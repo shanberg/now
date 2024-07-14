@@ -2,8 +2,6 @@
 
 # Frame-MD
 
-***
-
 This project is heavily inspired by [Frame](https://github.com/lelanthran/frame/tree/master), and implements a similar behavior using a CLI and data stored in a markdown file for greater accessibility.
 
 ***
