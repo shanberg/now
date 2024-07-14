@@ -1,5 +1,8 @@
 {
   "imports": {
     "std/": "https://deno.land/std@0.189.0/"
+  },
+  "tasks": {
+    "run": "deno run --allow-read --allow-write main.ts"
   }
 }
