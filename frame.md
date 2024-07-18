@@ -1,8 +1,4 @@
 - Root Frame
-  - Learn a New Language @
-    - Choose Language
-      - Research Popular Languages @
-      - Decide on One
-    - Get Learning Materials
-      - Buy Textbook
-      - Download App
+  - Item 1
+    - Item 1.1
+      - Item 1.1.1

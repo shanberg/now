@@ -3,6 +3,8 @@
     "std/": "https://deno.land/std@0.189.0/"
   },
   "tasks": {
-    "run": "deno run --allow-read --allow-write main.ts"
+    "start": "deno run --allow-read --allow-write src/index.ts",
+    "test": "deno test tests/",
+    "test:watch": "deno test --watch tests/"
   }
 }
