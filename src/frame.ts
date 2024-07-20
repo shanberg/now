@@ -1,30 +1,23 @@
-import { readJson } from "https://deno.land/x/jsonfile@1.0.0/mod.ts";
-import { INDENT, MARKER, ROOT_FRAME } from "./consts.ts";
+import { INDENT, MARKER } from "./consts.ts";
 
 // ```markdown
-// - Root Frame @
+// - Root Frame
 //   - Item 1
 //     - Item 1.1
-//     - Item 1.2
-//
+//     - Item 1.2 @
 //   - Item 2
 //     - Item 2.1
 //     - Item 2.2
 // ```
 
-export async function getFilePath(): Promise<string> {
-  const config = await readJson("./config.json") as Config;
-  if (!config.filePath) {
-    console.error("File path not found in config.json.");
-    Deno.exit(1);
-  }
-  return config.filePath;
-}
-
-async function readMarkdownFile(): Promise<string> {
-  const filePath = await getFilePath();
+/**
+ * Reads the content of a markdown file.
+ * @param {string} path - The path to the markdown file.
+ * @returns {Promise<string>} The content of the markdown file.
+ */
+async function readMarkdownFile(path: string): Promise<string> {
   try {
-    return await Deno.readTextFile(filePath);
+    return await Deno.readTextFile(path);
   } catch (error) {
     if (error instanceof Deno.errors.NotFound) {
       console.log("File not found.");
@@ -36,15 +29,24 @@ async function readMarkdownFile(): Promise<string> {
   }
 }
 
-async function writeMarkdownFile(content: string): Promise<void> {
-  const filePath = await getFilePath();
+/**
+ * Writes content to a markdown file.
+ * @param {string} content - The content to write to the file.
+ * @param {string} path - The path to the markdown file.
+ */
+async function writeMarkdownFile(content: string, path: string): Promise<void> {
   try {
-    await Deno.writeTextFile(filePath, content);
+    await Deno.writeTextFile(path, content);
   } catch (error) {
     console.error("Error writing file:", error);
   }
 }
 
+/**
+ * Deserializes a markdown string into a tree structure.
+ * @param {string} input - The markdown string to deserialize.
+ * @returns {TreeNode} The root node of the tree structure.
+ */
 export function deserialize(input: string): TreeNode {
   const lines = input.split("\n");
   const stack: { node: TreeNode; indent: number }[] = [];
@@ -120,6 +122,11 @@ export function deserialize(input: string): TreeNode {
   return root;
 }
 
+/**
+ * Serializes a tree structure into a markdown string.
+ * @param {TreeNode} tree - The root node of the tree structure.
+ * @returns {string} The serialized markdown string.
+ */
 export function serialize(tree: TreeNode): string {
   let result = "";
 
@@ -136,6 +143,11 @@ export function serialize(tree: TreeNode): string {
   return result;
 }
 
+/**
+ * Completes the current item in the tree, removing it and setting its parent as current.
+ * @param {TreeNode} tree - The root node of the tree structure.
+ * @returns {TreeNode} The updated tree structure.
+ */
 export function completeCurrentItem(tree: TreeNode): TreeNode {
   function traverse(node: TreeNode, parent: TreeNode | null): boolean {
     if (node.isCurrent) {
@@ -157,6 +169,12 @@ export function completeCurrentItem(tree: TreeNode): TreeNode {
   return tree;
 }
 
+/**
+ * Adds a new child item to the current item in the tree.
+ * @param {TreeNode} tree - The root node of the tree structure.
+ * @param {string} newName - The name of the new child item.
+ * @returns {TreeNode} The updated tree structure.
+ */
 export function addChildToCurrentItem(
   tree: TreeNode,
   newName: string,
@@ -188,6 +206,12 @@ export function addChildToCurrentItem(
   return tree;
 }
 
+/**
+ * Edits the name of the current item in the tree.
+ * @param {TreeNode} tree - The root node of the tree structure.
+ * @param {string} newName - The new name for the current item.
+ * @returns {TreeNode} The updated tree structure.
+ */
 export function editCurrentItemName(tree: TreeNode, newName: string): TreeNode {
   if (!newName.trim()) {
     console.error("Name cannot be empty.");
@@ -211,6 +235,12 @@ export function editCurrentItemName(tree: TreeNode, newName: string): TreeNode {
   return tree;
 }
 
+/**
+ * Sets the current item in the tree based on the provided key.
+ * @param {TreeNode} tree - The root node of the tree structure.
+ * @param {string} key - The key of the item to set as current.
+ * @returns {TreeNode} The updated tree structure.
+ */
 export function setCurrentItem(tree: TreeNode, key: string): TreeNode {
   let hasUnsetPrevious = false;
   let hasSetNew = false;
@@ -237,6 +267,11 @@ export function setCurrentItem(tree: TreeNode, key: string): TreeNode {
   return tree;
 }
 
+/**
+ * Gets a list of items in the tree as strings.
+ * @param {TreeNode} tree - The root node of the tree structure.
+ * @returns {string[]} The list of items.
+ */
 export function getItemsList(tree: TreeNode): string[] {
   const items: string[] = [];
 
@@ -253,6 +288,11 @@ export function getItemsList(tree: TreeNode): string[] {
   return items;
 }
 
+/**
+ * Gets the breadcrumb path of the current item in the tree.
+ * @param {TreeNode} tree - The root node of the tree structure.
+ * @returns {string} The breadcrumb path of the current item.
+ */
 export function getCurrentItemBreadcrumb(tree: TreeNode): string {
   let breadcrumb: string[] = [];
   let currentItemName = "";
@@ -279,61 +319,101 @@ export function getCurrentItemBreadcrumb(tree: TreeNode): string {
   return [breadcrumbPath, `Focus: ${currentItemName}`].join("\n");
 }
 
-const getTree = async (): Promise<TreeNode> => {
-  const content = await readMarkdownFile();
+/**
+ * Retrieves the tree structure from the markdown file.
+ * @param {string} path - The path to the markdown file.
+ * @returns {Promise<TreeNode>} The root node of the tree structure.
+ */
+const getTree = async (path: string): Promise<TreeNode> => {
+  const content = await readMarkdownFile(path);
   return deserialize(content);
 };
 
-const writeTree = async (tree: TreeNode): Promise<void> => {
+/**
+ * Writes the tree structure to the markdown file.
+ * @param {TreeNode} tree - The root node of the tree structure.
+ * @param {string} path - The path to the markdown file.
+ */
+const writeTree = async (tree: TreeNode, path: string): Promise<void> => {
   const serialized = serialize(tree);
-  await writeMarkdownFile(serialized);
+  await writeMarkdownFile(serialized, path);
   return;
 };
 
-// Exported function to get the list items
-export async function getItemsListEffect(): Promise<string[]> {
-  const tree = await getTree();
+/**
+ * Retrieves the list of items in the tree structure.
+ * @param {string} path - The path to the markdown file.
+ * @returns {Promise<string[]>} The list of items.
+ */
+export async function getItemsListEffect(path: string): Promise<string[]> {
+  const tree = await getTree(path);
   return getItemsList(tree);
 }
 
-// Exported function to create a new nested list item
+/**
+ * Adds a new child item to the current item in the tree structure.
+ * @param {string} newText - The name of the new child item.
+ * @param {string} path - The path to the markdown file.
+ */
 export async function addChildToCurrentItemEffect(
   newText: string,
+  path: string,
 ): Promise<void> {
-  const tree = await getTree();
+  const tree = await getTree(path);
   const newTree = addChildToCurrentItem(tree, newText);
-  await writeTree(newTree);
+  await writeTree(newTree, path);
   return;
 }
 
-// Exported function to complete the current item
-export async function completeCurrentItemEffect(): Promise<void> {
-  const tree = await getTree();
+/**
+ * Completes the current item in the tree structure.
+ * @param {string} path - The path to the markdown file.
+ */
+export async function completeCurrentItemEffect(path: string): Promise<void> {
+  const tree = await getTree(path);
   const newTree = completeCurrentItem(tree);
-  await writeTree(newTree);
+  await writeTree(newTree, path);
   return;
 }
 
-// Exported function to set the current item
-export async function setCurrentItemEffect(key: string): Promise<void> {
-  const tree = await getTree();
+/**
+ * Sets the current item in the tree structure based on the provided key.
+ * @param {string} key - The key of the item to set as current.
+ * @param {string} path - The path to the markdown file.
+ */
+export async function setCurrentItemEffect(
+  key: string,
+  path: string,
+): Promise<void> {
+  const tree = await getTree(path);
   const newTree = setCurrentItem(tree, key);
-  await writeTree(newTree);
+  await writeTree(newTree, path);
   return;
 }
 
-// Exported function to edit the name of the current item
+/**
+ * Edits the name of the current item in the tree structure.
+ * @param {string} newName - The new name for the current item.
+ * @param {string} path - The path to the markdown file.
+ */
 export async function editCurrentItemNameEffect(
   newName: string,
+  path: string,
 ): Promise<void> {
-  const tree = await getTree();
+  const tree = await getTree(path);
   const newTree = editCurrentItemName(tree, newName);
-  await writeTree(newTree);
+  await writeTree(newTree, path);
   return;
 }
 
-// Exported function to get the current item breadcrumb
-export async function getCurrentItemBreadcrumbEffect(): Promise<string> {
-  const tree = await getTree();
+/**
+ * Retrieves the breadcrumb path of the current item in the tree structure.
+ * @param {string} path - The path to the markdown file.
+ * @returns {Promise<string>} The breadcrumb path of the current item.
+ */
+export async function getCurrentItemBreadcrumbEffect(
+  path: string,
+): Promise<string> {
+  const tree = await getTree(path);
   return getCurrentItemBreadcrumb(tree);
 }

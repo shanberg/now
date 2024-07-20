@@ -1,7 +1,3 @@
-interface Config {
-    filePath: string;
-}
-
 interface TreeNode {
     key: string;
     name: string;
