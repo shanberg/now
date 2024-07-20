@@ -10,7 +10,7 @@ Deno.test("getCurrentItemBreadcrumb - current item at root", () => {
         children: [],
     };
 
-    const expected = "Focus: Root";
+    const expected = "Root";
     assertEquals(getCurrentItemBreadcrumb(tree), expected);
 });
 
@@ -35,7 +35,7 @@ Deno.test("getCurrentItemBreadcrumb - current item at first level", () => {
         ],
     };
 
-    const expected = "Focus: Child 1";
+    const expected = "Child 1";
     assertEquals(getCurrentItemBreadcrumb(tree), expected);
 });
 
@@ -61,7 +61,7 @@ Deno.test("getCurrentItemBreadcrumb - current item at second level", () => {
         ],
     };
 
-    const expected = "Child 1\nFocus: Grandchild 1.1";
+    const expected = "Child 1\nGrandchild 1.1";
     assertEquals(getCurrentItemBreadcrumb(tree), expected);
 });
 
@@ -80,6 +80,6 @@ Deno.test("getCurrentItemBreadcrumb - no current item", () => {
         ],
     };
 
-    const expected = "Focus: ";
+    const expected = "";
     assertEquals(getCurrentItemBreadcrumb(tree), expected);
 });

@@ -1,12 +1,14 @@
 import {
   Confirm,
   Input,
+  List,
   Select,
 } from "https://deno.land/x/cliffy@v0.25.7/prompt/mod.ts";
 import { colors } from "https://deno.land/x/cliffy@v0.25.7/ansi/colors.ts";
 import {
   addChildToCurrentItemEffect,
   completeCurrentItemEffect,
+  createNestedChildrenEffect,
   editCurrentItemNameEffect,
   getCurrentItemBreadcrumbEffect,
   getItemsListEffect,
@@ -36,10 +38,10 @@ async function displayStatus(path: string): Promise<void> {
     console.log(colors.dim(breadcrumbStr));
     console.log(`${FOCUS_ARROW} ${focusStr}`);
   } else {
+    console.log(colors.dim("—"));
     console.log(`${FOCUS_ARROW} ${currentItem}`);
   }
 
-  // console.log(colors.dim("—".repeat(24)));
   console.log();
 }
 
@@ -90,11 +92,11 @@ async function findOrCreateFrameFile(): Promise<string> {
 async function promptMainAction(): Promise<string> {
   return await Select.prompt({
     ...promptOptions,
-    message: "Actions",
+    message: colors.dim("Actions"),
     options: [
-      { name: "Complete current frame", value: "complete" },
-      { name: "Add frame", value: "add" },
-      { name: "More options", value: "more" },
+      { name: "Complete this", value: "complete" },
+      { name: "Add frames", value: "add" },
+      { name: "More…", value: "more" },
     ],
   });
 }
@@ -106,29 +108,16 @@ async function promptMainAction(): Promise<string> {
  */
 async function handleMainAction(action: string, path: string): Promise<void> {
   switch (action) {
-    case "add":
-      await handleAddAction(path);
-      break;
     case "complete":
       await handleCompleteAction(path);
+      break;
+    case "add":
+      await handleAddNestedAction(path);
       break;
     case "more":
       await handleMoreAction(path);
       break;
   }
-}
-
-/**
- * Handles the action to add a new frame.
- * @param {string} path - The path to the frame file.
- */
-async function handleAddAction(path: string): Promise<void> {
-  await displayStatus(path);
-  const newText = await Input.prompt({
-    ...promptOptions,
-    message: "Enter the description for the new Frame:",
-  });
-  await addChildToCurrentItemEffect(newText, path);
 }
 
 /**
@@ -138,6 +127,20 @@ async function handleAddAction(path: string): Promise<void> {
 async function handleCompleteAction(path: string): Promise<void> {
   await completeCurrentItemEffect(path);
   console.log("All Frames completed. Time for a break?");
+}
+
+/**
+ * Handles the action to add nested frames.
+ * @param {string} path - The path to the frame file.
+ */
+async function handleAddNestedAction(path: string): Promise<void> {
+  await displayStatus(path);
+  const newItems = await Input.prompt({
+    ...promptOptions,
+    message: "Add a tree of new frames:",
+    hint: "Add a children with commas",
+  });
+  await createNestedChildrenEffect(newItems, path);
 }
 
 /**

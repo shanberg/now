@@ -206,6 +206,131 @@ export function addChildToCurrentItem(
   return tree;
 }
 
+// /**
+//  * Adds a sequence of nested children to the current item in the tree.
+//  * @param {TreeNode} tree - The root node of the tree structure.
+//  * @param {string} items - The comma-separated list of items to add.
+//  * @returns {TreeNode} The updated tree structure.
+//  */
+// export function createNestedChildren(tree: TreeNode, items: string): TreeNode {
+//   const itemList = items.split(",").map((item) => item.trim()).filter((item) =>
+//     item
+//   );
+//   if (itemList.length === 0) {
+//     console.error("No valid items to add.");
+//     return tree;
+//   }
+
+//   // Find the highest key value in the tree
+//   let maxKey = 0;
+//   function findMaxKey(node: TreeNode) {
+//     const key = parseInt(node.key, 10);
+//     if (key > maxKey) {
+//       maxKey = key;
+//     }
+//     for (const child of node.children) {
+//       findMaxKey(child);
+//     }
+//   }
+//   findMaxKey(tree);
+
+//   let keyCounter = maxKey + 1;
+
+//   function traverseAndAdd(node: TreeNode): boolean {
+//     if (node.isCurrent) {
+//       node.isCurrent = false;
+//       let currentNode = node;
+//       itemList.forEach((item, index) => {
+//         const newChild: TreeNode = {
+//           key: keyCounter.toString(),
+//           name: item,
+//           children: [],
+//           isCurrent: index === itemList.length - 1,
+//         };
+//         keyCounter++;
+//         currentNode.children.push(newChild);
+//         currentNode = newChild;
+//       });
+//       return true;
+//     }
+//     for (const child of node.children) {
+//       if (traverseAndAdd(child)) {
+//         return true;
+//       }
+//     }
+//     return false;
+//   }
+
+//   traverseAndAdd(tree);
+//   return tree;
+// }
+
+/**
+ * Adds a sequence of nested children and siblings to the current item in the tree.
+ * @param {TreeNode} tree - The root node of the tree structure.
+ * @param {string} items - The string of items to add, using slashes for nesting and commas for siblings.
+ * @returns {TreeNode} The updated tree structure.
+ */
+export function createNestedChildren(tree: TreeNode, items: string): TreeNode {
+  // Split the input into nested levels
+  const levels = items.split("/").map((level) => level.trim());
+
+  // Find the highest key value in the tree
+  let maxKey = 0;
+  function findMaxKey(node: TreeNode) {
+    const key = parseInt(node.key, 10);
+    if (key > maxKey) {
+      maxKey = key;
+    }
+    for (const child of node.children) {
+      findMaxKey(child);
+    }
+  }
+  findMaxKey(tree);
+
+  let keyCounter = maxKey + 1;
+
+  function traverseAndAdd(node: TreeNode): boolean {
+    if (node.isCurrent) {
+      node.isCurrent = false;
+      let currentNode = node;
+
+      levels.forEach((level, levelIndex) => {
+        const siblings = level.split(",").map((sibling) => sibling.trim());
+
+        siblings.forEach((sibling, siblingIndex) => {
+          const newChild: TreeNode = {
+            key: keyCounter.toString(),
+            name: sibling,
+            children: [],
+            isCurrent: levelIndex === levels.length - 1 &&
+              siblingIndex === siblings.length - 1,
+          };
+          keyCounter++;
+          currentNode.children.push(newChild);
+
+          // If it's the last sibling, it becomes the current node for the next level
+          if (siblingIndex === siblings.length - 1) {
+            currentNode = newChild;
+          }
+        });
+      });
+
+      return true;
+    }
+
+    for (const child of node.children) {
+      if (traverseAndAdd(child)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  traverseAndAdd(tree);
+  return tree;
+}
+
 /**
  * Edits the name of the current item in the tree.
  * @param {TreeNode} tree - The root node of the tree structure.
@@ -314,9 +439,9 @@ export function getCurrentItemBreadcrumb(tree: TreeNode): string {
   traverse(tree, []);
   const breadcrumbPath = breadcrumb.slice(1).join(" / "); // Exclude the root item
   if (!breadcrumbPath) {
-    return `Focus: ${currentItemName}`;
+    return `${currentItemName}`;
   }
-  return [breadcrumbPath, `Focus: ${currentItemName}`].join("\n");
+  return [breadcrumbPath, `${currentItemName}`].join("\n");
 }
 
 /**
@@ -361,6 +486,22 @@ export async function addChildToCurrentItemEffect(
 ): Promise<void> {
   const tree = await getTree(path);
   const newTree = addChildToCurrentItem(tree, newText);
+  await writeTree(newTree, path);
+  return;
+}
+
+/**
+ * Adds a sequence of nested children to the current item in the tree structure.
+ * The last item in the list will be the new current item.
+ * @param {string} items - The comma-separated list of items to add.
+ * @param {string} path - The path to the markdown file.
+ */
+export async function createNestedChildrenEffect(
+  items: string,
+  path: string,
+): Promise<void> {
+  const tree = await getTree(path);
+  const newTree = createNestedChildren(tree, items);
   await writeTree(newTree, path);
   return;
 }
