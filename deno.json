@@ -4,6 +4,7 @@
   },
   "tasks": {
     "start": "deno run --allow-read --allow-write src/index.ts",
+    "dev": "deno run --allow-read --allow-write --watch src/index.ts",
     "test": "deno test tests/",
     "test:watch": "deno test --watch tests/"
   }

@@ -29,6 +29,7 @@
     "https://deno.land/std@0.170.0/path/posix.ts": "b859684bc4d80edfd4cad0a82371b50c716330bed51143d6dcdbe59e6278b30c",
     "https://deno.land/std@0.170.0/path/separator.ts": "fe1816cb765a8068afb3e8f13ad272351c85cbc739af56dacfc7d93d710fe0f9",
     "https://deno.land/std@0.170.0/path/win32.ts": "7cebd2bda6657371adc00061a1d23fdd87bcdf64b4843bb148b0b24c11b40f69",
+    "https://deno.land/std@0.221.0/fmt/colors.ts": "d239d84620b921ea520125d778947881f62c50e78deef2657073840b8af9559a",
     "https://deno.land/std@0.224.0/assert/_constants.ts": "a271e8ef5a573f1df8e822a6eb9d09df064ad66a4390f21b3e31f820a38e0975",
     "https://deno.land/std@0.224.0/assert/assert.ts": "09d30564c09de846855b7b071e62b5974b001bb72a4b797958fe0660e7849834",
     "https://deno.land/std@0.224.0/assert/assert_almost_equals.ts": "9e416114322012c9a21fa68e187637ce2d7df25bcbdbfd957cd639e65d3cf293",
@@ -128,6 +129,7 @@
     "https://deno.land/x/cliffy@v0.25.7/_utils/distance.ts": "02af166952c7c358ac83beae397aa2fbca4ad630aecfcd38d92edb1ea429f004",
     "https://deno.land/x/cliffy@v0.25.7/ansi/ansi_escapes.ts": "885f61f343223f27b8ec69cc138a54bea30542924eacd0f290cd84edcf691387",
     "https://deno.land/x/cliffy@v0.25.7/ansi/chain.ts": "31fb9fcbf72fed9f3eb9b9487270d2042ccd46a612d07dd5271b1a80ae2140a0",
+    "https://deno.land/x/cliffy@v0.25.7/ansi/colors.ts": "5f71993af5bd1aa0a795b15f41692d556d7c89584a601fed75997df844b832c9",
     "https://deno.land/x/cliffy@v0.25.7/ansi/cursor_position.ts": "d537491e31d9c254b208277448eff92ff7f55978c4928dea363df92c0df0813f",
     "https://deno.land/x/cliffy@v0.25.7/ansi/deps.ts": "0f35cb7e91868ce81561f6a77426ea8bc55dc15e13f84c7352f211023af79053",
     "https://deno.land/x/cliffy@v0.25.7/ansi/tty.ts": "8fb064c17ead6cdf00c2d3bc87a9fd17b1167f2daa575c42b516f38bdb604673",
@@ -201,6 +203,7 @@
     "https://deno.land/x/cliffy@v0.25.7/table/row.ts": "5f519ba7488d2ef76cbbf50527f10f7957bfd668ce5b9169abbc44ec88302645",
     "https://deno.land/x/cliffy@v0.25.7/table/table.ts": "ec204c9d08bb3ff1939c5ac7412a4c9ed7d00925d4fc92aff9bfe07bd269258d",
     "https://deno.land/x/cliffy@v0.25.7/table/utils.ts": "187bb7dcbcfb16199a5d906113f584740901dfca1007400cba0df7dcd341bc29",
+    "https://deno.land/x/cliffy@v1.0.0-rc.4/ansi/colors.ts": "21c6702197d0871c700279d22fc54e4b15152be4ece1f433d6714595b018d265",
     "https://deno.land/x/jsonfile@1.0.0/mod.ts": "e9c1125d58078de9dc4b3ef43bcc644375af26bef565b7f623df706e97d76087",
     "https://deno.land/x/jsonfile@1.0.0/read_json.ts": "bbf7fa8f559e8540a8bbb837078a4f2b6b3e5d94dfc7c9aaf752ab9e1a00f029",
     "https://deno.land/x/jsonfile@1.0.0/write_json.ts": "89a6231f51a6759dfff8f1f5534d030c2239c22fc9f3c0b3305d424f4f1d5604"

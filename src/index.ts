@@ -3,6 +3,7 @@ import {
   Input,
   Select,
 } from "https://deno.land/x/cliffy@v0.25.7/prompt/mod.ts";
+import { colors } from "https://deno.land/x/cliffy@v0.25.7/ansi/colors.ts";
 import {
   addChildToCurrentItemEffect,
   completeCurrentItemEffect,
@@ -12,6 +13,36 @@ import {
   setCurrentItemEffect,
 } from "./frame.ts";
 
+const FOCUS_ARROW = "▶︎";
+
+const promptOptions = {
+  prefix: "",
+  pointer: colors.bold("•"),
+  listPointer: colors.bold("•"),
+  indent: "",
+};
+
+/**
+ * Displays the current status including the breadcrumb and focus.
+ * @param {string} path - The path to the frame file.
+ */
+async function displayStatus(path: string): Promise<void> {
+  console.clear();
+  const currentItem = await getCurrentItemBreadcrumbEffect(path);
+
+  if (currentItem.split("\n").length > 1) {
+    const breadcrumbStr = currentItem.split("\n")[0];
+    const focusStr = currentItem.split("\n")[1].replace("Focus: ", "");
+    console.log(colors.dim(breadcrumbStr));
+    console.log(`${FOCUS_ARROW} ${focusStr}`);
+  } else {
+    console.log(`${FOCUS_ARROW} ${currentItem}`);
+  }
+
+  // console.log(colors.dim("—".repeat(24)));
+  console.log();
+}
+
 /**
  * Starts the interactive command-line interface (CLI) for managing frames.
  * Continuously prompts the user for actions and handles them accordingly.
@@ -20,8 +51,7 @@ async function interactiveCLI() {
   const path = Deno.args[0] || await findOrCreateFrameFile();
   console.log(`Using frame file: ${path}`);
   while (true) {
-    console.clear();
-    console.log(await getCurrentItemBreadcrumbEffect(path));
+    await displayStatus(path);
     const action = await promptMainAction();
     await handleMainAction(action, path);
   }
@@ -59,11 +89,12 @@ async function findOrCreateFrameFile(): Promise<string> {
  */
 async function promptMainAction(): Promise<string> {
   return await Select.prompt({
-    message: "Select an action",
+    ...promptOptions,
+    message: "Actions",
     options: [
-      { name: "Add Frame", value: "add" },
-      { name: "Complete Frame", value: "complete" },
-      { name: "More Options", value: "more" },
+      { name: "Complete current frame", value: "complete" },
+      { name: "Add frame", value: "add" },
+      { name: "More options", value: "more" },
     ],
   });
 }
@@ -92,9 +123,11 @@ async function handleMainAction(action: string, path: string): Promise<void> {
  * @param {string} path - The path to the frame file.
  */
 async function handleAddAction(path: string): Promise<void> {
-  const newText = await Input.prompt(
-    "Enter the description for the new Frame:",
-  );
+  await displayStatus(path);
+  const newText = await Input.prompt({
+    ...promptOptions,
+    message: "Enter the description for the new Frame:",
+  });
   await addChildToCurrentItemEffect(newText, path);
 }
 
@@ -112,11 +145,14 @@ async function handleCompleteAction(path: string): Promise<void> {
  * @param {string} path - The path to the frame file.
  */
 async function handleMoreAction(path: string): Promise<void> {
+  await displayStatus(path);
   const moreAction = await Select.prompt({
-    message: "Select an option",
+    ...promptOptions,
+    message: "More Options",
     options: [
-      { name: "Edit Frame", value: "edit" },
-      { name: "Switch Frame", value: "switch" },
+      { name: "Edit frame", value: "edit" },
+      { name: "Switch frame", value: "switch" },
+      { name: "Go back", value: "back" },
       { name: "Exit", value: "exit" },
     ],
   });
@@ -128,6 +164,8 @@ async function handleMoreAction(path: string): Promise<void> {
     case "switch":
       await handleSwitchAction(path);
       break;
+    case "back":
+      return; // Go back to the previous menu
     case "exit":
       console.log("Exiting...");
       Deno.exit();
@@ -140,9 +178,22 @@ async function handleMoreAction(path: string): Promise<void> {
  * @param {string} path - The path to the frame file.
  */
 async function handleEditAction(path: string): Promise<void> {
-  const newText = await Input.prompt(
-    "Enter the new description for the current Frame:",
-  );
+  // Get the name of the current item
+  const currentItem = await getCurrentItemBreadcrumbEffect(path);
+  let currentItemName = "";
+  if (currentItem.split("\n").length > 1) {
+    currentItemName = currentItem.split("\n")[1].replace("Focus: ", "");
+  } else {
+    currentItemName = currentItem.replace("Focus: ", "");
+  }
+
+  // Prompt the user for the new name
+  const newText = await Input.prompt({
+    ...promptOptions,
+    minLength: 1,
+    default: currentItemName,
+    message: "New description:",
+  });
   await editCurrentItemNameEffect(newText, path);
 }
 
@@ -152,12 +203,19 @@ async function handleEditAction(path: string): Promise<void> {
  */
 async function handleSwitchAction(path: string): Promise<void> {
   const items = await getItemsListEffect(path);
+  await displayStatus(path);
   const itemToSwitch = await Select.prompt({
+    ...promptOptions,
+    search: true,
     message: "Select a Frame to switch to:",
-    options: items.map((item, index) => ({
-      name: item,
-      value: index.toString(),
-    })),
+    options: [
+      ...items.map((item, index) => ({
+        name: item,
+        value: index.toString(),
+      })),
+      Select.separator(),
+      { name: "Go Back", value: "back" },
+    ],
   });
   await setCurrentItemEffect(itemToSwitch, path);
 }
