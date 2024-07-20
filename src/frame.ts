@@ -144,29 +144,62 @@ export function serialize(tree: TreeNode): string {
 }
 
 /**
- * Completes the current item in the tree, removing it and setting its parent as current.
+ * Completes the current item in the tree, removing it and setting the appropriate new current item.
+ * The new current item is determined as follows:
+ * - If a previous sibling exists, that becomes the new current item.
+ * - Otherwise, if a next sibling exists, that becomes the new current item.
+ * - Otherwise, the parent becomes the new current item.
  * @param {TreeNode} tree - The root node of the tree structure.
  * @returns {TreeNode} The updated tree structure.
  */
 export function completeCurrentItem(tree: TreeNode): TreeNode {
   function traverse(node: TreeNode, parent: TreeNode | null): boolean {
-    if (node.isCurrent) {
-      if (parent) {
-        parent.children = parent.children.filter((child) => child !== node);
-        parent.isCurrent = true;
+    // Iterate over each child node
+    for (let i = 0; i < node.children.length; i++) {
+      const child = node.children[i];
+
+      // Check if the current child is the current item
+      if (child.isCurrent) {
+        // Unset the current item
+        child.isCurrent = false;
+
+        // Determine the new current item
+        let newCurrentItem: TreeNode | null = null;
+
+        if (i > 0) {
+          // Previous sibling exists
+          newCurrentItem = node.children[i - 1];
+        } else if (i < node.children.length - 1) {
+          // Next sibling exists
+          newCurrentItem = node.children[i + 1];
+        } else if (node) {
+          // No siblings, set node as current
+          newCurrentItem = node;
+        }
+
+        // Set the new current item if found
+        if (newCurrentItem) {
+          newCurrentItem.isCurrent = true;
+        }
+
+        // Remove the current item from the children array
+        node.children.splice(i, 1);
+
+        return true; // Indicate that the current item was found and processed
       }
-      return true;
-    }
-    for (const child of node.children) {
+
+      // Recursively traverse the child nodes
       if (traverse(child, node)) {
-        return true;
+        return true; // Stop traversal if the current item was found and processed
       }
     }
-    return false;
+    return false; // Indicate that the current item was not found in this branch
   }
 
+  // Start the traversal from the root node
   traverse(tree, null);
-  return tree;
+
+  return tree; // Return the updated tree structure
 }
 
 /**
@@ -205,65 +238,6 @@ export function addChildToCurrentItem(
   traverseAndAdd(tree);
   return tree;
 }
-
-// /**
-//  * Adds a sequence of nested children to the current item in the tree.
-//  * @param {TreeNode} tree - The root node of the tree structure.
-//  * @param {string} items - The comma-separated list of items to add.
-//  * @returns {TreeNode} The updated tree structure.
-//  */
-// export function createNestedChildren(tree: TreeNode, items: string): TreeNode {
-//   const itemList = items.split(",").map((item) => item.trim()).filter((item) =>
-//     item
-//   );
-//   if (itemList.length === 0) {
-//     console.error("No valid items to add.");
-//     return tree;
-//   }
-
-//   // Find the highest key value in the tree
-//   let maxKey = 0;
-//   function findMaxKey(node: TreeNode) {
-//     const key = parseInt(node.key, 10);
-//     if (key > maxKey) {
-//       maxKey = key;
-//     }
-//     for (const child of node.children) {
-//       findMaxKey(child);
-//     }
-//   }
-//   findMaxKey(tree);
-
-//   let keyCounter = maxKey + 1;
-
-//   function traverseAndAdd(node: TreeNode): boolean {
-//     if (node.isCurrent) {
-//       node.isCurrent = false;
-//       let currentNode = node;
-//       itemList.forEach((item, index) => {
-//         const newChild: TreeNode = {
-//           key: keyCounter.toString(),
-//           name: item,
-//           children: [],
-//           isCurrent: index === itemList.length - 1,
-//         };
-//         keyCounter++;
-//         currentNode.children.push(newChild);
-//         currentNode = newChild;
-//       });
-//       return true;
-//     }
-//     for (const child of node.children) {
-//       if (traverseAndAdd(child)) {
-//         return true;
-//       }
-//     }
-//     return false;
-//   }
-
-//   traverseAndAdd(tree);
-//   return tree;
-// }
 
 /**
  * Adds a sequence of nested children and siblings to the current item in the tree.
