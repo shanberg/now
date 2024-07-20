@@ -1,3 +1,4 @@
+// @deno-types="../types.d.ts"
 import {
     assertEquals,
 } from "https://deno.land/std@0.224.0/assert/assert_equals.ts";
@@ -15,7 +16,7 @@ Deno.test("editCurrentItem - edits the current item correctly", () => {
         "  - Item 2",
         "    - Item 2.1",
         "    - Item 2.2",
-    ];
+    ] as Line[];
     const newText = "Edited Item 1.1";
     const expectedLines = [
         "- Root Frame",
@@ -25,7 +26,7 @@ Deno.test("editCurrentItem - edits the current item correctly", () => {
         "  - Item 2",
         "    - Item 2.1",
         "    - Item 2.2",
-    ];
+    ] as Line[];
 
     const result = editCurrentItem(lines, newText);
     assertEquals(result, expectedLines);
@@ -40,7 +41,7 @@ Deno.test("editCurrentItem - throws error when no current item is found", () => 
         "  - Item 2",
         "    - Item 2.1",
         "    - Item 2.2",
-    ];
+    ] as Line[];
     const newText = "Edited Item 1.1";
 
     assertThrows(
@@ -61,7 +62,7 @@ Deno.test("editCurrentItem - maintains indentation", () => {
         "  - Item 2",
         "    - Item 2.1 @",
         "    - Item 2.2",
-    ];
+    ] as Line[];
     const newText = "Edited Item 2.1";
     const expectedLines = [
         "- Root Frame",
@@ -71,14 +72,14 @@ Deno.test("editCurrentItem - maintains indentation", () => {
         "  - Item 2",
         "    - Edited Item 2.1 @",
         "    - Item 2.2",
-    ];
+    ] as Line[];
 
     const result = editCurrentItem(lines, newText);
     assertEquals(result, expectedLines);
 });
 
 Deno.test("editCurrentItem - handles empty lines array", () => {
-    const lines: string[] = [];
+    const lines = [] as Line[];
     const newText = "Edited Item";
 
     assertThrows(

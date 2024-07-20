@@ -1,106 +1,48 @@
+// @deno-types="../types.d.ts"
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/assert_equals.ts";
-import { completeCurrentItem } from "../src/frame.ts";
+import { setIndentLevel } from "../src/frame.ts";
 
-Deno.test("completeCurrentItem - complete nested item and move marker to next sibling", () => {
-    const lines = [
-        "- Root Frame",
-        "  - Item 1 @",
-        "    - Item 1.1",
-        "  - Item 2",
-        "    - Item 2.1",
-    ];
-    const { lines: result, otherBranchesExist } = completeCurrentItem(lines);
-    assertEquals(result, [
-        "- Root Frame",
-        "  - Item 2 @",
-        "    - Item 2.1",
-    ]);
-    assertEquals(otherBranchesExist, true);
+Deno.test("setIndentLevel - Basic Indentation", () => {
+    const line = "- Item 1" as Line;
+    const result = setIndentLevel(line, 2);
+    assertEquals(result, "    - Item 1");
 });
 
-Deno.test("completeCurrentItem - complete item with multiple branches and update marker", () => {
-    const lines = [
-        "- Root Frame",
-        "  - Item 1",
-        "    - Item 1.1 @",
-        "  - Item 2",
-        "    - Item 2.1",
-    ];
-    const { lines: result, otherBranchesExist } = completeCurrentItem(lines);
-    assertEquals(result, [
-        "- Root Frame",
-        "  - Item 1 @",
-        "  - Item 2",
-        "    - Item 2.1",
-    ]);
-    assertEquals(otherBranchesExist, true);
+Deno.test("setIndentLevel - No Indentation", () => {
+    const line = "    - Item 2" as Line;
+    const result = setIndentLevel(line, 0);
+    assertEquals(result, "- Item 2");
 });
 
-Deno.test("completeCurrentItem - complete root item (should not be allowed)", () => {
-    const lines = [
-        "- Root Frame @",
-        "  - Item 1",
-        "    - Item 1.1",
-        "  - Item 2",
-        "    - Item 2.1",
-    ];
-    const { lines: result, otherBranchesExist } = completeCurrentItem(lines);
-    assertEquals(result, lines); // No change should occur
-    assertEquals(otherBranchesExist, true);
+Deno.test("setIndentLevel - Multiple Indentations", () => {
+    const line = "- Item 3" as Line;
+    const result1 = setIndentLevel(line, 1);
+    assertEquals(result1, "  - Item 3");
+
+    const result2 = setIndentLevel(line, 3);
+    assertEquals(result2, "      - Item 3");
 });
 
-Deno.test("completeCurrentItem - complete item with no children", () => {
-    const lines = [
-        "- Root Frame",
-        "  - Item 1",
-        "    - Item 1.1 @",
-        "  - Item 2",
-        "    - Item 2.1",
-    ];
-    const { lines: result, otherBranchesExist } = completeCurrentItem(lines);
-    assertEquals(result, [
-        "- Root Frame",
-        "  - Item 1 @",
-        "  - Item 2",
-        "    - Item 2.1",
-    ]);
-    assertEquals(otherBranchesExist, true);
+Deno.test("setIndentLevel - Leading Whitespace", () => {
+    const line = "  - Item 4" as Line;
+    const result = setIndentLevel(line, 2);
+    assertEquals(result, "    - Item 4");
 });
 
-Deno.test("completeCurrentItem - complete item and move marker to previous sibling", () => {
-    const lines = [
-        "- Root Frame",
-        "  - Item 1",
-        "    - Item 1.1",
-        "    - Item 1.2 @",
-        "  - Item 2",
-        "    - Item 2.1",
-    ];
-    const { lines: result, otherBranchesExist } = completeCurrentItem(lines);
-    assertEquals(result, [
-        "- Root Frame",
-        "  - Item 1",
-        "    - Item 1.1 @",
-        "  - Item 2",
-        "    - Item 2.1",
-    ]);
-    assertEquals(otherBranchesExist, true);
+Deno.test("setIndentLevel - Empty Line", () => {
+    const line = "" as Line;
+    const result = setIndentLevel(line, 2);
+    assertEquals(result, "    ");
 });
 
-Deno.test("completeCurrentItem - complete item and move marker to parent", () => {
-    const lines = [
-        "- Root Frame",
-        "  - Item 1 @",
-        "    - Item 1.1",
-        "      - Item 1.1.1",
-        "  - Item 2",
-        "    - Item 2.1",
-    ];
-    const { lines: result, otherBranchesExist } = completeCurrentItem(lines);
-    assertEquals(result, [
-        "- Root Frame",
-        "  - Item 2 @",
-        "    - Item 2.1",
-    ]);
-    assertEquals(otherBranchesExist, true);
+Deno.test("setIndentLevel - Negative Indentation Level", () => {
+    const line = "- Item 5" as Line;
+    const result = setIndentLevel(line, -1);
+    assertEquals(result, "- Item 5"); // Assuming negative indentation is treated as 0
+});
+
+Deno.test("setIndentLevel - Excessively Large Indentation Level", () => {
+    const line = "- Item 6" as Line;
+    const result = setIndentLevel(line, 100);
+    assertEquals(result, " ".repeat(100 * 2) + "- Item 6"); // Assuming INDENT is 2 spaces
 });

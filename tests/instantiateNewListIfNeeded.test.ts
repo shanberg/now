@@ -1,14 +1,15 @@
+// @deno-types="../types.d.ts"
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/assert_equals.ts";
 import { instantiateNewListIfNeeded } from "../src/frame.ts";
 
 Deno.test("instantiateNewListIfNeeded - empty list", () => {
-    const lines: string[] = [];
+    const lines = [] as Line[];
     const result = instantiateNewListIfNeeded(lines);
     assertEquals(result, ["- Root Frame @"]);
 });
 
 Deno.test("instantiateNewListIfNeeded - list with only whitespace", () => {
-    const lines = ["  ", "\t"];
+    const lines = ["  ", "\t"] as Line[];
     const result = instantiateNewListIfNeeded(lines);
     assertEquals(result, ["- Root Frame @"]);
 });
@@ -18,7 +19,7 @@ Deno.test("instantiateNewListIfNeeded - non-empty list", () => {
         "- Root Frame @",
         "  - Item 1",
         "    - Item 1.1",
-    ];
+    ] as Line[];
     const result = instantiateNewListIfNeeded(lines);
     assertEquals(result, [
         "- Root Frame @",
@@ -32,7 +33,7 @@ Deno.test("instantiateNewListIfNeeded - list with items", () => {
         "- Root Frame",
         "  - Item 1",
         "    - Item 1.1",
-    ];
+    ] as Line[];
     const result = instantiateNewListIfNeeded(lines);
     assertEquals(result, [
         "- Root Frame",
