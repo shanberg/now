@@ -1,12 +1,11 @@
 import {
   Confirm,
   Input,
-  List,
   Select,
 } from "https://deno.land/x/cliffy@v0.25.7/prompt/mod.ts";
 import { colors } from "https://deno.land/x/cliffy@v0.25.7/ansi/colors.ts";
 import {
-  addChildToCurrentItemEffect,
+  addNextSiblingToCurrentItemEffect,
   completeCurrentItemEffect,
   createNestedChildrenEffect,
   editCurrentItemNameEffect,
@@ -96,6 +95,7 @@ async function promptMainAction(): Promise<string> {
     options: [
       { name: "Complete this", value: "complete" },
       { name: "Add frames", value: "add" },
+      { name: "Add later", value: "later" },
       { name: "More…", value: "more" },
     ],
   });
@@ -113,6 +113,9 @@ async function handleMainAction(action: string, path: string): Promise<void> {
       break;
     case "add":
       await handleAddNestedAction(path);
+      break;
+    case "later":
+      await handleAddLater(path);
       break;
     case "more":
       await handleMoreAction(path);
@@ -141,6 +144,20 @@ async function handleAddNestedAction(path: string): Promise<void> {
     hint: "Add a children with commas",
   });
   await createNestedChildrenEffect(newItems, path);
+}
+
+/**
+ * Handles the action to add nested frames.
+ * @param {string} path - The path to the frame file.
+ */
+async function handleAddLater(path: string): Promise<void> {
+  await displayStatus(path);
+  const newItems = await Input.prompt({
+    ...promptOptions,
+    message: "Add a tree of new frames:",
+    hint: "Add a children with commas",
+  });
+  await addNextSiblingToCurrentItemEffect(newItems, path);
 }
 
 /**

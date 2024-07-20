@@ -306,6 +306,70 @@ export function createNestedChildren(tree: TreeNode, items: string): TreeNode {
 }
 
 /**
+ * Adds a sibling item after the current item in the tree.
+ * If the current item is the root, the new item is added to the top of the list of children of the root.
+ * @param {TreeNode} tree - The root node of the tree structure.
+ * @param {string} newName - The name of the new sibling item.
+ * @returns {TreeNode} The updated tree structure.
+ */
+export function addNextSiblingToCurrentItem(
+  tree: TreeNode,
+  newName: string,
+): TreeNode {
+  // Find the highest key value in the tree
+  let maxKey = 0;
+  function findMaxKey(node: TreeNode) {
+    const key = parseInt(node.key, 10);
+    if (key > maxKey) {
+      maxKey = key;
+    }
+    for (const child of node.children) {
+      findMaxKey(child);
+    }
+  }
+  findMaxKey(tree);
+
+  let keyCounter = maxKey + 1;
+
+  function traverseAndAdd(node: TreeNode): boolean {
+    if (node.isCurrent && node === tree) {
+      // If the current item is the root, add the new item to the top of the list of children of the root
+      const newChild: TreeNode = {
+        key: keyCounter.toString(),
+        name: newName,
+        children: [],
+        isCurrent: false,
+      };
+      keyCounter++;
+      node.children.unshift(newChild);
+      return true;
+    }
+
+    for (let i = 0; i < node.children.length; i++) {
+      const child = node.children[i];
+      if (child.isCurrent) {
+        const newSibling: TreeNode = {
+          key: keyCounter.toString(),
+          name: newName,
+          children: [],
+          isCurrent: false,
+        };
+        keyCounter++;
+        node.children.splice(i + 1, 0, newSibling);
+        return true;
+      }
+      if (traverseAndAdd(child)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  traverseAndAdd(tree);
+  return tree;
+}
+
+/**
  * Edits the name of the current item in the tree.
  * @param {TreeNode} tree - The root node of the tree structure.
  * @param {string} newName - The new name for the current item.
@@ -476,6 +540,21 @@ export async function createNestedChildrenEffect(
 ): Promise<void> {
   const tree = await getTree(path);
   const newTree = createNestedChildren(tree, items);
+  await writeTree(newTree, path);
+  return;
+}
+
+/**
+ * Adds a new sibling item after the current item in the tree structure.
+ * @param {string} newText - The name of the new sibling item.
+ * @param {string} path - The path to the markdown file.
+ */
+export async function addNextSiblingToCurrentItemEffect(
+  newText: string,
+  path: string,
+): Promise<void> {
+  const tree = await getTree(path);
+  const newTree = addNextSiblingToCurrentItem(tree, newText);
   await writeTree(newTree, path);
   return;
 }
