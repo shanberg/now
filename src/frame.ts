@@ -1,4 +1,3 @@
-// @deno-types="../types.d.ts"
 import { readJson } from "https://deno.land/x/jsonfile@1.0.0/mod.ts";
 import { INDENT, MARKER, ROOT_FRAME } from "./consts.ts";
 
@@ -46,13 +45,6 @@ async function writeMarkdownFile(content: string): Promise<void> {
   }
 }
 
-interface TreeNode {
-  key: string;
-  name: string;
-  children: TreeNode[];
-  isCurrent: boolean;
-}
-
 export function deserialize(input: string): TreeNode {
   const lines = input.split("\n");
   const stack: { node: TreeNode; indent: number }[] = [];
@@ -66,7 +58,7 @@ export function deserialize(input: string): TreeNode {
     if (!line.trim()) continue;
 
     const spaces = line.search(/\S/);
-    let indent = Math.ceil(spaces / 2); // Convert spaces to indentation level
+    let indent = Math.ceil(spaces / INDENT.length); // Convert spaces to indentation level
     const isCurrent = line.endsWith(" " + MARKER);
     const name = line.trimStart().slice(2).replace(" " + MARKER, "");
     const newNode: TreeNode = {
@@ -132,7 +124,7 @@ export function serialize(tree: TreeNode): string {
   let result = "";
 
   function traverse(node: TreeNode, depth: number) {
-    const prefix = "  ".repeat(depth) + "- ";
+    const prefix = INDENT.repeat(depth) + "- ";
     const marker = node.isCurrent ? " " + MARKER : "";
     result += `${prefix}${node.name}${marker}\n`;
     for (const child of node.children) {
@@ -249,8 +241,8 @@ export function getItemsList(tree: TreeNode): string[] {
   const items: string[] = [];
 
   function traverse(node: TreeNode, depth: number) {
-    const indent = "  ".repeat(depth);
-    const marker = node.isCurrent ? " @" : "";
+    const indent = INDENT.repeat(depth);
+    const marker = node.isCurrent ? " " + MARKER : "";
     items.push(`${indent}- ${node.name}${marker}`);
     for (const child of node.children) {
       traverse(child, depth + 1);

@@ -11,13 +11,9 @@ import {
   setCurrentItemEffect,
 } from "./frame.ts";
 
-function clearScreen() {
-  console.clear();
-}
-
 async function interactiveCLI() {
   while (true) {
-    clearScreen();
+    console.clear();
     console.log(await getCurrentItemBreadcrumbEffect());
     const action = await promptMainAction();
     await handleMainAction(action);
