@@ -2,20 +2,27 @@ interface Config {
     filePath: string;
 }
 
-type Line = string & {
-    __brand: "Line";
-};
+interface TreeNode {
+    key: string;
+    name: string;
+    children: TreeNode[];
+    isCurrent: boolean;
+}
 
-type Item = string & {
-    __brand: "Item";
-};
+// type Line = string & {
+//     __brand: "Line";
+// };
 
-type FileContent = string & {
-    __brand: "FileContent";
-};
+// type Item = string & {
+//     __brand: "Item";
+// };
 
-type FormattedBreadcrumb = string & { __brand: "FormattedBreadcrumb" };
+// type FileContent = string & {
+//     __brand: "FileContent";
+// };
 
-type ColorizedBreadcrumb = string & { __brand: "ColorizedBreadcrumb" };
+// type FormattedBreadcrumb = string & { __brand: "FormattedBreadcrumb" };
 
-type ColorizedFocus = string & { __brand: "ColorizedFocus" };
+// type ColorizedBreadcrumb = string & { __brand: "ColorizedBreadcrumb" };
+
+// type ColorizedFocus = string & { __brand: "ColorizedFocus" };

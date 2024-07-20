@@ -1,25 +1,32 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { setCurrentItem } from "../src/frame.ts";
+import { addChildToCurrentItem } from "../src/frame.ts";
 
-Deno.test("setCurrentItem - basic", () => {
+Deno.test("addChildToCurrentItem - basic", () => {
     const tree: TreeNode = {
-        key: "0",
-        name: "Root",
-        isCurrent: false,
-        children: [],
-    };
-
-    const expected: TreeNode = {
         key: "0",
         name: "Root",
         isCurrent: true,
         children: [],
     };
 
-    assertEquals(setCurrentItem(tree, "0"), expected);
+    const expected: TreeNode = {
+        key: "0",
+        name: "Root",
+        isCurrent: false,
+        children: [
+            {
+                key: "1",
+                name: "New Child",
+                isCurrent: true,
+                children: [],
+            },
+        ],
+    };
+
+    assertEquals(addChildToCurrentItem(tree, "New Child"), expected);
 });
 
-Deno.test("setCurrentItem - nested tree", () => {
+Deno.test("addChildToCurrentItem - nested tree", () => {
     const tree: TreeNode = {
         key: "0",
         name: "Root",
@@ -49,21 +56,28 @@ Deno.test("setCurrentItem - nested tree", () => {
                 key: "1",
                 name: "Child 1",
                 isCurrent: false,
-                children: [],
+                children: [
+                    {
+                        key: "1",
+                        name: "New Child",
+                        isCurrent: true,
+                        children: [],
+                    },
+                ],
             },
             {
                 key: "2",
                 name: "Child 2",
-                isCurrent: true,
+                isCurrent: false,
                 children: [],
             },
         ],
     };
 
-    assertEquals(setCurrentItem(tree, "2"), expected);
+    assertEquals(addChildToCurrentItem(tree, "New Child"), expected);
 });
 
-Deno.test("setCurrentItem - deeply nested tree", () => {
+Deno.test("addChildToCurrentItem - deeply nested tree", () => {
     const tree: TreeNode = {
         key: "0",
         name: "Root",
@@ -88,7 +102,7 @@ Deno.test("setCurrentItem - deeply nested tree", () => {
     const expected: TreeNode = {
         key: "0",
         name: "Root",
-        isCurrent: true,
+        isCurrent: false,
         children: [
             {
                 key: "1",
@@ -99,17 +113,24 @@ Deno.test("setCurrentItem - deeply nested tree", () => {
                         key: "2",
                         name: "Grandchild 1.1",
                         isCurrent: false,
-                        children: [],
+                        children: [
+                            {
+                                key: "1",
+                                name: "New Child",
+                                isCurrent: true,
+                                children: [],
+                            },
+                        ],
                     },
                 ],
             },
         ],
     };
 
-    assertEquals(setCurrentItem(tree, "0"), expected);
+    assertEquals(addChildToCurrentItem(tree, "New Child"), expected);
 });
 
-Deno.test("setCurrentItem - key does not exist", () => {
+Deno.test("addChildToCurrentItem - no current item", () => {
     const tree: TreeNode = {
         key: "0",
         name: "Root",
@@ -123,7 +144,6 @@ Deno.test("setCurrentItem - key does not exist", () => {
             },
         ],
     };
-
     const expected: TreeNode = {
         key: "0",
         name: "Root",
@@ -138,5 +158,5 @@ Deno.test("setCurrentItem - key does not exist", () => {
         ],
     };
 
-    assertEquals(setCurrentItem(tree, "2"), expected);
+    assertEquals(addChildToCurrentItem(tree, "New Child"), expected);
 });
