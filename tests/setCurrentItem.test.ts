@@ -1,6 +1,5 @@
-// @deno-types="../types.d.ts"
-import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { setCurrentItem } from "../src/frame.ts";
+import { assertEquals } from "asserts";
+import { setCurrentItem } from "src/frame.ts";
 
 Deno.test("setCurrentItem - basic", () => {
   const tree: TreeNode = {

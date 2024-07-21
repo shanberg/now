@@ -1,10 +1,6 @@
-import {
-  Confirm,
-  Input,
-  Select,
-} from "https://deno.land/x/cliffy@v0.25.7/prompt/mod.ts";
-import { colors } from "https://deno.land/x/cliffy@v0.25.7/ansi/colors.ts";
-import { DATA_STR } from "./consts.ts";
+import { Confirm, Input, Select } from "cliffy";
+import { colors } from "colors";
+import { DATA_STR } from "src/consts.ts";
 import {
   addNextSiblingToCurrentItemEffect,
   completeCurrentItemEffect,
@@ -13,7 +9,7 @@ import {
   getCurrentItemBreadcrumbEffect,
   getItemsListEffect,
   setCurrentItemEffect,
-} from "./frame.ts";
+} from "src/frame.ts";
 
 const FOCUS_ARROW = "▶︎";
 

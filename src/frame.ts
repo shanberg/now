@@ -1,5 +1,5 @@
 // @deno-types="../types.d.ts"
-import { DATA_STR } from "./consts.ts";
+import { DATA_STR } from "src/consts.ts";
 
 // ```markdown
 // - Root Frame

@@ -1,7 +1,5 @@
-// @deno-types="../types.d.ts"
-import { assertEquals } from "https://deno.land/std@0.224.0/assert/assert_equals.ts";
-import { assertThrows } from "https://deno.land/std@0.224.0/assert/assert_throws.ts";
-import { deserialize } from "../src/frame.ts";
+import { assertEquals, assertThrows } from "asserts";
+import { deserialize } from "src/frame.ts";
 
 Deno.test("deserialize - basic structure", () => {
   const input = `
