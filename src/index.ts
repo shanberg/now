@@ -26,7 +26,7 @@ const promptOptions = {
 const SYNTAX_HINT = colors.dim.italic("Syntax: Item 1, Item 2 / Item 2.1");
 
 const showHint = (text: string) => {
-  console.log(colors.dim.italic(text));
+  console.log(colors.dim(text));
 };
 
 /**
@@ -68,21 +68,22 @@ async function interactiveCLI() {
  * @returns {Promise<string>} The path to the frame file.
  */
 async function findOrCreateFrameFile(): Promise<string> {
+  const folderName = Deno.cwd().split("/").pop();
+  const fileName = `.${folderName}.frame.md`;
   const files = [...Deno.readDirSync(".")].filter((file) =>
     file.isFile && file.name.endsWith(".frame.md")
   );
   if (files.length > 0) {
     return files[0].name;
   } else {
+    console.clear();
     showHint("Files are stored in the current directory.");
     const createFile = await Confirm.prompt({
       ...promptOptions,
-      message: "No *.frame.md file found. Create one?",
+      message: `No frame file found. Create ${fileName}?`,
     });
 
     if (createFile) {
-      const folderName = Deno.cwd().split("/").pop();
-      const fileName = `.${folderName}.frame.md`;
       await Deno.writeTextFile(fileName, "- Root Frame @\n");
       return fileName;
     } else {
