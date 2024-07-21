@@ -18,10 +18,12 @@ const FOCUS_ARROW = "▶︎";
 
 const promptOptions = {
   prefix: "",
-  pointer: colors.bold("•"),
+  pointer: "",
   listPointer: colors.bold("•"),
   indent: "",
 };
+
+const styleHint = (text: string) => colors.dim.reset(text);
 
 /**
  * Displays the current status including the breadcrumb and focus.
@@ -33,14 +35,13 @@ async function displayStatus(path: string): Promise<void> {
 
   if (currentItem.split("\n").length > 1) {
     const breadcrumbStr = currentItem.split("\n")[0];
-    const focusStr = currentItem.split("\n")[1].replace("Focus: ", "");
-    console.log(colors.dim(breadcrumbStr));
-    console.log(`${FOCUS_ARROW} ${focusStr}`);
+    const focusStr = currentItem.split("\n")[1];
+    console.log(colors.dim(breadcrumbStr + " /"));
+    console.log(colors.yellow(`${FOCUS_ARROW} ${focusStr}`));
   } else {
     console.log(colors.dim("—"));
-    console.log(`${FOCUS_ARROW} ${currentItem}`);
+    console.log(colors.yellow(`${FOCUS_ARROW} ${currentItem}`));
   }
-
   console.log();
 }
 
@@ -93,10 +94,10 @@ async function promptMainAction(): Promise<string> {
     ...promptOptions,
     message: colors.dim("Actions"),
     options: [
-      { name: "Complete this", value: "complete" },
-      { name: "Add frames", value: "add" },
-      { name: "Add later", value: "later" },
-      { name: "More…", value: "more" },
+      { name: "Finish this", value: "complete" },
+      { name: "Narrow focus", value: "add" },
+      { name: "Add followup", value: "later" },
+      { name: "more…", value: "more" },
     ],
   });
 }
@@ -140,8 +141,8 @@ async function handleAddNestedAction(path: string): Promise<void> {
   await displayStatus(path);
   const newItems = await Input.prompt({
     ...promptOptions,
-    message: "Add a tree of new frames:",
-    hint: "Add a children with commas",
+    message: "Focus on:",
+    hint: styleHint("e.g. 1, 2 / 2.1"),
   });
   await createNestedChildrenEffect(newItems, path);
 }
@@ -154,8 +155,8 @@ async function handleAddLater(path: string): Promise<void> {
   await displayStatus(path);
   const newItems = await Input.prompt({
     ...promptOptions,
-    message: "Add a tree of new frames:",
-    hint: "Add a children with commas",
+    message: "Add for later:",
+    hint: styleHint("1, 2 / 2.1"),
   });
   await addNextSiblingToCurrentItemEffect(newItems, path);
 }
@@ -170,8 +171,8 @@ async function handleMoreAction(path: string): Promise<void> {
     ...promptOptions,
     message: "More Options",
     options: [
-      { name: "Edit frame", value: "edit" },
-      { name: "Switch frame", value: "switch" },
+      { name: "Rename focus", value: "edit" },
+      { name: "Switch focus", value: "switch" },
       { name: "Go back", value: "back" },
       { name: "Exit", value: "exit" },
     ],
@@ -202,17 +203,18 @@ async function handleEditAction(path: string): Promise<void> {
   const currentItem = await getCurrentItemBreadcrumbEffect(path);
   let currentItemName = "";
   if (currentItem.split("\n").length > 1) {
-    currentItemName = currentItem.split("\n")[1].replace("Focus: ", "");
+    currentItemName = currentItem.split("\n")[1];
   } else {
-    currentItemName = currentItem.replace("Focus: ", "");
+    currentItemName = currentItem;
   }
 
+  await displayStatus(path);
   // Prompt the user for the new name
   const newText = await Input.prompt({
     ...promptOptions,
     minLength: 1,
     default: currentItemName,
-    message: "New description:",
+    message: "New name:",
   });
   await editCurrentItemNameEffect(newText, path);
 }
@@ -227,7 +229,7 @@ async function handleSwitchAction(path: string): Promise<void> {
   const itemToSwitch = await Select.prompt({
     ...promptOptions,
     search: true,
-    message: "Select a Frame to switch to:",
+    message: "Select a focus to switch to:",
     options: [
       ...items.map((item, index) => ({
         name: item,
