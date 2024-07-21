@@ -23,7 +23,11 @@ const promptOptions = {
   indent: "",
 };
 
-const styleHint = (text: string) => colors.dim.reset(text);
+const SYNTAX_HINT = colors.dim.italic("Syntax: Item 1, Item 2 / Item 2.1");
+
+const showHint = (text: string) => {
+  console.log(colors.dim.italic(text));
+};
 
 /**
  * Displays the current status including the breadcrumb and focus.
@@ -70,9 +74,12 @@ async function findOrCreateFrameFile(): Promise<string> {
   if (files.length > 0) {
     return files[0].name;
   } else {
-    const createFile = await Confirm.prompt(
-      "No .frame.md file found. Create one?",
-    );
+    showHint("Files are stored in the current directory.");
+    const createFile = await Confirm.prompt({
+      ...promptOptions,
+      message: "No *.frame.md file found. Create one?",
+    });
+
     if (createFile) {
       const folderName = Deno.cwd().split("/").pop();
       const fileName = `.${folderName}.frame.md`;
@@ -139,10 +146,10 @@ async function handleCompleteAction(path: string): Promise<void> {
  */
 async function handleAddNestedAction(path: string): Promise<void> {
   await displayStatus(path);
+  showHint(SYNTAX_HINT);
   const newItems = await Input.prompt({
     ...promptOptions,
     message: "Focus on:",
-    hint: styleHint("e.g. 1, 2 / 2.1"),
   });
   await createNestedChildrenEffect(newItems, path);
 }
@@ -153,10 +160,10 @@ async function handleAddNestedAction(path: string): Promise<void> {
  */
 async function handleAddLater(path: string): Promise<void> {
   await displayStatus(path);
+  showHint(SYNTAX_HINT);
   const newItems = await Input.prompt({
     ...promptOptions,
     message: "Add for later:",
-    hint: styleHint("1, 2 / 2.1"),
   });
   await addNextSiblingToCurrentItemEffect(newItems, path);
 }
@@ -171,10 +178,10 @@ async function handleMoreAction(path: string): Promise<void> {
     ...promptOptions,
     message: "More Options",
     options: [
-      { name: "Rename focus", value: "edit" },
+      { name: "Edit current focus", value: "edit" },
       { name: "Switch focus", value: "switch" },
       { name: "Go back", value: "back" },
-      { name: "Exit", value: "exit" },
+      { name: "Quit", value: "quit" },
     ],
   });
 
@@ -187,7 +194,7 @@ async function handleMoreAction(path: string): Promise<void> {
       break;
     case "back":
       return; // Go back to the previous menu
-    case "exit":
+    case "quit":
       console.log("Exiting...");
       Deno.exit();
       break;
