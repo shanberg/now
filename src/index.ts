@@ -4,6 +4,7 @@ import {
   Select,
 } from "https://deno.land/x/cliffy@v0.25.7/prompt/mod.ts";
 import { colors } from "https://deno.land/x/cliffy@v0.25.7/ansi/colors.ts";
+import { DATA_STR } from "./consts.ts";
 import {
   addNextSiblingToCurrentItemEffect,
   completeCurrentItemEffect,
@@ -84,7 +85,10 @@ async function findOrCreateFrameFile(): Promise<string> {
     });
 
     if (createFile) {
-      await Deno.writeTextFile(fileName, "- Root Frame @\n");
+      await Deno.writeTextFile(
+        fileName,
+        `#${DATA_STR.lineMarker}Root Frame ${DATA_STR.currentItemMarker}\n`,
+      );
       return fileName;
     } else {
       console.log("No frame file created. Exiting...");

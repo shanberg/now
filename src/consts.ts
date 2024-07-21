@@ -1,2 +1,6 @@
-export const MARKER = "@";
-export const INDENT = "  ";
+export const DATA_STR = {
+  currentItemMarker: "@",
+  indent: "  ",
+  lineSeparator: "\n",
+  lineMarker: "- ",
+};

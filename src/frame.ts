@@ -1,5 +1,5 @@
 // @deno-types="../types.d.ts"
-import { INDENT, MARKER } from "./consts.ts";
+import { DATA_STR } from "./consts.ts";
 
 // ```markdown
 // - Root Frame
@@ -49,7 +49,7 @@ async function writeMarkdownFile(content: string, path: string): Promise<void> {
  * @returns {TreeNode} The root node of the tree structure.
  */
 export function deserialize(input: string): TreeNode {
-  const lines = input.split("\n");
+  const lines = input.split(DATA_STR.lineSeparator);
   const stack: { node: TreeNode; indent: number }[] = [];
   let keyCounter = 0;
   let root: TreeNode | null = null;
@@ -61,9 +61,12 @@ export function deserialize(input: string): TreeNode {
     if (!line.trim()) continue;
 
     const spaces = line.search(/\S/);
-    let indent = Math.ceil(spaces / INDENT.length); // Convert spaces to indentation level
-    const isCurrent = line.endsWith(" " + MARKER);
-    const name = line.trimStart().slice(2).replace(" " + MARKER, "");
+    let indent = Math.ceil(spaces / DATA_STR.indent.length); // Convert spaces to indentation level
+    const isCurrent = line.endsWith(" " + DATA_STR.currentItemMarker);
+    const name = line.trimStart().slice(DATA_STR.lineMarker.length).replace(
+      " " + DATA_STR.currentItemMarker,
+      "",
+    );
     const newNode: TreeNode = {
       key: keyCounter.toString(),
       name,
@@ -132,8 +135,8 @@ export function serialize(tree: TreeNode): string {
   let result = "";
 
   function traverse(node: TreeNode, depth: number) {
-    const prefix = INDENT.repeat(depth) + "- ";
-    const marker = node.isCurrent ? " " + MARKER : "";
+    const prefix = DATA_STR.indent.repeat(depth) + "- ";
+    const marker = node.isCurrent ? " " + DATA_STR.currentMarker : "";
     result += `${prefix}${node.name}${marker}\n`;
     for (const child of node.children) {
       traverse(child, depth + 1);
@@ -440,8 +443,8 @@ export function getItemsList(tree: TreeNode): string[] {
   const items: string[] = [];
 
   function traverse(node: TreeNode, depth: number) {
-    const indent = INDENT.repeat(depth);
-    const marker = node.isCurrent ? " " + MARKER : "";
+    const indent = DATA_STR.indent.repeat(depth);
+    const marker = node.isCurrent ? " " + DATA_STR.currentItemMarker : "";
     items.push(`${indent}- ${node.name}${marker}`);
     for (const child of node.children) {
       traverse(child, depth + 1);
