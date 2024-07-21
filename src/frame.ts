@@ -136,7 +136,7 @@ export function serialize(tree: TreeNode): string {
 
   function traverse(node: TreeNode, depth: number) {
     const prefix = DATA_STR.indent.repeat(depth) + "- ";
-    const marker = node.isCurrent ? " " + DATA_STR.currentMarker : "";
+    const marker = node.isCurrent ? " " + DATA_STR.currentItemMarker : "";
     result += `${prefix}${node.name}${marker}\n`;
     for (const child of node.children) {
       traverse(child, depth + 1);
