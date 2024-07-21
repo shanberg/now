@@ -1,3 +1,4 @@
+// @deno-types="../types.d.ts"
 import { INDENT, MARKER } from "./consts.ts";
 
 // ```markdown
@@ -153,7 +154,7 @@ export function serialize(tree: TreeNode): string {
  * @returns {TreeNode} The updated tree structure.
  */
 export function completeCurrentItem(tree: TreeNode): TreeNode {
-  function traverse(node: TreeNode, parent: TreeNode | null): boolean {
+  function traverse(node: TreeNode): boolean {
     // Iterate over each child node
     for (let i = 0; i < node.children.length; i++) {
       const child = node.children[i];
@@ -189,7 +190,7 @@ export function completeCurrentItem(tree: TreeNode): TreeNode {
       }
 
       // Recursively traverse the child nodes
-      if (traverse(child, node)) {
+      if (traverse(child)) {
         return true; // Stop traversal if the current item was found and processed
       }
     }
@@ -197,7 +198,7 @@ export function completeCurrentItem(tree: TreeNode): TreeNode {
   }
 
   // Start the traversal from the root node
-  traverse(tree, null);
+  traverse(tree);
 
   return tree; // Return the updated tree structure
 }
@@ -278,7 +279,7 @@ export function createNestedChildren(tree: TreeNode, items: string): TreeNode {
             name: sibling,
             children: [],
             isCurrent: levelIndex === levels.length - 1 &&
-              siblingIndex === siblings.length - 1,
+              siblingIndex === 0,
           };
           keyCounter++;
           currentNode.children.push(newChild);
