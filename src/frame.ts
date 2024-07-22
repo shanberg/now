@@ -136,7 +136,7 @@ export function serialize(tree: TreeNode): string {
 
   function traverse(node: TreeNode, depth: number) {
     const prefix = DATA_STR.indent.repeat(depth) + "- ";
-    const marker = node.isCurrent ? " " + DATA_STR.currentMarker : "";
+    const marker = node.isCurrent ? " " + DATA_STR.currentItemMarker : "";
     result += `${prefix}${node.name}${marker}\n`;
     for (const child of node.children) {
       traverse(child, depth + 1);
@@ -407,31 +407,31 @@ export function editCurrentItemName(tree: TreeNode, newName: string): TreeNode {
  * @param {TreeNode} tree - The root node of the tree structure.
  * @param {string} key - The key of the item to set as current.
  * @returns {TreeNode} The updated tree structure.
+ * @throws {Error} If the key does not exist in the tree.
  */
 export function setCurrentItem(tree: TreeNode, key: string): TreeNode {
-  let hasUnsetPrevious = false;
-  let hasSetNew = false;
+  let keyFound = false;
 
-  function traverseAndSet(node: TreeNode): boolean {
-    if (node.isCurrent) {
-      node.isCurrent = false;
-      hasUnsetPrevious = true;
+  function traverseAndSet(node: TreeNode): TreeNode {
+    const isCurrent = node.key === key;
+    if (isCurrent) {
+      keyFound = true;
     }
-    if (node.key === key) {
-      node.isCurrent = true;
-      hasSetNew = true;
-    }
-    for (const child of node.children) {
-      traverseAndSet(child);
-      if (hasUnsetPrevious && hasSetNew) {
-        return true;
-      }
-    }
-    return hasUnsetPrevious && hasSetNew;
+
+    return {
+      ...node,
+      isCurrent,
+      children: node.children.map(traverseAndSet),
+    };
   }
 
-  traverseAndSet(tree);
-  return tree;
+  const newTree = traverseAndSet(tree);
+
+  if (!keyFound) {
+    throw new Error(`Key "${key}" does not exist in the tree.`);
+  }
+
+  return newTree;
 }
 
 /**
