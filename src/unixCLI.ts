@@ -1,6 +1,6 @@
 import {
   createFrameFile,
-  displayStatus,
+  // displayStatus,
   findOrCreateFrameFile,
 } from "./cliUtils.ts";
 import {
@@ -19,7 +19,8 @@ async function unixCLI(command: string, path?: string, ...args: any[]) {
   }
   switch (command) {
     case "status":
-      await displayStatus(frameFilePath);
+      // await displayStatus(frameFilePath);
+
       break;
     case "complete":
       await completeCurrentItemEffect(frameFilePath);

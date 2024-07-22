@@ -1,6 +1,7 @@
 import { Confirm } from "https://deno.land/x/cliffy@v0.25.7/prompt/mod.ts";
 import { colors } from "https://deno.land/x/cliffy@v0.25.7/ansi/colors.ts";
 import { getCurrentItemBreadcrumbEffect } from "./frame.ts";
+import { DATA_STR } from "./consts.ts";
 
 export const FOCUS_ARROW = "▶︎";
 
@@ -49,7 +50,7 @@ export async function createFrameFile(fileName: string): Promise<string> {
   }
 }
 
-export async function displayStatus(path: string): Promise<void> {
+export async function displayStatusEffect(path: string): Promise<void> {
   const currentItem = await getCurrentItemBreadcrumbEffect(path);
 
   if (currentItem.split("\n").length > 1) {

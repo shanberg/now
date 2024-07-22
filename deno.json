@@ -7,7 +7,7 @@
     "start": "deno run --allow-read --allow-write src/index.ts",
     "dev": "deno run --allow-read --allow-write --watch src/index.ts",
     "dev:cli": "deno run --allow-read --allow-write --watch src/index.ts cli",
-    "dev:interactive": "deno run --allow-read --allow-write --watch src/index.ts tui",
+    "dev:tui": "deno run --allow-read --allow-write --watch src/index.ts tui",
     "test": "deno test tests/",
     "test:watch": "deno test --watch tests/",
     "bundle": "deno run --allow-read --allow-write --allow-env src/bundle.ts",

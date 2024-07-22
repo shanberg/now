@@ -11,6 +11,25 @@ import { DATA_STR } from "./consts.ts";
 //     - Item 2.2
 // ```
 
+const d = false; // debug mode
+
+class Mutex {
+  private mutex = Promise.resolve();
+
+  lock(): PromiseLike<() => void> {
+    let begin: (unlock: () => void) => void = (unlock) => {};
+
+    this.mutex = this.mutex.then(() => {
+      return new Promise(begin);
+    });
+
+    return new Promise((res) => {
+      begin = res;
+    });
+  }
+}
+const fileMutex = new Mutex();
+
 /**
  * Reads the content of a markdown file.
  * @param {string} path - The path to the markdown file.
@@ -20,6 +39,7 @@ async function readMarkdownFile(path: string): Promise<string> {
   if (!path) {
     throw new Error("Path is required");
   }
+  const unlock = await fileMutex.lock();
   try {
     return await Deno.readTextFile(path);
   } catch (error) {
@@ -30,6 +50,8 @@ async function readMarkdownFile(path: string): Promise<string> {
       console.error("Error reading file:", error);
       return "";
     }
+  } finally {
+    unlock();
   }
 }
 
@@ -39,10 +61,14 @@ async function readMarkdownFile(path: string): Promise<string> {
  * @param {string} path - The path to the markdown file.
  */
 async function writeMarkdownFile(content: string, path: string): Promise<void> {
+  const unlock = await fileMutex.lock();
+
   try {
     await Deno.writeTextFile(path, content);
   } catch (error) {
     console.error("Error writing file:", error);
+  } finally {
+    unlock();
   }
 }
 
@@ -56,10 +82,8 @@ export function deserialize(input: string): TreeNode {
   const stack: { node: TreeNode; indent: number }[] = [];
   let keyCounter = 0;
   let root: TreeNode | null = null;
-  let deepestNodes: TreeNode[] = [];
-  let maxDepth = -1;
+  let hasFoundCurrent = false;
   let prevSpaces = 0;
-  let hasSetCurrent = false;
 
   for (const line of lines) {
     if (!line.trim()) continue;
@@ -76,14 +100,14 @@ export function deserialize(input: string): TreeNode {
       key: keyCounter.toString(),
       name,
       children: [],
-      isCurrent: hasSetCurrent ? false : isMarkedCurrent,
+      isCurrent: hasFoundCurrent ? false : isMarkedCurrent,
     };
 
     if (isMarkedCurrent) {
-      if (hasSetCurrent) {
+      if (hasFoundCurrent) {
         throw new Error(`Multiple items marked as current at line: "${line}"`);
       }
-      hasSetCurrent = true;
+      hasFoundCurrent = true;
     }
     keyCounter++;
 
@@ -114,14 +138,6 @@ export function deserialize(input: string): TreeNode {
       stack.push({ node: newNode, indent });
     }
 
-    // Track deepest nodes
-    if (indent > maxDepth) {
-      maxDepth = indent;
-      deepestNodes = [newNode];
-    } else if (indent === maxDepth) {
-      deepestNodes.push(newNode);
-    }
-
     prevSpaces = spaces;
   }
 
@@ -129,10 +145,9 @@ export function deserialize(input: string): TreeNode {
     throw new Error("Root node not found in the input content.");
   }
 
-  // If no item is current, set the first deepest node as current
-  const currentNode = stack.find(({ node }) => node.isCurrent);
-  if (!currentNode && deepestNodes.length > 0) {
-    deepestNodes[0].isCurrent = true;
+  // If no item is current, set the first node as current
+  if (!hasFoundCurrent) {
+    root.isCurrent = true;
   }
 
   return root;
@@ -510,11 +525,37 @@ export function getCurrentItemBreadcrumb(tree: TreeNode): string {
   }
 
   traverse(tree, []);
-  const breadcrumbPath = breadcrumb.slice(1).join(" / "); // Exclude the root item
+  const breadcrumbPath = breadcrumb.join(" / ");
   if (!breadcrumbPath) {
     return `${currentItemName}`;
   }
-  return [breadcrumbPath, `${currentItemName}`].join("\n");
+  return [breadcrumbPath, currentItemName].join(" / ");
+}
+
+/**
+ * Gets the focus string of the current item in the tree,
+ * including the breadcrumb path and the name of the current item.
+ * @param {TreeNode} tree - The root node of the tree structure.
+ * @returns {string} The focus string of the current item.
+ */
+export function getCurrentFocus(
+  tree: TreeNode,
+): { breadcrumbStr: string; focusStr: string } {
+  const breadcrumbPath = getCurrentItemBreadcrumb(tree);
+
+  if (breadcrumbPath.split(" / ").length > 1) {
+    const breadcrumbStr = breadcrumbPath.slice(
+      0,
+      breadcrumbPath.lastIndexOf(" / "),
+    );
+    const focusStr = breadcrumbPath.slice(
+      breadcrumbPath.lastIndexOf(" / ") + 3,
+    );
+    return { breadcrumbStr, focusStr };
+  } else {
+    const focusStr = breadcrumbPath;
+    return { breadcrumbStr: "Focusing on", focusStr };
+  }
 }
 
 /**
@@ -522,9 +563,11 @@ export function getCurrentItemBreadcrumb(tree: TreeNode): string {
  * @param {string} path - The path to the markdown file.
  * @returns {Promise<TreeNode>} The root node of the tree structure.
  */
-const getTree = async (path: string): Promise<TreeNode> => {
+export const getTree = async (path: string): Promise<TreeNode> => {
   const content = await readMarkdownFile(path);
-  return deserialize(content);
+  const tree = deserialize(content);
+  d && validateTree(tree, "getTree");
+  return tree;
 };
 
 /**
@@ -534,9 +577,40 @@ const getTree = async (path: string): Promise<TreeNode> => {
  */
 const writeTree = async (tree: TreeNode, path: string): Promise<void> => {
   const serialized = serialize(tree);
+  d && validateTree(tree, "writeTree");
   await writeMarkdownFile(serialized, path);
   return;
 };
+
+/**
+ * Validates the tree structure to ensure only one node is marked as current.
+ * @param {TreeNode} tree - The root node of the tree structure.
+ * @throws {Error} If multiple nodes are marked as current.
+ */
+export function validateTree(tree: TreeNode, caller = "validateTree"): void {
+  let currentCount = 0;
+
+  function traverse(node: TreeNode): void {
+    if (node.isCurrent) {
+      currentCount++;
+      if (currentCount > 1) {
+        console.error(
+          `(${caller}) Multiple nodes marked as current: ${node.name}`,
+        );
+        // throw new Error(`Multiple nodes marked as current: ${node.name}`);
+      }
+    }
+    for (const child of node.children) {
+      traverse(child);
+    }
+  }
+
+  traverse(tree);
+
+  if (currentCount === 0) {
+    console.error(`(${caller}) No node is marked as current`);
+  }
+}
 
 /**
  * Retrieves the list of items in the tree structure.
@@ -547,6 +621,7 @@ export async function getItemsListEffect(
   path: string,
 ): Promise<[string, string][]> {
   const tree = await getTree(path);
+  d && validateTree(tree, "getItemsListEffect");
   return getItemsList(tree);
 }
 
@@ -557,6 +632,7 @@ export async function getItemsListEffect(
  */
 export async function getNodesListEffect(path: string): Promise<TreeNode[]> {
   const tree = await getTree(path);
+  d && validateTree(tree, "getNodesListEffect");
   return getNodesList(tree);
 }
 
@@ -571,6 +647,7 @@ export async function addChildToCurrentItemEffect(
 ): Promise<void> {
   const tree = await getTree(path);
   const newTree = addChildToCurrentItem(tree, newText);
+  d && validateTree(newTree, "addChildToCurrentItemEffect");
   await writeTree(newTree, path);
   return;
 }
@@ -587,6 +664,7 @@ export async function createNestedChildrenEffect(
 ): Promise<void> {
   const tree = await getTree(path);
   const newTree = createNestedChildren(tree, items);
+  d && validateTree(newTree, "createNestedChildrenEffect");
   await writeTree(newTree, path);
   return;
 }
@@ -602,6 +680,7 @@ export async function addNextSiblingToCurrentItemEffect(
 ): Promise<void> {
   const tree = await getTree(path);
   const newTree = addNextSiblingToCurrentItem(tree, newText);
+  d && validateTree(newTree, "addNextSiblingToCurrentItemEffect");
   await writeTree(newTree, path);
   return;
 }
@@ -613,6 +692,7 @@ export async function addNextSiblingToCurrentItemEffect(
 export async function completeCurrentItemEffect(path: string): Promise<void> {
   const tree = await getTree(path);
   const newTree = completeCurrentItem(tree);
+  d && validateTree(newTree, "completeCurrentItemEffect");
   await writeTree(newTree, path);
   return;
 }
@@ -628,6 +708,7 @@ export async function setCurrentItemEffect(
 ): Promise<void> {
   const tree = await getTree(path);
   const newTree = setCurrentItem(tree, key);
+  d && validateTree(newTree, "setCurrentItemEffect");
   await writeTree(newTree, path);
   return;
 }
@@ -643,6 +724,7 @@ export async function editCurrentItemNameEffect(
 ): Promise<void> {
   const tree = await getTree(path);
   const newTree = editCurrentItemName(tree, newName);
+  d && validateTree(tree, "editCurrentItemNameEffect");
   await writeTree(newTree, path);
   return;
 }
@@ -656,5 +738,6 @@ export async function getCurrentItemBreadcrumbEffect(
   path: string,
 ): Promise<string> {
   const tree = await getTree(path);
+  d && validateTree(tree, "getCurrentItemBreadcrumbEffect");
   return getCurrentItemBreadcrumb(tree);
 }
