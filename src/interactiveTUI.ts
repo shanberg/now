@@ -29,7 +29,9 @@ const FOCUS_ARROW = "▶︎";
 function displayCurrentFocus(tree: TreeNode): void {
   d || console.clear();
   const { breadcrumbStr, focusStr } = getCurrentFocus(tree);
-  console.log(colors.dim(breadcrumbStr + " /"));
+  const trimmedBread = breadcrumbStr.split(" / ").slice(1).join(" / ");
+
+  console.log(colors.dim(trimmedBread + " /"));
   console.log(colors.yellow(`${FOCUS_ARROW} ${focusStr}`));
   console.log();
 }
