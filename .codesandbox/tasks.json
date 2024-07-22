@@ -5,10 +5,7 @@
     "run": {
       "name": "TUI",
       "command": "deno task dev",
-      "runAtStart": true,
-      "preview": {
-        "port": 8080
-      }
+      "runAtStart": true
     },
     "test": {
       "name": "Test",
