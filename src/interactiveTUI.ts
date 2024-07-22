@@ -5,6 +5,7 @@ import {
 import { colors } from "https://deno.land/x/cliffy@v0.25.7/ansi/colors.ts";
 import {
   createFrameFile,
+  displayCurrentFocus,
   findOrCreateFrameFile,
   promptOptions,
   showHint,
@@ -23,18 +24,6 @@ import {
 } from "./frame.ts";
 
 const d = false; // debug mode
-
-const FOCUS_ARROW = "▶︎";
-
-function displayCurrentFocus(tree: TreeNode): void {
-  d || console.clear();
-  const { breadcrumbStr, focusStr } = getCurrentFocus(tree);
-  const trimmedBread = breadcrumbStr.split(" / ").slice(1).join(" / ");
-
-  console.log(colors.dim(trimmedBread + " /"));
-  console.log(colors.yellow(`${FOCUS_ARROW} ${focusStr}`));
-  console.log();
-}
 
 async function interactiveTUI(path?: string) {
   d || console.clear();

@@ -1,6 +1,6 @@
 import { Confirm } from "https://deno.land/x/cliffy@v0.25.7/prompt/mod.ts";
 import { colors } from "https://deno.land/x/cliffy@v0.25.7/ansi/colors.ts";
-import { getCurrentItemBreadcrumbEffect } from "./frame.ts";
+import { getCurrentFocus, getTree } from "./frame.ts";
 import { DATA_STR } from "./consts.ts";
 
 export const FOCUS_ARROW = "▶︎";
@@ -18,7 +18,7 @@ export const showHint = (text: string) => {
   console.log(colors.dim(text));
 };
 
-export async function findOrCreateFrameFile(): Promise<string> {
+export function findOrCreateFrameFile(): string {
   const folderName = Deno.cwd().split("/").pop();
   const fileName = `.${folderName}.frame.md`;
   const files = [...Deno.readDirSync(".")].filter((file) =>
@@ -50,17 +50,15 @@ export async function createFrameFile(fileName: string): Promise<string> {
   }
 }
 
-export async function displayStatusEffect(path: string): Promise<void> {
-  const currentItem = await getCurrentItemBreadcrumbEffect(path);
+export function displayCurrentFocus(tree: TreeNode): void {
+  const { breadcrumbStr, focusStr } = getCurrentFocus(tree);
+  const trimmedBread = breadcrumbStr.split(" / ").slice(1).join(" / ");
 
-  if (currentItem.split("\n").length > 1) {
-    const breadcrumbStr = currentItem.split("\n")[0];
-    const focusStr = currentItem.split("\n")[1];
-    console.log(colors.dim(breadcrumbStr + " /"));
-    console.log(colors.yellow(`${FOCUS_ARROW} ${focusStr}`));
-  } else {
-    console.log(colors.dim("Focusing on"));
-    console.log(colors.yellow(`${FOCUS_ARROW} ${currentItem}`));
-  }
-  console.log();
+  console.log(colors.dim(trimmedBread + " /"));
+  console.log(colors.yellow(`${FOCUS_ARROW} ${focusStr}`));
+}
+
+export async function displayCurrentFocusEffect(path: string): Promise<void> {
+  const tree = await getTree(path);
+  displayCurrentFocus(tree);
 }
