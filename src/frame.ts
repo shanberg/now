@@ -1,5 +1,5 @@
 // @deno-types="../types.d.ts"
-import { DATA_STR } from "src/consts.ts";
+import { DATA_STR } from "./consts.ts";
 
 // ```markdown
 // - Root Frame
@@ -17,6 +17,9 @@ import { DATA_STR } from "src/consts.ts";
  * @returns {Promise<string>} The content of the markdown file.
  */
 async function readMarkdownFile(path: string): Promise<string> {
+  if (!path) {
+    throw new Error("Path is required");
+  }
   try {
     return await Deno.readTextFile(path);
   } catch (error) {
@@ -56,23 +59,32 @@ export function deserialize(input: string): TreeNode {
   let deepestNodes: TreeNode[] = [];
   let maxDepth = -1;
   let prevSpaces = 0;
+  let hasSetCurrent = false;
 
   for (const line of lines) {
     if (!line.trim()) continue;
 
     const spaces = line.search(/\S/);
     let indent = Math.ceil(spaces / DATA_STR.indent.length); // Convert spaces to indentation level
-    const isCurrent = line.endsWith(" " + DATA_STR.currentItemMarker);
+    const isMarkedCurrent = line.endsWith(" " + DATA_STR.currentItemMarker);
     const name = line.trimStart().slice(DATA_STR.lineMarker.length).replace(
       " " + DATA_STR.currentItemMarker,
       "",
     );
+
     const newNode: TreeNode = {
       key: keyCounter.toString(),
       name,
       children: [],
-      isCurrent,
+      isCurrent: hasSetCurrent ? false : isMarkedCurrent,
     };
+
+    if (isMarkedCurrent) {
+      if (hasSetCurrent) {
+        throw new Error(`Multiple items marked as current at line: "${line}"`);
+      }
+      hasSetCurrent = true;
+    }
     keyCounter++;
 
     if (indent === 0) {
@@ -407,31 +419,31 @@ export function editCurrentItemName(tree: TreeNode, newName: string): TreeNode {
  * @param {TreeNode} tree - The root node of the tree structure.
  * @param {string} key - The key of the item to set as current.
  * @returns {TreeNode} The updated tree structure.
+ * @throws {Error} If the key does not exist in the tree.
  */
 export function setCurrentItem(tree: TreeNode, key: string): TreeNode {
-  let hasUnsetPrevious = false;
-  let hasSetNew = false;
+  let keyFound = false;
 
-  function traverseAndSet(node: TreeNode): boolean {
-    if (node.isCurrent) {
-      node.isCurrent = false;
-      hasUnsetPrevious = true;
+  function traverseAndSet(node: TreeNode): TreeNode {
+    const isCurrent = node.key === key;
+    if (isCurrent) {
+      keyFound = true;
     }
-    if (node.key === key) {
-      node.isCurrent = true;
-      hasSetNew = true;
-    }
-    for (const child of node.children) {
-      traverseAndSet(child);
-      if (hasUnsetPrevious && hasSetNew) {
-        return true;
-      }
-    }
-    return hasUnsetPrevious && hasSetNew;
+
+    return {
+      ...node,
+      isCurrent,
+      children: node.children.map(traverseAndSet),
+    };
   }
 
-  traverseAndSet(tree);
-  return tree;
+  const newTree = traverseAndSet(tree);
+
+  if (!keyFound) {
+    throw new Error(`Key "${key}" does not exist in the tree.`);
+  }
+
+  return newTree;
 }
 
 /**
@@ -439,13 +451,32 @@ export function setCurrentItem(tree: TreeNode, key: string): TreeNode {
  * @param {TreeNode} tree - The root node of the tree structure.
  * @returns {string[]} The list of items.
  */
-export function getItemsList(tree: TreeNode): string[] {
-  const items: string[] = [];
+export function getItemsList(tree: TreeNode): [string, string][] {
+  const items: [string, string][] = [];
 
   function traverse(node: TreeNode, depth: number) {
     const indent = DATA_STR.indent.repeat(depth);
     const marker = node.isCurrent ? " " + DATA_STR.currentItemMarker : "";
-    items.push(`${indent}- ${node.name}${marker}`);
+    items.push([`${indent}${node.name}${marker}`, node.key]);
+    for (const child of node.children) {
+      traverse(child, depth + 1);
+    }
+  }
+
+  traverse(tree, 0);
+  return items;
+}
+
+/**
+ * Gets an array of TreeNodes from the tree structure.
+ * @param {TreeNode} tree - The root node of the tree structure.
+ * @returns {TreeNode[]} The list of items.
+ */
+export function getNodesList(tree: TreeNode): TreeNode[] {
+  const items: TreeNode[] = [];
+
+  function traverse(node: TreeNode, depth: number) {
+    items.push(node);
     for (const child of node.children) {
       traverse(child, depth + 1);
     }
@@ -510,11 +541,23 @@ const writeTree = async (tree: TreeNode, path: string): Promise<void> => {
 /**
  * Retrieves the list of items in the tree structure.
  * @param {string} path - The path to the markdown file.
- * @returns {Promise<string[]>} The list of items.
+ * @returns {Promise<[string, string][]>} The list of items.
  */
-export async function getItemsListEffect(path: string): Promise<string[]> {
+export async function getItemsListEffect(
+  path: string,
+): Promise<[string, string][]> {
   const tree = await getTree(path);
   return getItemsList(tree);
+}
+
+/**
+ * Retrieves the list of items in the tree structure.
+ * @param {string} path - The path to the markdown file.
+ * @returns {Promise<TreeNode[]>} The list of nodes.
+ */
+export async function getNodesListEffect(path: string): Promise<TreeNode[]> {
+  const tree = await getTree(path);
+  return getNodesList(tree);
 }
 
 /**

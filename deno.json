@@ -1,15 +1,16 @@
 {
   "imports": {
     "std/": "https://deno.land/std@0.189.0/",
-    "asserts": "https://deno.land/std@0.224.0/assert/mod.ts",
-    "cliffy": "https://deno.land/x/cliffy@v0.25.7/prompt/mod.ts",
-    "colors": "https://deno.land/x/cliffy@v0.25.7/ansi/colors.ts",
     "src/": "./src/"
   },
   "tasks": {
     "start": "deno run --allow-read --allow-write src/index.ts",
     "dev": "deno run --allow-read --allow-write --watch src/index.ts",
+    "dev:cli": "deno run --allow-read --allow-write --watch src/index.ts cli",
+    "dev:interactive": "deno run --allow-read --allow-write --watch src/index.ts tui",
     "test": "deno test tests/",
-    "test:watch": "deno test --watch tests/"
+    "test:watch": "deno test --watch tests/",
+    "bundle": "deno run --allow-read --allow-write --allow-env src/bundle.ts",
+    "bundle:watch": "deno run --allow-read --allow-write --allow-env --watch src/bundle.ts"
   }
 }

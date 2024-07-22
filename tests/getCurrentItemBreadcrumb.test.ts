@@ -1,5 +1,5 @@
-import { assertEquals } from "asserts";
-import { getCurrentItemBreadcrumb } from "src/frame.ts";
+import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { getCurrentItemBreadcrumb } from "../src/frame.ts";
 
 Deno.test("getCurrentItemBreadcrumb - current item at root", () => {
   const tree: TreeNode = {

@@ -1,5 +1,8 @@
-import { assertEquals } from "asserts";
-import { setCurrentItem } from "src/frame.ts";
+import {
+  assertEquals,
+  assertThrows,
+} from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { setCurrentItem } from "../src/frame.ts";
 
 Deno.test("setCurrentItem - basic", () => {
   const tree: TreeNode = {
@@ -138,5 +141,5 @@ Deno.test("setCurrentItem - key does not exist", () => {
     ],
   };
 
-  assertEquals(setCurrentItem(tree, "2"), expected);
+  assertThrows(() => setCurrentItem(tree, "2"), Error);
 });
