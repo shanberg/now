@@ -11,7 +11,6 @@ import {
   showHint,
   SYNTAX_HINT,
 } from "./cliUtils.ts";
-
 import {
   addNextSiblingToCurrentItemEffect,
   completeCurrentItemEffect,
@@ -48,12 +47,15 @@ async function promptMainAction(
   displayCurrentFocus(tree);
   return await Select.prompt({
     ...promptOptions,
+    search: true,
+    searchLabel: "",
     message: colors.dim("Actions"),
     options: [
-      { name: "Finish this", value: "complete" },
       { name: "Narrow focus", value: "add" },
+      { name: "Finish this", value: "complete" },
+      { name: "Switch focus", value: "switch" },
       { name: "Add followup", value: "later" },
-      { name: "more…", value: "more" },
+      { name: "Edit focus", value: "edit" },
     ],
   });
 }
@@ -69,8 +71,13 @@ async function handleMainAction(
       return await handleAddNestedAction(path);
     case "later":
       return await handleAddLater(path);
-    case "more":
-      return await handleMoreAction(path);
+    case "switch":
+      return await handleSwitchAction(path);
+    case "edit":
+      return await handleEditAction(path);
+    case "quit":
+      console.log("Exiting...");
+      Deno.exit();
     default:
       return await getTree(path); // Return the current tree if action is unrecognized
   }
@@ -114,10 +121,10 @@ async function handleMoreAction(path: string): Promise<TreeNode> {
   displayCurrentFocus(tree);
   const moreAction = await Select.prompt({
     ...promptOptions,
+    search: true,
     message: "More Options",
     options: [
       { name: "Edit current focus", value: "edit" },
-      { name: "Switch focus", value: "switch" },
       { name: "Go back", value: "back" },
       { name: "Quit", value: "quit" },
     ],
@@ -126,8 +133,6 @@ async function handleMoreAction(path: string): Promise<TreeNode> {
   switch (moreAction) {
     case "edit":
       return await handleEditAction(path);
-    case "switch":
-      return await handleSwitchAction(path);
     case "back":
       return tree; // Go back to the previous menu
     case "quit":
@@ -161,6 +166,7 @@ async function handleSwitchAction(path: string): Promise<TreeNode> {
   const switchToKey = await Select.prompt({
     ...promptOptions,
     search: true,
+    searchLabel: "",
     message: "Select a focus to switch to:",
     options: [
       ...items.map(([name, key]: [string, string]) => ({

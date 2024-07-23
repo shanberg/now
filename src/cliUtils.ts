@@ -54,8 +54,9 @@ export function displayCurrentFocus(tree: TreeNode): void {
   const { breadcrumbStr, focusStr } = getCurrentFocus(tree);
   const trimmedBread = breadcrumbStr.split(" / ").slice(1).join(" / ");
 
-  console.log(colors.dim(trimmedBread + " /"));
+  console.log(colors.dim(trimmedBread || "—"));
   console.log(colors.yellow(`${FOCUS_ARROW} ${focusStr}`));
+  console.log();
 }
 
 export async function displayCurrentFocusEffect(path: string): Promise<void> {
