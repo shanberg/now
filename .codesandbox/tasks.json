@@ -26,6 +26,11 @@
       "name": "Bundle",
       "command": "deno task bundle:watch",
       "runAtStart": false
+    },
+    "compile": {
+      "name": "Compile",
+      "command": "deno task compile",
+      "runAtStart": false
     }
   }
 }

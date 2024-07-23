@@ -10,9 +10,8 @@
     "lint:watch": "deno lint --watch",
     "fmt": "deno fmt",
     "fmt:watch": "deno fmt --watch",
-    "test": "deno test tests/",
-    "test:watch": "deno test --watch tests/",
-    "bundle": "deno run --allow-read --allow-write --allow-env src/bundle.ts",
-    "bundle:watch": "deno run --allow-read --allow-write --allow-env --watch src/bundle.ts"
+    "test": "deno test --allow-read --allow-write tests/",
+    "test:watch": "deno test --watch --allow-read --allow-write tests/",
+    "compile": "deno compile --allow-read --allow-write src/index.ts"
   }
 }
