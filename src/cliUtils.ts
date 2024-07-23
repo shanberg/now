@@ -8,6 +8,9 @@ export const FOCUS_ARROW = "▶︎";
 export const promptOptions = {
   prefix: "",
   pointer: "",
+  search: true,
+  searchLabel: "",
+  maxRows: 20,
   listPointer: colors.bold("•"),
   indent: "",
 };

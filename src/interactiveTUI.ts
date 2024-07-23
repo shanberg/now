@@ -47,8 +47,6 @@ async function promptMainAction(
   displayCurrentFocus(tree);
   return await Select.prompt({
     ...promptOptions,
-    search: true,
-    searchLabel: "",
     message: colors.dim("Actions"),
     options: [
       { name: "Narrow focus", value: "add" },
@@ -121,7 +119,6 @@ async function handleMoreAction(path: string): Promise<TreeNode> {
   displayCurrentFocus(tree);
   const moreAction = await Select.prompt({
     ...promptOptions,
-    search: true,
     message: "More Options",
     options: [
       { name: "Edit current focus", value: "edit" },
@@ -165,8 +162,6 @@ async function handleSwitchAction(path: string): Promise<TreeNode> {
   const items = await getItemsListEffect(path);
   const switchToKey = await Select.prompt({
     ...promptOptions,
-    search: true,
-    searchLabel: "",
     message: "Select a focus to switch to:",
     options: [
       ...items.map(([name, key]: [string, string]) => ({
