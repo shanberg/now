@@ -3,4 +3,4 @@ export const DATA_STR = {
   indent: "  ",
   lineSeparator: "\n",
   lineMarker: "- ",
-};
+} as const;

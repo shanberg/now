@@ -3,12 +3,34 @@
   "setupTasks": [],
   "tasks": {
     "run": {
-      "name": "Run Frames",
+      "name": "TUI",
       "command": "deno task dev",
-      "runAtStart": true,
-      "preview": {
-        "port": 8080
-      }
+      "runAtStart": true
+    },
+    "test": {
+      "name": "Test",
+      "command": "deno task test:watch",
+      "runAtStart": false
+    },
+    "lint": {
+      "name": "Lint",
+      "command": "deno task lint:watch",
+      "runAtStart": false
+    },
+    "fmt": {
+      "name": "Fmt",
+      "command": "deno task fmt:watch",
+      "runAtStart": false
+    },
+    "bundle": {
+      "name": "Bundle",
+      "command": "deno task bundle:watch",
+      "runAtStart": false
+    },
+    "compile": {
+      "name": "Compile",
+      "command": "deno task compile",
+      "runAtStart": false
     }
   }
 }
