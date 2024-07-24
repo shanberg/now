@@ -1,25 +1,10 @@
-import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { focusNextSibling, focusPreviousSibling } from "../src/frame.ts";
+import {
+  assertEquals,
+  assertThrows,
+} from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { moveNodeToNewParent } from "../src/frame.ts";
 
-Deno.test("focusNextSibling - no siblings", () => {
-  const tree: TreeNode = {
-    key: "0",
-    name: "Root",
-    isCurrent: true,
-    children: [],
-  };
-
-  const expected: TreeNode = {
-    key: "0",
-    name: "Root",
-    isCurrent: true,
-    children: [],
-  };
-
-  assertEquals(focusNextSibling(tree), expected);
-});
-
-Deno.test("focusNextSibling - multiple siblings", () => {
+Deno.test("moveNodeToNewParent - move root child to another root child", () => {
   const tree: TreeNode = {
     key: "0",
     name: "Root",
@@ -34,12 +19,6 @@ Deno.test("focusNextSibling - multiple siblings", () => {
       {
         key: "2",
         name: "Child 2",
-        isCurrent: false,
-        children: [],
-      },
-      {
-        key: "3",
-        name: "Child 3",
         isCurrent: false,
         children: [],
       },
@@ -52,288 +31,25 @@ Deno.test("focusNextSibling - multiple siblings", () => {
     isCurrent: false,
     children: [
       {
-        key: "1",
-        name: "Child 1",
-        isCurrent: false,
-        children: [],
-      },
-      {
         key: "2",
         name: "Child 2",
-        isCurrent: true,
-        children: [],
-      },
-      {
-        key: "3",
-        name: "Child 3",
-        isCurrent: false,
-        children: [],
-      },
-    ],
-  };
-
-  assertEquals(focusNextSibling(tree), expected);
-});
-
-Deno.test("focusNextSibling - last sibling cycles to first", () => {
-  const tree: TreeNode = {
-    key: "0",
-    name: "Root",
-    isCurrent: false,
-    children: [
-      {
-        key: "1",
-        name: "Child 1",
-        isCurrent: false,
-        children: [],
-      },
-      {
-        key: "2",
-        name: "Child 2",
-        isCurrent: false,
-        children: [],
-      },
-      {
-        key: "3",
-        name: "Child 3",
-        isCurrent: true,
-        children: [],
-      },
-    ],
-  };
-
-  const expected: TreeNode = {
-    key: "0",
-    name: "Root",
-    isCurrent: false,
-    children: [
-      {
-        key: "1",
-        name: "Child 1",
-        isCurrent: true,
-        children: [],
-      },
-      {
-        key: "2",
-        name: "Child 2",
-        isCurrent: false,
-        children: [],
-      },
-      {
-        key: "3",
-        name: "Child 3",
-        isCurrent: false,
-        children: [],
-      },
-    ],
-  };
-
-  assertEquals(focusNextSibling(tree), expected);
-});
-
-Deno.test("focusPreviousSibling - no siblings", () => {
-  const tree: TreeNode = {
-    key: "0",
-    name: "Root",
-    isCurrent: true,
-    children: [],
-  };
-
-  const expected: TreeNode = {
-    key: "0",
-    name: "Root",
-    isCurrent: true,
-    children: [],
-  };
-
-  assertEquals(focusPreviousSibling(tree), expected);
-});
-
-Deno.test("focusPreviousSibling - multiple siblings", () => {
-  const tree: TreeNode = {
-    key: "0",
-    name: "Root",
-    isCurrent: false,
-    children: [
-      {
-        key: "1",
-        name: "Child 1",
-        isCurrent: false,
-        children: [],
-      },
-      {
-        key: "2",
-        name: "Child 2",
-        isCurrent: true,
-        children: [],
-      },
-      {
-        key: "3",
-        name: "Child 3",
-        isCurrent: false,
-        children: [],
-      },
-    ],
-  };
-
-  const expected: TreeNode = {
-    key: "0",
-    name: "Root",
-    isCurrent: false,
-    children: [
-      {
-        key: "1",
-        name: "Child 1",
-        isCurrent: true,
-        children: [],
-      },
-      {
-        key: "2",
-        name: "Child 2",
-        isCurrent: false,
-        children: [],
-      },
-      {
-        key: "3",
-        name: "Child 3",
-        isCurrent: false,
-        children: [],
-      },
-    ],
-  };
-
-  assertEquals(focusPreviousSibling(tree), expected);
-});
-
-Deno.test("focusPreviousSibling - first sibling cycles to last", () => {
-  const tree: TreeNode = {
-    key: "0",
-    name: "Root",
-    isCurrent: false,
-    children: [
-      {
-        key: "1",
-        name: "Child 1",
-        isCurrent: true,
-        children: [],
-      },
-      {
-        key: "2",
-        name: "Child 2",
-        isCurrent: false,
-        children: [],
-      },
-      {
-        key: "3",
-        name: "Child 3",
-        isCurrent: false,
-        children: [],
-      },
-    ],
-  };
-
-  const expected: TreeNode = {
-    key: "0",
-    name: "Root",
-    isCurrent: false,
-    children: [
-      {
-        key: "1",
-        name: "Child 1",
-        isCurrent: false,
-        children: [],
-      },
-      {
-        key: "2",
-        name: "Child 2",
-        isCurrent: false,
-        children: [],
-      },
-      {
-        key: "3",
-        name: "Child 3",
-        isCurrent: true,
-        children: [],
-      },
-    ],
-  };
-
-  assertEquals(focusPreviousSibling(tree), expected);
-});
-
-Deno.test("focusNextSibling - deeply nested nodes", () => {
-  const tree: TreeNode = {
-    key: "0",
-    name: "Root",
-    isCurrent: false,
-    children: [
-      {
-        key: "1",
-        name: "Child 1",
         isCurrent: false,
         children: [
           {
-            key: "2",
-            name: "Grandchild 1.1",
-            isCurrent: false,
-            children: [
-              {
-                key: "3",
-                name: "Great-Grandchild 1.1.1",
-                isCurrent: true,
-                children: [],
-              },
-              {
-                key: "4",
-                name: "Great-Grandchild 1.1.2",
-                isCurrent: false,
-                children: [],
-              },
-            ],
+            key: "1",
+            name: "Child 1",
+            isCurrent: true,
+            children: [],
           },
         ],
       },
     ],
   };
 
-  const expected: TreeNode = {
-    key: "0",
-    name: "Root",
-    isCurrent: false,
-    children: [
-      {
-        key: "1",
-        name: "Child 1",
-        isCurrent: false,
-        children: [
-          {
-            key: "2",
-            name: "Grandchild 1.1",
-            isCurrent: false,
-            children: [
-              {
-                key: "3",
-                name: "Great-Grandchild 1.1.1",
-                isCurrent: false,
-                children: [],
-              },
-              {
-                key: "4",
-                name: "Great-Grandchild 1.1.2",
-                isCurrent: true,
-                children: [],
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  };
-
-  assertEquals(focusNextSibling(tree), expected);
+  assertEquals(moveNodeToNewParent(tree, "1", "2"), expected);
 });
 
-Deno.test("focusPreviousSibling - deeply nested nodes", () => {
+Deno.test("moveNodeToNewParent - move nested child to another nested child", () => {
   const tree: TreeNode = {
     key: "0",
     name: "Root",
@@ -345,79 +61,7 @@ Deno.test("focusPreviousSibling - deeply nested nodes", () => {
         isCurrent: false,
         children: [
           {
-            key: "2",
-            name: "Grandchild 1.1",
-            isCurrent: false,
-            children: [
-              {
-                key: "3",
-                name: "Great-Grandchild 1.1.1",
-                isCurrent: false,
-                children: [],
-              },
-              {
-                key: "4",
-                name: "Great-Grandchild 1.1.2",
-                isCurrent: true,
-                children: [],
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  };
-
-  const expected: TreeNode = {
-    key: "0",
-    name: "Root",
-    isCurrent: false,
-    children: [
-      {
-        key: "1",
-        name: "Child 1",
-        isCurrent: false,
-        children: [
-          {
-            key: "2",
-            name: "Grandchild 1.1",
-            isCurrent: false,
-            children: [
-              {
-                key: "3",
-                name: "Great-Grandchild 1.1.1",
-                isCurrent: true,
-                children: [],
-              },
-              {
-                key: "4",
-                name: "Great-Grandchild 1.1.2",
-                isCurrent: false,
-                children: [],
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  };
-
-  assertEquals(focusPreviousSibling(tree), expected);
-});
-
-Deno.test("focusNextSibling - nodes at the same level under different parents", () => {
-  const tree: TreeNode = {
-    key: "0",
-    name: "Root",
-    isCurrent: false,
-    children: [
-      {
-        key: "1",
-        name: "Child 1",
-        isCurrent: false,
-        children: [
-          {
-            key: "2",
+            key: "3",
             name: "Grandchild 1.1",
             isCurrent: true,
             children: [],
@@ -425,7 +69,7 @@ Deno.test("focusNextSibling - nodes at the same level under different parents", 
         ],
       },
       {
-        key: "3",
+        key: "2",
         name: "Child 2",
         isCurrent: false,
         children: [
@@ -449,17 +93,10 @@ Deno.test("focusNextSibling - nodes at the same level under different parents", 
         key: "1",
         name: "Child 1",
         isCurrent: false,
-        children: [
-          {
-            key: "2",
-            name: "Grandchild 1.1",
-            isCurrent: true,
-            children: [],
-          },
-        ],
+        children: [],
       },
       {
-        key: "3",
+        key: "2",
         name: "Child 2",
         isCurrent: false,
         children: [
@@ -469,15 +106,65 @@ Deno.test("focusNextSibling - nodes at the same level under different parents", 
             isCurrent: false,
             children: [],
           },
+          {
+            key: "3",
+            name: "Grandchild 1.1",
+            isCurrent: true,
+            children: [],
+          },
         ],
       },
     ],
   };
 
-  assertEquals(focusNextSibling(tree), expected);
+  assertEquals(moveNodeToNewParent(tree, "3", "2"), expected);
 });
 
-Deno.test("focusPreviousSibling - nodes at the same level under different parents", () => {
+Deno.test("moveNodeToNewParent - move node to itself", () => {
+  const tree: TreeNode = {
+    key: "0",
+    name: "Root",
+    isCurrent: false,
+    children: [
+      {
+        key: "1",
+        name: "Child 1",
+        isCurrent: true,
+        children: [],
+      },
+    ],
+  };
+
+  assertThrows(
+    () => {
+      moveNodeToNewParent(tree, "1", "1");
+    },
+    Error,
+    "The node to move cannot be the same as the new parent node.",
+  );
+});
+
+Deno.test("moveNodeToNewParent - move node to non-existent parent", () => {
+  const tree: TreeNode = {
+    key: "0",
+    name: "Root",
+    isCurrent: false,
+    children: [
+      {
+        key: "1",
+        name: "Child 1",
+        isCurrent: true,
+        children: [],
+      },
+    ],
+  };
+
+  const expected: TreeNode = { ...tree };
+
+  assertEquals(moveNodeToNewParent(tree, "1", "999"), expected);
+});
+
+Deno.test("moveNodeToNewParent - deeply nested move", () => {
   const tree: TreeNode = {
     key: "0",
     name: "Root",
@@ -489,7 +176,7 @@ Deno.test("focusPreviousSibling - nodes at the same level under different parent
         isCurrent: false,
         children: [
           {
-            key: "2",
+            key: "3",
             name: "Grandchild 1.1",
             isCurrent: true,
             children: [],
@@ -497,7 +184,7 @@ Deno.test("focusPreviousSibling - nodes at the same level under different parent
         ],
       },
       {
-        key: "3",
+        key: "2",
         name: "Child 2",
         isCurrent: false,
         children: [
@@ -521,17 +208,10 @@ Deno.test("focusPreviousSibling - nodes at the same level under different parent
         key: "1",
         name: "Child 1",
         isCurrent: false,
-        children: [
-          {
-            key: "2",
-            name: "Grandchild 1.1",
-            isCurrent: true,
-            children: [],
-          },
-        ],
+        children: [],
       },
       {
-        key: "3",
+        key: "2",
         name: "Child 2",
         isCurrent: false,
         children: [
@@ -539,12 +219,19 @@ Deno.test("focusPreviousSibling - nodes at the same level under different parent
             key: "4",
             name: "Grandchild 2.1",
             isCurrent: false,
-            children: [],
+            children: [
+              {
+                key: "3",
+                name: "Grandchild 1.1",
+                isCurrent: true,
+                children: [],
+              },
+            ],
           },
         ],
       },
     ],
   };
 
-  assertEquals(focusPreviousSibling(tree), expected);
+  assertEquals(moveNodeToNewParent(tree, "3", "4"), expected);
 });

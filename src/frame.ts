@@ -524,6 +524,118 @@ export function setCurrentItem(tree: TreeNode, key: string): TreeNode {
 }
 
 /**
+ * Recursively finds a node by its key.
+ *
+ * @param {TreeNode} node - The current node being checked.
+ * @param {string} key - The key of the node to find.
+ * @returns {TreeNode | null} The node if found, otherwise null.
+ */
+function findNodeByKey(node: TreeNode, key: string): TreeNode | null {
+  if (node.key === key) {
+    return node;
+  }
+  for (const child of node.children) {
+    const result = findNodeByKey(child, key);
+    if (result) {
+      return result;
+    }
+  }
+  return null;
+}
+
+/**
+ * Moves a node to be the last child of a new parent node in the tree.
+ *
+ * @param {TreeNode} tree - The root node of the tree structure.
+ * @param {string} nodeKey - The key of the node to move.
+ * @param {string} newParentKey - The key of the new parent node.
+ * @returns {TreeNode} The updated tree structure.
+ * @throws {Error} If the nodeKey is the same as the newParentKey.
+ */
+export function moveNodeToNewParent(
+  tree: TreeNode,
+  nodeKey: string,
+  newParentKey: string,
+): TreeNode {
+  console.log(nodeKey, newParentKey);
+
+  if (nodeKey === newParentKey) {
+    throw new Error(
+      "The node to move cannot be the same as the new parent node.",
+    );
+  }
+
+  let nodeToMove: TreeNode | null = null;
+  let parentOfNodeToMove: TreeNode | null = null;
+
+  /**
+   * Recursively finds the node to move and its parent.
+   *
+   * @param {TreeNode} node - The current node being checked.
+   * @param {TreeNode | null} parent - The parent of the current node.
+   * @returns {boolean} True if the node is found, otherwise false.
+   */
+  function findNodeAndParent(node: TreeNode, parent: TreeNode | null): boolean {
+    if (node.key === nodeKey) {
+      nodeToMove = node;
+      parentOfNodeToMove = parent;
+      return true;
+    }
+    for (const child of node.children) {
+      if (findNodeAndParent(child, node)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Recursively finds a node by its key.
+   *
+   * @param {TreeNode} node - The current node being checked.
+   * @param {string} key - The key of the node to find.
+   * @returns {TreeNode | null} The node if found, otherwise null.
+   */
+  function findNodeByKey(node: TreeNode, key: string): TreeNode | null {
+    if (node.key === key) {
+      return node;
+    }
+    for (const child of node.children) {
+      const result = findNodeByKey(child, key);
+      if (result) {
+        return result;
+      }
+    }
+    return null;
+  }
+
+  findNodeAndParent(tree, null);
+
+  if (!nodeToMove || !parentOfNodeToMove) {
+    return tree; // Node to move not found
+  }
+
+  const newParentNode = findNodeByKey(tree, newParentKey);
+
+  if (!newParentNode) {
+    return tree; // New parent node not found
+  }
+
+  // Remove node from its current parent's children
+  if (parentOfNodeToMove && (parentOfNodeToMove as TreeNode).children) {
+    (parentOfNodeToMove as TreeNode).children = (parentOfNodeToMove as TreeNode)
+      .children.filter(
+        (child: TreeNode) => child.key !== nodeKey,
+      );
+  }
+
+  // Add node to the new parent's children
+  newParentNode.children.push(nodeToMove);
+
+  return tree;
+}
+
+/**
  * Gets a list of items in the tree as strings.
  * @param {TreeNode} tree - The root node of the tree structure.
  * @returns {string[]} The list of items.
@@ -620,12 +732,14 @@ export function getCurrentItemDetails(
   depth: number;
   siblingCount: number;
   descendantCount: number;
+  key: string;
 } {
   const breadcrumbPath = getCurrentItemBreadcrumb(tree);
   let isLeaf = false;
   let depth = 0;
   let siblingCount = 0;
   let descendantCount = 0;
+  let currentKey = "";
 
   function traverse(
     node: TreeNode,
@@ -639,6 +753,7 @@ export function getCurrentItemDetails(
         ? path[path.length - 1].children.length - 1
         : 0;
       descendantCount = countDescendants(node);
+      currentKey = node.key;
       return true;
     }
     for (const child of node.children) {
@@ -674,6 +789,7 @@ export function getCurrentItemDetails(
       depth,
       siblingCount,
       descendantCount,
+      key: currentKey,
     };
   } else {
     const focusStr = breadcrumbPath;
@@ -684,6 +800,7 @@ export function getCurrentItemDetails(
       depth,
       siblingCount,
       descendantCount,
+      key: currentKey,
     };
   }
 }
@@ -991,6 +1108,30 @@ export async function wrapCurrentItemInNewParentEffect(
   const tree = await getTree(path);
   const newTree = wrapCurrentItemInNewParent(tree, newParentName);
   D && validateTree(newTree, "wrapCurrentItemInNewParentEffect");
+  await writeTree(newTree, path);
+  return newTree;
+}
+
+/**
+ * Moves a node to be the last child of a new parent node in the tree structure and updates the tree structure in the markdown file.
+ *
+ * @param {string} nodeKey - The key of the node to move.
+ * @param {string} newParentKey - The key of the new parent node.
+ * @param {string} path - The path to the markdown file.
+ * @returns {Promise<TreeNode>} The updated tree structure.
+ * @throws {Error} If the nodeKey is the same as the newParentKey.
+ */
+export async function moveNodeToNewParentEffect(
+  nodeKey: string,
+  newParentKey: string,
+  path: string,
+): Promise<TreeNode> {
+  const tree = await getTree(path);
+  const before = getCurrentItemDetails(tree);
+  const newTree = moveNodeToNewParent(tree, nodeKey, newParentKey);
+  const after = getCurrentItemDetails(tree);
+  console.log({ before, after });
+  D && validateTree(newTree, "moveNodeToNewParentEffect");
   await writeTree(newTree, path);
   return newTree;
 }

@@ -22,8 +22,10 @@ import {
   focusNextSiblingEffect,
   focusPreviousSiblingEffect,
   getCurrentItemDetails,
+  getItemsList,
   getItemsListEffect,
   getTree,
+  moveNodeToNewParentEffect,
   setCurrentItemEffect,
   wrapCurrentItemInNewParentEffect,
 } from "./frame.ts";
@@ -61,6 +63,7 @@ async function promptMainAction(
     { name: "Switch focus", value: "switch" },
     { name: "Edit focus", value: "edit" },
     { name: "Wrap in new parent", value: "wrap" },
+    { name: "Move to new parent", value: "move" },
     siblingCount > 1 && { name: "Next", value: "nextSibling" },
     siblingCount > 1 && { name: "Prev", value: "previousSibling" },
   ]).filter(Boolean);
@@ -91,6 +94,8 @@ async function handleMainAction(
       return await handleEditAction(path);
     case "wrap":
       return await handleWrapAction(path);
+    case "move":
+      return await handleMoveAction(path);
     case "nextSibling":
       return await handleNextSiblingAction(path);
     case "previousSibling":
@@ -200,6 +205,33 @@ async function handleWrapAction(path: string): Promise<TreeNode> {
     message: "New parent name:",
   });
   await wrapCurrentItemInNewParentEffect(newParentName, path);
+  return await getTree(path);
+}
+
+async function handleMoveAction(path: string): Promise<TreeNode> {
+  D || console.clear();
+  const tree = await getTree(path);
+  const items = getItemsList(tree);
+  const { key: currentKey } = getCurrentItemDetails(tree);
+
+  const moveToKey = await Select.prompt({
+    ...promptOptions,
+    message: "Select a new parent for the current item:",
+    options: [
+      ...items
+        .filter(([_, key]) => key !== currentKey) // Disable the current item
+        .map(([name, key]: [string, string]) => ({
+          name: name,
+          value: key,
+        })),
+      Select.separator(),
+      { name: "Go Back", value: "back" },
+    ],
+  });
+
+  if (moveToKey !== "back") {
+    await moveNodeToNewParentEffect(currentKey, moveToKey, path);
+  }
   return await getTree(path);
 }
 
