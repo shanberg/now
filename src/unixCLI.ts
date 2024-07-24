@@ -1,3 +1,4 @@
+import { Argument } from "https://deno.land/x/cliffy@v0.25.7/command/mod.ts";
 import {
   createFrameFile,
   displayCurrentFocusEffect,
@@ -12,7 +13,7 @@ import {
   setCurrentItemEffect,
 } from "./frame.ts";
 
-async function unixCLI(command: string, path?: string, ...args: any[]) {
+async function unixCLI(command: string, path?: string, ...args: Argument[]) {
   const frameFilePath = path || await findOrCreateFrameFile();
   if (!path && !frameFilePath) {
     await createFrameFile(frameFilePath);

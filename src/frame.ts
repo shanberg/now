@@ -11,23 +11,6 @@ import { D, DATA_STR } from "./consts.ts";
 //     - Item 2.2
 // ```
 
-class Mutex {
-  private mutex = Promise.resolve();
-
-  lock(): PromiseLike<() => void> {
-    let begin: (unlock: () => void) => void = (unlock) => {};
-
-    this.mutex = this.mutex.then(() => {
-      return new Promise(begin);
-    });
-
-    return new Promise((res) => {
-      begin = res;
-    });
-  }
-}
-const fileMutex = new Mutex();
-
 /**
  * Reads the content of a markdown file.
  * @param {string} path - The path to the markdown file.
@@ -37,7 +20,6 @@ async function readMarkdownFile(path: string): Promise<string> {
   if (!path) {
     throw new Error("Path is required");
   }
-  const unlock = await fileMutex.lock();
   try {
     return await Deno.readTextFile(path);
   } catch (error) {
@@ -48,8 +30,6 @@ async function readMarkdownFile(path: string): Promise<string> {
       console.error("Error reading file:", error);
       return "";
     }
-  } finally {
-    unlock();
   }
 }
 
@@ -59,14 +39,10 @@ async function readMarkdownFile(path: string): Promise<string> {
  * @param {string} path - The path to the markdown file.
  */
 async function writeMarkdownFile(content: string, path: string): Promise<void> {
-  const unlock = await fileMutex.lock();
-
   try {
     await Deno.writeTextFile(path, content);
   } catch (error) {
     console.error("Error writing file:", error);
-  } finally {
-    unlock();
   }
 }
 

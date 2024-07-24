@@ -7,11 +7,9 @@ import {
   createFrameFile,
   displayCurrentFocus,
   findOrCreateFrameFile,
-  MENU_DIVIDER,
   promptOptions,
   SEPARATOR_STR,
   showHint,
-  STYLE,
   styleOptions,
   SYNTAX_HINT,
 } from "./cliUtils.ts";
@@ -96,6 +94,7 @@ async function handleMainAction(
     case "quit":
       console.log("Exiting...");
       Deno.exit();
+      break;
     default:
       return await getTree(path); // Return the current tree if action is unrecognized
   }
@@ -146,33 +145,6 @@ async function handleNextSiblingAction(path: string): Promise<TreeNode> {
 async function handlePreviousSiblingAction(path: string): Promise<TreeNode> {
   await focusPreviousSiblingEffect(path);
   return await getTree(path);
-}
-
-async function handleMoreAction(path: string): Promise<TreeNode> {
-  D || console.clear();
-  const tree = await getTree(path);
-  displayCurrentFocus(tree);
-  const moreAction = await Select.prompt({
-    ...promptOptions,
-    message: "More Options",
-    options: [
-      { name: "Edit current focus", value: "edit" },
-      { name: "Go back", value: "back" },
-      { name: "Quit", value: "quit" },
-    ],
-  });
-
-  switch (moreAction) {
-    case "edit":
-      return await handleEditAction(path);
-    case "back":
-      return tree; // Go back to the previous menu
-    case "quit":
-      console.log("Exiting...");
-      Deno.exit();
-      break;
-  }
-  return tree;
 }
 
 async function handleEditAction(path: string): Promise<TreeNode> {

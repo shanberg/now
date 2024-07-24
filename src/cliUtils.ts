@@ -1,6 +1,9 @@
-import { Confirm } from "https://deno.land/x/cliffy@v0.25.7/prompt/mod.ts";
+import {
+  Confirm,
+  SelectOption,
+} from "https://deno.land/x/cliffy@v0.25.7/prompt/mod.ts";
 import { colors } from "https://deno.land/x/cliffy@v0.25.7/ansi/colors.ts";
-import { getCurrentFocus, getCurrentItemDetails, getTree } from "./frame.ts";
+import { getCurrentItemDetails, getTree } from "./frame.ts";
 import { DATA_STR } from "./consts.ts";
 
 export const FOCUS_ARROW = "▶︎";
@@ -25,7 +28,7 @@ const STYLE = {
 
 export const SYNTAX_HINT = STYLE.hint("Syntax: Item 1, Item 2 / Item 2.1");
 
-export const styleOptions = (options: any[]) => {
+export const styleOptions = (options: SelectOption[]) => {
   return options.map((option) => {
     if (!option.name) return option;
     if (option.disabled) {
@@ -83,10 +86,6 @@ export function displayCurrentFocus(tree: TreeNode): void {
     breadcrumbStr,
     focusStr,
     isLeaf,
-    depth,
-    siblingCount,
-    pathToRoot,
-    descendantCount,
   } = getCurrentItemDetails(tree);
 
   const trimmedBread = breadcrumbStr.split(" / ").slice(1).join(" / ");
