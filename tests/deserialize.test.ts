@@ -155,8 +155,6 @@ Deno.test("deserialize - corrects invalid indentation", () => {
   assertEquals(deserialize(input), expected);
 });
 
-
-
 Deno.test("deserialize - no root node", () => {
   const input = ``;
 
@@ -166,7 +164,6 @@ Deno.test("deserialize - no root node", () => {
     "Root node not found in the input content.",
   );
 });
-
 
 Deno.test("deserialize - multiple current markers", () => {
   const input = `- Root
