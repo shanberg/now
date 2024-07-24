@@ -658,6 +658,63 @@ export function getCurrentItemDetails(
 }
 
 /**
+ * Changes focus to the next sibling item in the tree.
+ * If the current item is the last sibling, it cycles to the first sibling.
+ * If no siblings exist, the focus remains unchanged.
+ * @param {TreeNode} tree - The root node of the tree structure.
+ * @returns {TreeNode} The updated tree structure.
+ */
+export function focusNextSibling(tree: TreeNode): TreeNode {
+  function traverse(node: TreeNode): boolean {
+    for (let i = 0; i < node.children.length; i++) {
+      const child = node.children[i];
+      if (child.isCurrent) {
+        child.isCurrent = false;
+        const nextSiblingIndex = (i + 1) % node.children.length;
+        node.children[nextSiblingIndex].isCurrent = true;
+        return true;
+      }
+      if (traverse(child)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  traverse(tree);
+  return tree;
+}
+
+/**
+ * Changes focus to the previous sibling item in the tree.
+ * If the current item is the first sibling, it cycles to the last sibling.
+ * If no siblings exist, the focus remains unchanged.
+ * @param {TreeNode} tree - The root node of the tree structure.
+ * @returns {TreeNode} The updated tree structure.
+ */
+export function focusPreviousSibling(tree: TreeNode): TreeNode {
+  function traverse(node: TreeNode): boolean {
+    for (let i = 0; i < node.children.length; i++) {
+      const child = node.children[i];
+      if (child.isCurrent) {
+        child.isCurrent = false;
+        const prevSiblingIndex = (i - 1 + node.children.length) %
+          node.children.length;
+        node.children[prevSiblingIndex].isCurrent = true;
+        return true;
+      }
+      if (traverse(child)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  traverse(tree);
+  return tree;
+}
+
+/**
  * Retrieves the tree structure from the markdown file.
  * @param {string} path - The path to the markdown file.
  * @returns {Promise<TreeNode>} The root node of the tree structure.
@@ -852,6 +909,38 @@ export async function diveInEffect(
   const tree = await getTree(path);
   const newTree = diveIn(tree);
   D && validateTree(newTree, "diveInEffect");
+  await writeTree(newTree, path);
+  return newTree;
+}
+
+/**
+ * Changes focus to the next sibling item in the tree structure.
+ * If the current item is the last sibling, it cycles to the first sibling.
+ * If no siblings exist, the focus remains unchanged.
+ * @param {string} path - The path to the markdown file.
+ * @returns {Promise<TreeNode>} The updated tree structure.
+ */
+export async function focusNextSiblingEffect(path: string): Promise<TreeNode> {
+  const tree = await getTree(path);
+  const newTree = focusNextSibling(tree);
+  D && validateTree(newTree, "focusNextSiblingEffect");
+  await writeTree(newTree, path);
+  return newTree;
+}
+
+/**
+ * Changes focus to the previous sibling item in the tree structure.
+ * If the current item is the first sibling, it cycles to the last sibling.
+ * If no siblings exist, the focus remains unchanged.
+ * @param {string} path - The path to the markdown file.
+ * @returns {Promise<TreeNode>} The updated tree structure.
+ */
+export async function focusPreviousSiblingEffect(
+  path: string,
+): Promise<TreeNode> {
+  const tree = await getTree(path);
+  const newTree = focusPreviousSibling(tree);
+  D && validateTree(newTree, "focusPreviousSiblingEffect");
   await writeTree(newTree, path);
   return newTree;
 }

@@ -21,6 +21,8 @@ import {
   createNestedChildrenEffect,
   diveInEffect,
   editCurrentItemNameEffect,
+  focusNextSiblingEffect,
+  focusPreviousSiblingEffect,
   getCurrentItemDetails,
   getItemsListEffect,
   getTree,
@@ -49,7 +51,7 @@ async function promptMainAction(
 ): Promise<string> {
   D || console.clear();
   displayCurrentFocus(tree);
-  const { isLeaf } = getCurrentItemDetails(tree);
+  const { isLeaf, siblingCount } = getCurrentItemDetails(tree);
 
   const options = styleOptions([
     !isLeaf && { name: "Dive in", value: "diveIn" },
@@ -59,6 +61,8 @@ async function promptMainAction(
     Select.separator(SEPARATOR_STR),
     { name: "Switch focus", value: "switch" },
     { name: "Edit focus", value: "edit" },
+    siblingCount > 1 && { name: "Next", value: "nextSibling" },
+    siblingCount > 1 && { name: "Prev", value: "previousSibling" },
   ]).filter(Boolean);
 
   return await Select.prompt({
@@ -85,6 +89,10 @@ async function handleMainAction(
       return await handleDiveInAction(path);
     case "edit":
       return await handleEditAction(path);
+    case "nextSibling":
+      return await handleNextSiblingAction(path);
+    case "previousSibling":
+      return await handlePreviousSiblingAction(path);
     case "quit":
       console.log("Exiting...");
       Deno.exit();
@@ -127,6 +135,16 @@ async function handleAddLater(path: string): Promise<TreeNode> {
     message: "Add for later:",
   });
   await addNextSiblingToCurrentItemEffect(newItems, path);
+  return await getTree(path);
+}
+
+async function handleNextSiblingAction(path: string): Promise<TreeNode> {
+  await focusNextSiblingEffect(path);
+  return await getTree(path);
+}
+
+async function handlePreviousSiblingAction(path: string): Promise<TreeNode> {
+  await focusPreviousSiblingEffect(path);
   return await getTree(path);
 }
 
