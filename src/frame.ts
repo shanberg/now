@@ -1,5 +1,5 @@
 // @deno-types="../types.d.ts"
-import { DATA_STR } from "./consts.ts";
+import { D, DATA_STR } from "./consts.ts";
 
 // ```markdown
 // - Root Frame
@@ -10,8 +10,6 @@ import { DATA_STR } from "./consts.ts";
 //     - Item 2.1
 //     - Item 2.2
 // ```
-
-const d = false; // debug mode
 
 class Mutex {
   private mutex = Promise.resolve();
@@ -231,6 +229,39 @@ export function completeCurrentItem(tree: TreeNode): TreeNode {
   traverse(tree);
 
   return tree; // Return the updated tree structure
+}
+
+/**
+ * Sets the current item to the first deepest child of the current item in the tree.
+ * If the current item has no children, it remains the current item.
+ * @param {TreeNode} tree - The root node of the tree structure.
+ * @returns {TreeNode} The updated tree structure.
+ */
+export function diveIn(tree: TreeNode): TreeNode {
+  function traverse(node: TreeNode): boolean {
+    if (node.isCurrent) {
+      node.isCurrent = false;
+      let currentNode = node;
+
+      while (currentNode.children.length > 0) {
+        currentNode = currentNode.children[0];
+      }
+
+      currentNode.isCurrent = true;
+      return true;
+    }
+
+    for (const child of node.children) {
+      if (traverse(child)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  traverse(tree);
+  return tree;
 }
 
 /**
@@ -533,15 +564,69 @@ export function getCurrentItemBreadcrumb(tree: TreeNode): string {
 }
 
 /**
- * Gets the focus string of the current item in the tree,
- * including the breadcrumb path and the name of the current item.
- * @param {TreeNode} tree - The root node of the tree structure.
- * @returns {string} The focus string of the current item.
+ * Checks if the given node is a leaf node (i.e., it has no children).
+ * @param {TreeNode} node - The node to check.
+ * @returns {boolean} True if the node is a leaf, false otherwise.
  */
-export function getCurrentFocus(
+function isLeafNode(node: TreeNode): boolean {
+  return node.children.length === 0;
+}
+
+/**
+ * Gets detailed information about the current item in the tree,
+ * including the breadcrumb path, focus string, whether it is a leaf node,
+ * the depth of the current item, the number of siblings, the path to the root,
+ * and the number of descendants.
+ * @param {TreeNode} tree - The root node of the tree structure.
+ * @returns {object} An object containing detailed information about the current item.
+ */
+export function getCurrentItemDetails(
   tree: TreeNode,
-): { breadcrumbStr: string; focusStr: string } {
+): {
+  breadcrumbStr: string;
+  focusStr: string;
+  isLeaf: boolean;
+  depth: number;
+  siblingCount: number;
+  descendantCount: number;
+} {
   const breadcrumbPath = getCurrentItemBreadcrumb(tree);
+  let isLeaf = false;
+  let depth = 0;
+  let siblingCount = 0;
+  let descendantCount = 0;
+
+  function traverse(
+    node: TreeNode,
+    currentDepth: number,
+    path: TreeNode[],
+  ): boolean {
+    if (node.isCurrent) {
+      isLeaf = isLeafNode(node);
+      depth = currentDepth;
+      siblingCount = path.length > 0
+        ? path[path.length - 1].children.length - 1
+        : 0;
+      descendantCount = countDescendants(node);
+      return true;
+    }
+    for (const child of node.children) {
+      if (traverse(child, currentDepth + 1, [...path, node])) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function countDescendants(node: TreeNode): number {
+    let count = node.children.length;
+    for (const child of node.children) {
+      count += countDescendants(child);
+    }
+    return count;
+  }
+
+  traverse(tree, 0, []);
 
   if (breadcrumbPath.split(" / ").length > 1) {
     const breadcrumbStr = breadcrumbPath.slice(
@@ -551,10 +636,24 @@ export function getCurrentFocus(
     const focusStr = breadcrumbPath.slice(
       breadcrumbPath.lastIndexOf(" / ") + 3,
     );
-    return { breadcrumbStr, focusStr };
+    return {
+      breadcrumbStr,
+      focusStr,
+      isLeaf,
+      depth,
+      siblingCount,
+      descendantCount,
+    };
   } else {
     const focusStr = breadcrumbPath;
-    return { breadcrumbStr: "Focusing on", focusStr };
+    return {
+      breadcrumbStr: "Focusing on",
+      focusStr,
+      isLeaf,
+      depth,
+      siblingCount,
+      descendantCount,
+    };
   }
 }
 
@@ -566,7 +665,7 @@ export function getCurrentFocus(
 export const getTree = async (path: string): Promise<TreeNode> => {
   const content = await readMarkdownFile(path);
   const tree = deserialize(content);
-  d && validateTree(tree, "getTree");
+  D && validateTree(tree, "getTree");
   return tree;
 };
 
@@ -577,7 +676,7 @@ export const getTree = async (path: string): Promise<TreeNode> => {
  */
 const writeTree = async (tree: TreeNode, path: string): Promise<void> => {
   const serialized = serialize(tree);
-  d && validateTree(tree, "writeTree");
+  D && validateTree(tree, "writeTree");
   await writeMarkdownFile(serialized, path);
   return;
 };
@@ -621,7 +720,7 @@ export async function getItemsListEffect(
   path: string,
 ): Promise<[string, string][]> {
   const tree = await getTree(path);
-  d && validateTree(tree, "getItemsListEffect");
+  D && validateTree(tree, "getItemsListEffect");
   return getItemsList(tree);
 }
 
@@ -632,7 +731,7 @@ export async function getItemsListEffect(
  */
 export async function getNodesListEffect(path: string): Promise<TreeNode[]> {
   const tree = await getTree(path);
-  d && validateTree(tree, "getNodesListEffect");
+  D && validateTree(tree, "getNodesListEffect");
   return getNodesList(tree);
 }
 
@@ -647,7 +746,7 @@ export async function addChildToCurrentItemEffect(
 ): Promise<void> {
   const tree = await getTree(path);
   const newTree = addChildToCurrentItem(tree, newText);
-  d && validateTree(newTree, "addChildToCurrentItemEffect");
+  D && validateTree(newTree, "addChildToCurrentItemEffect");
   await writeTree(newTree, path);
   return;
 }
@@ -664,7 +763,7 @@ export async function createNestedChildrenEffect(
 ): Promise<void> {
   const tree = await getTree(path);
   const newTree = createNestedChildren(tree, items);
-  d && validateTree(newTree, "createNestedChildrenEffect");
+  D && validateTree(newTree, "createNestedChildrenEffect");
   await writeTree(newTree, path);
   return;
 }
@@ -680,7 +779,7 @@ export async function addNextSiblingToCurrentItemEffect(
 ): Promise<void> {
   const tree = await getTree(path);
   const newTree = addNextSiblingToCurrentItem(tree, newText);
-  d && validateTree(newTree, "addNextSiblingToCurrentItemEffect");
+  D && validateTree(newTree, "addNextSiblingToCurrentItemEffect");
   await writeTree(newTree, path);
   return;
 }
@@ -692,7 +791,7 @@ export async function addNextSiblingToCurrentItemEffect(
 export async function completeCurrentItemEffect(path: string): Promise<void> {
   const tree = await getTree(path);
   const newTree = completeCurrentItem(tree);
-  d && validateTree(newTree, "completeCurrentItemEffect");
+  D && validateTree(newTree, "completeCurrentItemEffect");
   await writeTree(newTree, path);
   return;
 }
@@ -708,7 +807,7 @@ export async function setCurrentItemEffect(
 ): Promise<void> {
   const tree = await getTree(path);
   const newTree = setCurrentItem(tree, key);
-  d && validateTree(newTree, "setCurrentItemEffect");
+  D && validateTree(newTree, "setCurrentItemEffect");
   await writeTree(newTree, path);
   return;
 }
@@ -724,7 +823,7 @@ export async function editCurrentItemNameEffect(
 ): Promise<void> {
   const tree = await getTree(path);
   const newTree = editCurrentItemName(tree, newName);
-  d && validateTree(tree, "editCurrentItemNameEffect");
+  D && validateTree(tree, "editCurrentItemNameEffect");
   await writeTree(newTree, path);
   return;
 }
@@ -738,6 +837,21 @@ export async function getCurrentItemBreadcrumbEffect(
   path: string,
 ): Promise<string> {
   const tree = await getTree(path);
-  d && validateTree(tree, "getCurrentItemBreadcrumbEffect");
+  D && validateTree(tree, "getCurrentItemBreadcrumbEffect");
   return getCurrentItemBreadcrumb(tree);
+}
+
+/**
+ * Dives into the current item.
+ * @param {string} path - The path to the markdown file.
+ * @returns {Promise<TreeNode>} The root node of the tree structure.
+ */
+export async function diveInEffect(
+  path: string,
+): Promise<TreeNode> {
+  const tree = await getTree(path);
+  const newTree = diveIn(tree);
+  D && validateTree(newTree, "diveInEffect");
+  await writeTree(newTree, path);
+  return newTree;
 }

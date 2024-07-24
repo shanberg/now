@@ -1,8 +1,9 @@
 import { Command } from "https://deno.land/x/cliffy@v0.25.7/command/mod.ts";
 import { interactiveTUI } from "./interactiveTUI.ts";
 import { unixCLI } from "./unixCLI.ts";
+import { D } from "./consts.ts";
 
-console.clear();
+D || console.clear();
 await new Command()
   .name("focus")
   .version("0.1.0")

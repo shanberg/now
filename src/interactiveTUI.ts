@@ -7,25 +7,29 @@ import {
   createFrameFile,
   displayCurrentFocus,
   findOrCreateFrameFile,
+  MENU_DIVIDER,
   promptOptions,
+  SEPARATOR_STR,
   showHint,
+  STYLE,
+  styleOptions,
   SYNTAX_HINT,
 } from "./cliUtils.ts";
 import {
   addNextSiblingToCurrentItemEffect,
   completeCurrentItemEffect,
   createNestedChildrenEffect,
+  diveInEffect,
   editCurrentItemNameEffect,
-  getCurrentFocus,
+  getCurrentItemDetails,
   getItemsListEffect,
   getTree,
   setCurrentItemEffect,
 } from "./frame.ts";
-
-const d = false; // debug mode
+import { D } from "./consts.ts";
 
 async function interactiveTUI(path?: string) {
-  d || console.clear();
+  D || console.clear();
   const frameFilePath = path || await findOrCreateFrameFile();
   if (!path && !frameFilePath) {
     await createFrameFile(frameFilePath);
@@ -43,18 +47,24 @@ async function interactiveTUI(path?: string) {
 async function promptMainAction(
   tree: TreeNode,
 ): Promise<string> {
-  d || console.clear();
+  D || console.clear();
   displayCurrentFocus(tree);
+  const { isLeaf } = getCurrentItemDetails(tree);
+
+  const options = styleOptions([
+    !isLeaf && { name: "Dive in", value: "diveIn" },
+    { name: "Narrow focus", value: "add" },
+    { name: "Finish this", value: "complete" },
+    { name: "Add followup", value: "later" },
+    Select.separator(SEPARATOR_STR),
+    { name: "Switch focus", value: "switch" },
+    { name: "Edit focus", value: "edit" },
+  ]).filter(Boolean);
+
   return await Select.prompt({
     ...promptOptions,
     message: colors.dim("Actions"),
-    options: [
-      { name: "Narrow focus", value: "add" },
-      { name: "Finish this", value: "complete" },
-      { name: "Switch focus", value: "switch" },
-      { name: "Add followup", value: "later" },
-      { name: "Edit focus", value: "edit" },
-    ],
+    options,
   });
 }
 
@@ -71,6 +81,8 @@ async function handleMainAction(
       return await handleAddLater(path);
     case "switch":
       return await handleSwitchAction(path);
+    case "diveIn":
+      return await handleDiveInAction(path);
     case "edit":
       return await handleEditAction(path);
     case "quit":
@@ -81,6 +93,11 @@ async function handleMainAction(
   }
 }
 
+async function handleDiveInAction(path: string): Promise<TreeNode> {
+  await diveInEffect(path);
+  return await getTree(path);
+}
+
 async function handleCompleteAction(path: string): Promise<TreeNode> {
   await completeCurrentItemEffect(path);
   console.log("All Frames completed. Time for a break?");
@@ -88,7 +105,7 @@ async function handleCompleteAction(path: string): Promise<TreeNode> {
 }
 
 async function handleAddNestedAction(path: string): Promise<TreeNode> {
-  d || console.clear();
+  D || console.clear();
   const tree = await getTree(path);
   displayCurrentFocus(tree);
   showHint(SYNTAX_HINT);
@@ -101,7 +118,7 @@ async function handleAddNestedAction(path: string): Promise<TreeNode> {
 }
 
 async function handleAddLater(path: string): Promise<TreeNode> {
-  d || console.clear();
+  D || console.clear();
   const tree = await getTree(path);
   displayCurrentFocus(tree);
   showHint(SYNTAX_HINT);
@@ -114,7 +131,7 @@ async function handleAddLater(path: string): Promise<TreeNode> {
 }
 
 async function handleMoreAction(path: string): Promise<TreeNode> {
-  d || console.clear();
+  D || console.clear();
   const tree = await getTree(path);
   displayCurrentFocus(tree);
   const moreAction = await Select.prompt({
@@ -143,7 +160,7 @@ async function handleMoreAction(path: string): Promise<TreeNode> {
 async function handleEditAction(path: string): Promise<TreeNode> {
   const tree = await getTree(path);
   const currentItem = getCurrentFocus(tree).focusStr;
-  d || console.clear();
+  D || console.clear();
   displayCurrentFocus(tree);
   const newText = await Input.prompt({
     ...promptOptions,
@@ -156,7 +173,7 @@ async function handleEditAction(path: string): Promise<TreeNode> {
 }
 
 async function handleSwitchAction(path: string): Promise<TreeNode> {
-  d || console.clear();
+  D || console.clear();
   const tree = await getTree(path);
   displayCurrentFocus(tree);
   const items = await getItemsListEffect(path);

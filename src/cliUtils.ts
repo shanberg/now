@@ -1,9 +1,11 @@
 import { Confirm } from "https://deno.land/x/cliffy@v0.25.7/prompt/mod.ts";
 import { colors } from "https://deno.land/x/cliffy@v0.25.7/ansi/colors.ts";
-import { getCurrentFocus, getTree } from "./frame.ts";
+import { getCurrentFocus, getCurrentItemDetails, getTree } from "./frame.ts";
 import { DATA_STR } from "./consts.ts";
 
 export const FOCUS_ARROW = "▶︎";
+
+export const SEPARATOR_STR = "---";
 
 export const promptOptions = {
   prefix: "",
@@ -15,10 +17,33 @@ export const promptOptions = {
   indent: "",
 };
 
-export const SYNTAX_HINT = colors.dim("Syntax: Item 1, Item 2 / Item 2.1");
+const STYLE = {
+  hint: colors.dim,
+  menuItem: colors.bold,
+  menuItemDisabled: colors.dim.strikethrough,
+};
+
+export const SYNTAX_HINT = STYLE.hint("Syntax: Item 1, Item 2 / Item 2.1");
+
+export const styleOptions = (options: any[]) => {
+  return options.map((option) => {
+    if (!option.name) return option;
+    if (option.disabled) {
+      return {
+        ...option,
+        name: STYLE.menuItemDisabled(option.name),
+      };
+    } else {
+      return {
+        ...option,
+        name: STYLE.menuItem(option.name),
+      };
+    }
+  });
+};
 
 export const showHint = (text: string) => {
-  console.log(colors.dim(text));
+  console.log(STYLE.hint(text));
 };
 
 export function findOrCreateFrameFile(): string {
@@ -54,11 +79,22 @@ export async function createFrameFile(fileName: string): Promise<string> {
 }
 
 export function displayCurrentFocus(tree: TreeNode): void {
-  const { breadcrumbStr, focusStr } = getCurrentFocus(tree);
-  const trimmedBread = breadcrumbStr.split(" / ").slice(1).join(" / ");
+  const {
+    breadcrumbStr,
+    focusStr,
+    isLeaf,
+    depth,
+    siblingCount,
+    pathToRoot,
+    descendantCount,
+  } = getCurrentItemDetails(tree);
 
+  const trimmedBread = breadcrumbStr.split(" / ").slice(1).join(" / ");
   console.log(colors.dim(trimmedBread || "—"));
-  console.log(colors.yellow(`${FOCUS_ARROW} ${focusStr}`));
+  console.log(
+    [colors.yellow(`${FOCUS_ARROW} ${focusStr}`), !isLeaf && colors.dim(" / …")]
+      .filter(Boolean).join(""),
+  );
   console.log();
 }
 
