@@ -148,63 +148,90 @@ export function serialize(tree: TreeNode): string {
   return result;
 }
 
-/**
- * Completes the current item in the tree, removing it and setting the appropriate new current item.
- * The new current item is determined as follows:
- * - If a previous sibling exists, that becomes the new current item.
- * - Otherwise, if a next sibling exists, that becomes the new current item.
- * - Otherwise, the parent becomes the new current item.
- * @param {TreeNode} tree - The root node of the tree structure.
- * @returns {TreeNode} The updated tree structure.
- */
 export function completeCurrentItem(tree: TreeNode): TreeNode {
-  function traverse(node: TreeNode): boolean {
-    // Iterate over each child node
+  // Helper function to traverse the tree and find the current item
+
+  // const D = tree.name === "Root x";
+  const dbg = (x: any, args: any) => {
+    if (tree.name === "Root") {
+      true && console.log(x, args);
+      console.log();
+      true && alert([x, args].join("\n"));
+      console.log();
+    }
+  };
+
+  function traverse(node: TreeNode, parent: TreeNode | null = null): boolean {
+    // Iterate over the children of the current node
     for (let i = 0; i < node.children.length; i++) {
       const child = node.children[i];
 
-      // Check if the current child is the current item
+      // Check if the current child is the "current" item
       if (child.isCurrent) {
-        // Unset the current item
+        // Mark the current item as no longer current
         child.isCurrent = false;
 
-        // Determine the new current item
-        let newCurrentItem: TreeNode | null = null;
+        // If the current item is a leaf node
+        if (isLeafNode(child)) {
+          let newCurrentItem: TreeNode | null = null;
 
-        if (i > 0) {
-          // Previous sibling exists
-          newCurrentItem = node.children[i - 1];
-        } else if (i < node.children.length - 1) {
-          // Next sibling exists
-          newCurrentItem = node.children[i + 1];
-        } else if (node) {
-          // No siblings, set node as current
-          newCurrentItem = node;
+          // If there is a next sibling, make it the new current item
+          if (i < node.children.length - 1) {
+            dbg(child, "next");
+            newCurrentItem = node.children[i + 1];
+            // Traverse down to the first leaf node in the next sibling's subtree
+            while (
+              !isLeafNode(newCurrentItem) && newCurrentItem.children.length > 0
+            ) {
+              newCurrentItem = newCurrentItem.children[0];
+            }
+          } // If there is a previous sibling, make it the new current item
+          else if (i > 0) {
+            dbg(child, "prev");
+            newCurrentItem = node.children[i - 1];
+            // Traverse down to the first leaf node in the previous sibling's subtree
+            while (
+              !isLeafNode(newCurrentItem) && newCurrentItem.children.length > 0
+            ) {
+              newCurrentItem = newCurrentItem.children[0];
+            }
+          } // If there are no siblings, make the parent the new current item
+          else if (parent) {
+            dbg(child, "parent");
+            newCurrentItem = node;
+          }
+
+          // Mark the new current item as current
+          if (newCurrentItem) {
+            newCurrentItem.isCurrent = true;
+          }
+
+          // Remove the current item from its parent's children
+          node.children.splice(i, 1);
+          return true;
+        } else {
+          // If the current item is not a leaf node, just remove it
+          node.children.splice(i, 1);
+          return true;
         }
-
-        // Set the new current item if found
-        if (newCurrentItem) {
-          newCurrentItem.isCurrent = true;
-        }
-
-        // Remove the current item from the children array
-        node.children.splice(i, 1);
-
-        return true; // Indicate that the current item was found and processed
       }
 
-      // Recursively traverse the child nodes
-      if (traverse(child)) {
-        return true; // Stop traversal if the current item was found and processed
+      // Recursively traverse the child's subtree
+      if (traverse(child, node)) {
+        return true;
       }
     }
-    return false; // Indicate that the current item was not found in this branch
+
+    return false;
   }
 
-  // Start the traversal from the root node
-  traverse(tree);
+  // Start the traversal from the root of the tree
+  if (!traverse(tree) && tree.children.length === 0) {
+    // If no current item was found and the tree is empty, mark the root as current
+    tree.isCurrent = true;
+  }
 
-  return tree; // Return the updated tree structure
+  return tree;
 }
 
 /**
@@ -557,8 +584,6 @@ export function moveNodeToNewParent(
   nodeKey: string,
   newParentKey: string,
 ): TreeNode {
-  console.log(nodeKey, newParentKey);
-
   if (nodeKey === newParentKey) {
     throw new Error(
       "The node to move cannot be the same as the new parent node.",
@@ -1130,7 +1155,6 @@ export async function moveNodeToNewParentEffect(
   const before = getCurrentItemDetails(tree);
   const newTree = moveNodeToNewParent(tree, nodeKey, newParentKey);
   const after = getCurrentItemDetails(tree);
-  console.log({ before, after });
   D && validateTree(newTree, "moveNodeToNewParentEffect");
   await writeTree(newTree, path);
   return newTree;
