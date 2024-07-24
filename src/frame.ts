@@ -437,6 +437,61 @@ export function editCurrentItemName(tree: TreeNode, newName: string): TreeNode {
 }
 
 /**
+ * Wraps the current focus item in a new parent node.
+ * Throws an error if the root node is the current focus item.
+ * @param {TreeNode} tree - The root node of the tree structure.
+ * @param {string} newParentName - The name of the new parent node.
+ * @returns {TreeNode} The updated tree structure.
+ * @throws {Error} If the root node is the current focus item.
+ */
+export function wrapCurrentItemInNewParent(
+  tree: TreeNode,
+  newParentName: string,
+): TreeNode {
+  if (tree.isCurrent) {
+    throw new Error("Root node cannot be wrapped in a new parent");
+  }
+
+  // Find the highest key value in the tree
+  let maxKey = 0;
+  function findMaxKey(node: TreeNode) {
+    const key = parseInt(node.key, 10);
+    if (key > maxKey) {
+      maxKey = key;
+    }
+    for (const child of node.children) {
+      findMaxKey(child);
+    }
+  }
+  findMaxKey(tree);
+
+  let keyCounter = maxKey + 1;
+
+  function traverseAndWrap(node: TreeNode): boolean {
+    for (let i = 0; i < node.children.length; i++) {
+      const child = node.children[i];
+      if (child.isCurrent) {
+        const newParent: TreeNode = {
+          key: (keyCounter++).toString(),
+          name: newParentName,
+          isCurrent: false,
+          children: [child],
+        };
+        node.children[i] = newParent;
+        return true;
+      }
+      if (traverseAndWrap(child)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  traverseAndWrap(tree);
+  return tree;
+}
+
+/**
  * Sets the current item in the tree based on the provided key.
  * @param {TreeNode} tree - The root node of the tree structure.
  * @param {string} key - The key of the item to set as current.
@@ -917,6 +972,25 @@ export async function focusPreviousSiblingEffect(
   const tree = await getTree(path);
   const newTree = focusPreviousSibling(tree);
   D && validateTree(newTree, "focusPreviousSiblingEffect");
+  await writeTree(newTree, path);
+  return newTree;
+}
+
+/**
+ * Wraps the current focus item in a new parent node and updates the tree structure in the markdown file.
+ * Throws an error if the root node is the current focus item.
+ * @param {string} newParentName - The name of the new parent node.
+ * @param {string} path - The path to the markdown file.
+ * @returns {Promise<TreeNode>} The updated tree structure.
+ * @throws {Error} If the root node is the current focus item.
+ */
+export async function wrapCurrentItemInNewParentEffect(
+  newParentName: string,
+  path: string,
+): Promise<TreeNode> {
+  const tree = await getTree(path);
+  const newTree = wrapCurrentItemInNewParent(tree, newParentName);
+  D && validateTree(newTree, "wrapCurrentItemInNewParentEffect");
   await writeTree(newTree, path);
   return newTree;
 }

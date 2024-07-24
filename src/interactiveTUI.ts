@@ -25,6 +25,7 @@ import {
   getItemsListEffect,
   getTree,
   setCurrentItemEffect,
+  wrapCurrentItemInNewParentEffect,
 } from "./frame.ts";
 import { D } from "./consts.ts";
 
@@ -59,6 +60,7 @@ async function promptMainAction(
     Select.separator(SEPARATOR_STR),
     { name: "Switch focus", value: "switch" },
     { name: "Edit focus", value: "edit" },
+    { name: "Wrap in new parent", value: "wrap" },
     siblingCount > 1 && { name: "Next", value: "nextSibling" },
     siblingCount > 1 && { name: "Prev", value: "previousSibling" },
   ]).filter(Boolean);
@@ -87,6 +89,8 @@ async function handleMainAction(
       return await handleDiveInAction(path);
     case "edit":
       return await handleEditAction(path);
+    case "wrap":
+      return await handleWrapAction(path);
     case "nextSibling":
       return await handleNextSiblingAction(path);
     case "previousSibling":
@@ -184,6 +188,18 @@ async function handleSwitchAction(path: string): Promise<TreeNode> {
     console.log("Switching to " + switchToKey);
     await setCurrentItemEffect(switchToKey, path);
   }
+  return await getTree(path);
+}
+
+async function handleWrapAction(path: string): Promise<TreeNode> {
+  D || console.clear();
+  const tree = await getTree(path);
+  displayCurrentFocus(tree);
+  const newParentName = await Input.prompt({
+    ...promptOptions,
+    message: "New parent name:",
+  });
+  await wrapCurrentItemInNewParentEffect(newParentName, path);
   return await getTree(path);
 }
 
