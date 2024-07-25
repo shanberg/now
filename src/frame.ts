@@ -1,5 +1,5 @@
 // @deno-types="../types.d.ts"
-import { DATA_STR } from "./consts.ts";
+import { D, DATA_STR } from "./consts.ts";
 
 // ```markdown
 // - Root Frame
@@ -11,25 +11,6 @@ import { DATA_STR } from "./consts.ts";
 //     - Item 2.2
 // ```
 
-const d = false; // debug mode
-
-class Mutex {
-  private mutex = Promise.resolve();
-
-  lock(): PromiseLike<() => void> {
-    let begin: (unlock: () => void) => void = (unlock) => {};
-
-    this.mutex = this.mutex.then(() => {
-      return new Promise(begin);
-    });
-
-    return new Promise((res) => {
-      begin = res;
-    });
-  }
-}
-const fileMutex = new Mutex();
-
 /**
  * Reads the content of a markdown file.
  * @param {string} path - The path to the markdown file.
@@ -39,7 +20,6 @@ async function readMarkdownFile(path: string): Promise<string> {
   if (!path) {
     throw new Error("Path is required");
   }
-  const unlock = await fileMutex.lock();
   try {
     return await Deno.readTextFile(path);
   } catch (error) {
@@ -50,8 +30,6 @@ async function readMarkdownFile(path: string): Promise<string> {
       console.error("Error reading file:", error);
       return "";
     }
-  } finally {
-    unlock();
   }
 }
 
@@ -61,14 +39,10 @@ async function readMarkdownFile(path: string): Promise<string> {
  * @param {string} path - The path to the markdown file.
  */
 async function writeMarkdownFile(content: string, path: string): Promise<void> {
-  const unlock = await fileMutex.lock();
-
   try {
     await Deno.writeTextFile(path, content);
   } catch (error) {
     console.error("Error writing file:", error);
-  } finally {
-    unlock();
   }
 }
 
@@ -174,63 +148,123 @@ export function serialize(tree: TreeNode): string {
   return result;
 }
 
-/**
- * Completes the current item in the tree, removing it and setting the appropriate new current item.
- * The new current item is determined as follows:
- * - If a previous sibling exists, that becomes the new current item.
- * - Otherwise, if a next sibling exists, that becomes the new current item.
- * - Otherwise, the parent becomes the new current item.
- * @param {TreeNode} tree - The root node of the tree structure.
- * @returns {TreeNode} The updated tree structure.
- */
 export function completeCurrentItem(tree: TreeNode): TreeNode {
-  function traverse(node: TreeNode): boolean {
-    // Iterate over each child node
+  // Helper function to traverse the tree and find the current item
+
+  // const D = tree.name === "Root x";
+  const dbg = (x: any, args: any) => {
+    if (tree.name === "Root") {
+      true && console.log(x, args);
+      console.log();
+      true && alert([x, args].join("\n"));
+      console.log();
+    }
+  };
+
+  function traverse(node: TreeNode, parent: TreeNode | null = null): boolean {
+    // Iterate over the children of the current node
     for (let i = 0; i < node.children.length; i++) {
       const child = node.children[i];
 
-      // Check if the current child is the current item
+      // Check if the current child is the "current" item
       if (child.isCurrent) {
-        // Unset the current item
+        // Mark the current item as no longer current
         child.isCurrent = false;
 
-        // Determine the new current item
-        let newCurrentItem: TreeNode | null = null;
+        // If the current item is a leaf node
+        if (isLeafNode(child)) {
+          let newCurrentItem: TreeNode | null = null;
 
-        if (i > 0) {
-          // Previous sibling exists
-          newCurrentItem = node.children[i - 1];
-        } else if (i < node.children.length - 1) {
-          // Next sibling exists
-          newCurrentItem = node.children[i + 1];
-        } else if (node) {
-          // No siblings, set node as current
-          newCurrentItem = node;
+          // If there is a next sibling, make it the new current item
+          if (i < node.children.length - 1) {
+            dbg(child, "next");
+            newCurrentItem = node.children[i + 1];
+            // Traverse down to the first leaf node in the next sibling's subtree
+            while (
+              !isLeafNode(newCurrentItem) && newCurrentItem.children.length > 0
+            ) {
+              newCurrentItem = newCurrentItem.children[0];
+            }
+          } // If there is a previous sibling, make it the new current item
+          else if (i > 0) {
+            dbg(child, "prev");
+            newCurrentItem = node.children[i - 1];
+            // Traverse down to the first leaf node in the previous sibling's subtree
+            while (
+              !isLeafNode(newCurrentItem) && newCurrentItem.children.length > 0
+            ) {
+              newCurrentItem = newCurrentItem.children[0];
+            }
+          } // If there are no siblings, make the parent the new current item
+          else if (parent) {
+            dbg(child, "parent");
+            newCurrentItem = node;
+          }
+
+          // Mark the new current item as current
+          if (newCurrentItem) {
+            newCurrentItem.isCurrent = true;
+          }
+
+          // Remove the current item from its parent's children
+          node.children.splice(i, 1);
+          return true;
+        } else {
+          // If the current item is not a leaf node, just remove it
+          node.children.splice(i, 1);
+          return true;
         }
-
-        // Set the new current item if found
-        if (newCurrentItem) {
-          newCurrentItem.isCurrent = true;
-        }
-
-        // Remove the current item from the children array
-        node.children.splice(i, 1);
-
-        return true; // Indicate that the current item was found and processed
       }
 
-      // Recursively traverse the child nodes
-      if (traverse(child)) {
-        return true; // Stop traversal if the current item was found and processed
+      // Recursively traverse the child's subtree
+      if (traverse(child, node)) {
+        return true;
       }
     }
-    return false; // Indicate that the current item was not found in this branch
+
+    return false;
   }
 
-  // Start the traversal from the root node
-  traverse(tree);
+  // Start the traversal from the root of the tree
+  if (!traverse(tree) && tree.children.length === 0) {
+    // If no current item was found and the tree is empty, mark the root as current
+    tree.isCurrent = true;
+  }
 
-  return tree; // Return the updated tree structure
+  return tree;
+}
+
+/**
+ * Sets the current item to the first deepest child of the current item in the tree.
+ * If the current item has no children, it remains the current item.
+ * @param {TreeNode} tree - The root node of the tree structure.
+ * @returns {TreeNode} The updated tree structure.
+ */
+export function diveIn(tree: TreeNode): TreeNode {
+  function traverse(node: TreeNode): boolean {
+    if (node.isCurrent) {
+      node.isCurrent = false;
+      let currentNode = node;
+
+      while (currentNode.children.length > 0) {
+        currentNode = currentNode.children[0];
+      }
+
+      currentNode.isCurrent = true;
+      return true;
+    }
+
+    for (const child of node.children) {
+      if (traverse(child)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  traverse(tree);
+  return tree;
 }
 
 /**
@@ -430,6 +464,61 @@ export function editCurrentItemName(tree: TreeNode, newName: string): TreeNode {
 }
 
 /**
+ * Wraps the current focus item in a new parent node.
+ * Throws an error if the root node is the current focus item.
+ * @param {TreeNode} tree - The root node of the tree structure.
+ * @param {string} newParentName - The name of the new parent node.
+ * @returns {TreeNode} The updated tree structure.
+ * @throws {Error} If the root node is the current focus item.
+ */
+export function wrapCurrentItemInNewParent(
+  tree: TreeNode,
+  newParentName: string,
+): TreeNode {
+  if (tree.isCurrent) {
+    throw new Error("Root node cannot be wrapped in a new parent");
+  }
+
+  // Find the highest key value in the tree
+  let maxKey = 0;
+  function findMaxKey(node: TreeNode) {
+    const key = parseInt(node.key, 10);
+    if (key > maxKey) {
+      maxKey = key;
+    }
+    for (const child of node.children) {
+      findMaxKey(child);
+    }
+  }
+  findMaxKey(tree);
+
+  let keyCounter = maxKey + 1;
+
+  function traverseAndWrap(node: TreeNode): boolean {
+    for (let i = 0; i < node.children.length; i++) {
+      const child = node.children[i];
+      if (child.isCurrent) {
+        const newParent: TreeNode = {
+          key: (keyCounter++).toString(),
+          name: newParentName,
+          isCurrent: false,
+          children: [child],
+        };
+        node.children[i] = newParent;
+        return true;
+      }
+      if (traverseAndWrap(child)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  traverseAndWrap(tree);
+  return tree;
+}
+
+/**
  * Sets the current item in the tree based on the provided key.
  * @param {TreeNode} tree - The root node of the tree structure.
  * @param {string} key - The key of the item to set as current.
@@ -459,6 +548,116 @@ export function setCurrentItem(tree: TreeNode, key: string): TreeNode {
   }
 
   return newTree;
+}
+
+/**
+ * Recursively finds a node by its key.
+ *
+ * @param {TreeNode} node - The current node being checked.
+ * @param {string} key - The key of the node to find.
+ * @returns {TreeNode | null} The node if found, otherwise null.
+ */
+function findNodeByKey(node: TreeNode, key: string): TreeNode | null {
+  if (node.key === key) {
+    return node;
+  }
+  for (const child of node.children) {
+    const result = findNodeByKey(child, key);
+    if (result) {
+      return result;
+    }
+  }
+  return null;
+}
+
+/**
+ * Moves a node to be the last child of a new parent node in the tree.
+ *
+ * @param {TreeNode} tree - The root node of the tree structure.
+ * @param {string} nodeKey - The key of the node to move.
+ * @param {string} newParentKey - The key of the new parent node.
+ * @returns {TreeNode} The updated tree structure.
+ * @throws {Error} If the nodeKey is the same as the newParentKey.
+ */
+export function moveNodeToNewParent(
+  tree: TreeNode,
+  nodeKey: string,
+  newParentKey: string,
+): TreeNode {
+  if (nodeKey === newParentKey) {
+    throw new Error(
+      "The node to move cannot be the same as the new parent node.",
+    );
+  }
+
+  let nodeToMove: TreeNode | null = null;
+  let parentOfNodeToMove: TreeNode | null = null;
+
+  /**
+   * Recursively finds the node to move and its parent.
+   *
+   * @param {TreeNode} node - The current node being checked.
+   * @param {TreeNode | null} parent - The parent of the current node.
+   * @returns {boolean} True if the node is found, otherwise false.
+   */
+  function findNodeAndParent(node: TreeNode, parent: TreeNode | null): boolean {
+    if (node.key === nodeKey) {
+      nodeToMove = node;
+      parentOfNodeToMove = parent;
+      return true;
+    }
+    for (const child of node.children) {
+      if (findNodeAndParent(child, node)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Recursively finds a node by its key.
+   *
+   * @param {TreeNode} node - The current node being checked.
+   * @param {string} key - The key of the node to find.
+   * @returns {TreeNode | null} The node if found, otherwise null.
+   */
+  function findNodeByKey(node: TreeNode, key: string): TreeNode | null {
+    if (node.key === key) {
+      return node;
+    }
+    for (const child of node.children) {
+      const result = findNodeByKey(child, key);
+      if (result) {
+        return result;
+      }
+    }
+    return null;
+  }
+
+  findNodeAndParent(tree, null);
+
+  if (!nodeToMove || !parentOfNodeToMove) {
+    return tree; // Node to move not found
+  }
+
+  const newParentNode = findNodeByKey(tree, newParentKey);
+
+  if (!newParentNode) {
+    return tree; // New parent node not found
+  }
+
+  // Remove node from its current parent's children
+  if (parentOfNodeToMove && (parentOfNodeToMove as TreeNode).children) {
+    (parentOfNodeToMove as TreeNode).children = (parentOfNodeToMove as TreeNode)
+      .children.filter(
+        (child: TreeNode) => child.key !== nodeKey,
+      );
+  }
+
+  // Add node to the new parent's children
+  newParentNode.children.push(nodeToMove);
+
+  return tree;
 }
 
 /**
@@ -533,15 +732,72 @@ export function getCurrentItemBreadcrumb(tree: TreeNode): string {
 }
 
 /**
- * Gets the focus string of the current item in the tree,
- * including the breadcrumb path and the name of the current item.
- * @param {TreeNode} tree - The root node of the tree structure.
- * @returns {string} The focus string of the current item.
+ * Checks if the given node is a leaf node (i.e., it has no children).
+ * @param {TreeNode} node - The node to check.
+ * @returns {boolean} True if the node is a leaf, false otherwise.
  */
-export function getCurrentFocus(
+function isLeafNode(node: TreeNode): boolean {
+  return node.children.length === 0;
+}
+
+/**
+ * Gets detailed information about the current item in the tree,
+ * including the breadcrumb path, focus string, whether it is a leaf node,
+ * the depth of the current item, the number of siblings, the path to the root,
+ * and the number of descendants.
+ * @param {TreeNode} tree - The root node of the tree structure.
+ * @returns {object} An object containing detailed information about the current item.
+ */
+export function getCurrentItemDetails(
   tree: TreeNode,
-): { breadcrumbStr: string; focusStr: string } {
+): {
+  breadcrumbStr: string;
+  focusStr: string;
+  isLeaf: boolean;
+  depth: number;
+  siblingCount: number;
+  descendantCount: number;
+  key: string;
+} {
   const breadcrumbPath = getCurrentItemBreadcrumb(tree);
+  let isLeaf = false;
+  let depth = 0;
+  let siblingCount = 0;
+  let descendantCount = 0;
+  let currentKey = "";
+
+  function traverse(
+    node: TreeNode,
+    currentDepth: number,
+    path: TreeNode[],
+  ): boolean {
+    if (node.isCurrent) {
+      isLeaf = isLeafNode(node);
+      depth = currentDepth;
+      siblingCount = path.length > 0
+        ? path[path.length - 1].children.length - 1
+        : 0;
+      descendantCount = countDescendants(node);
+      currentKey = node.key;
+      return true;
+    }
+    for (const child of node.children) {
+      if (traverse(child, currentDepth + 1, [...path, node])) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function countDescendants(node: TreeNode): number {
+    let count = node.children.length;
+    for (const child of node.children) {
+      count += countDescendants(child);
+    }
+    return count;
+  }
+
+  traverse(tree, 0, []);
 
   if (breadcrumbPath.split(" / ").length > 1) {
     const breadcrumbStr = breadcrumbPath.slice(
@@ -551,11 +807,84 @@ export function getCurrentFocus(
     const focusStr = breadcrumbPath.slice(
       breadcrumbPath.lastIndexOf(" / ") + 3,
     );
-    return { breadcrumbStr, focusStr };
+    return {
+      breadcrumbStr,
+      focusStr,
+      isLeaf,
+      depth,
+      siblingCount,
+      descendantCount,
+      key: currentKey,
+    };
   } else {
     const focusStr = breadcrumbPath;
-    return { breadcrumbStr: "Focusing on", focusStr };
+    return {
+      breadcrumbStr: "Focusing on",
+      focusStr,
+      isLeaf,
+      depth,
+      siblingCount,
+      descendantCount,
+      key: currentKey,
+    };
   }
+}
+
+/**
+ * Changes focus to the next sibling item in the tree.
+ * If the current item is the last sibling, it cycles to the first sibling.
+ * If no siblings exist, the focus remains unchanged.
+ * @param {TreeNode} tree - The root node of the tree structure.
+ * @returns {TreeNode} The updated tree structure.
+ */
+export function focusNextSibling(tree: TreeNode): TreeNode {
+  function traverse(node: TreeNode): boolean {
+    for (let i = 0; i < node.children.length; i++) {
+      const child = node.children[i];
+      if (child.isCurrent) {
+        child.isCurrent = false;
+        const nextSiblingIndex = (i + 1) % node.children.length;
+        node.children[nextSiblingIndex].isCurrent = true;
+        return true;
+      }
+      if (traverse(child)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  traverse(tree);
+  return tree;
+}
+
+/**
+ * Changes focus to the previous sibling item in the tree.
+ * If the current item is the first sibling, it cycles to the last sibling.
+ * If no siblings exist, the focus remains unchanged.
+ * @param {TreeNode} tree - The root node of the tree structure.
+ * @returns {TreeNode} The updated tree structure.
+ */
+export function focusPreviousSibling(tree: TreeNode): TreeNode {
+  function traverse(node: TreeNode): boolean {
+    for (let i = 0; i < node.children.length; i++) {
+      const child = node.children[i];
+      if (child.isCurrent) {
+        child.isCurrent = false;
+        const prevSiblingIndex = (i - 1 + node.children.length) %
+          node.children.length;
+        node.children[prevSiblingIndex].isCurrent = true;
+        return true;
+      }
+      if (traverse(child)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  traverse(tree);
+  return tree;
 }
 
 /**
@@ -566,7 +895,7 @@ export function getCurrentFocus(
 export const getTree = async (path: string): Promise<TreeNode> => {
   const content = await readMarkdownFile(path);
   const tree = deserialize(content);
-  d && validateTree(tree, "getTree");
+  D && validateTree(tree, "getTree");
   return tree;
 };
 
@@ -577,7 +906,7 @@ export const getTree = async (path: string): Promise<TreeNode> => {
  */
 const writeTree = async (tree: TreeNode, path: string): Promise<void> => {
   const serialized = serialize(tree);
-  d && validateTree(tree, "writeTree");
+  D && validateTree(tree, "writeTree");
   await writeMarkdownFile(serialized, path);
   return;
 };
@@ -621,7 +950,7 @@ export async function getItemsListEffect(
   path: string,
 ): Promise<[string, string][]> {
   const tree = await getTree(path);
-  d && validateTree(tree, "getItemsListEffect");
+  D && validateTree(tree, "getItemsListEffect");
   return getItemsList(tree);
 }
 
@@ -632,7 +961,7 @@ export async function getItemsListEffect(
  */
 export async function getNodesListEffect(path: string): Promise<TreeNode[]> {
   const tree = await getTree(path);
-  d && validateTree(tree, "getNodesListEffect");
+  D && validateTree(tree, "getNodesListEffect");
   return getNodesList(tree);
 }
 
@@ -647,7 +976,7 @@ export async function addChildToCurrentItemEffect(
 ): Promise<void> {
   const tree = await getTree(path);
   const newTree = addChildToCurrentItem(tree, newText);
-  d && validateTree(newTree, "addChildToCurrentItemEffect");
+  D && validateTree(newTree, "addChildToCurrentItemEffect");
   await writeTree(newTree, path);
   return;
 }
@@ -664,7 +993,7 @@ export async function createNestedChildrenEffect(
 ): Promise<void> {
   const tree = await getTree(path);
   const newTree = createNestedChildren(tree, items);
-  d && validateTree(newTree, "createNestedChildrenEffect");
+  D && validateTree(newTree, "createNestedChildrenEffect");
   await writeTree(newTree, path);
   return;
 }
@@ -680,7 +1009,7 @@ export async function addNextSiblingToCurrentItemEffect(
 ): Promise<void> {
   const tree = await getTree(path);
   const newTree = addNextSiblingToCurrentItem(tree, newText);
-  d && validateTree(newTree, "addNextSiblingToCurrentItemEffect");
+  D && validateTree(newTree, "addNextSiblingToCurrentItemEffect");
   await writeTree(newTree, path);
   return;
 }
@@ -692,7 +1021,7 @@ export async function addNextSiblingToCurrentItemEffect(
 export async function completeCurrentItemEffect(path: string): Promise<void> {
   const tree = await getTree(path);
   const newTree = completeCurrentItem(tree);
-  d && validateTree(newTree, "completeCurrentItemEffect");
+  D && validateTree(newTree, "completeCurrentItemEffect");
   await writeTree(newTree, path);
   return;
 }
@@ -708,7 +1037,7 @@ export async function setCurrentItemEffect(
 ): Promise<void> {
   const tree = await getTree(path);
   const newTree = setCurrentItem(tree, key);
-  d && validateTree(newTree, "setCurrentItemEffect");
+  D && validateTree(newTree, "setCurrentItemEffect");
   await writeTree(newTree, path);
   return;
 }
@@ -724,7 +1053,7 @@ export async function editCurrentItemNameEffect(
 ): Promise<void> {
   const tree = await getTree(path);
   const newTree = editCurrentItemName(tree, newName);
-  d && validateTree(tree, "editCurrentItemNameEffect");
+  D && validateTree(tree, "editCurrentItemNameEffect");
   await writeTree(newTree, path);
   return;
 }
@@ -738,6 +1067,95 @@ export async function getCurrentItemBreadcrumbEffect(
   path: string,
 ): Promise<string> {
   const tree = await getTree(path);
-  d && validateTree(tree, "getCurrentItemBreadcrumbEffect");
+  D && validateTree(tree, "getCurrentItemBreadcrumbEffect");
   return getCurrentItemBreadcrumb(tree);
+}
+
+/**
+ * Dives into the current item.
+ * @param {string} path - The path to the markdown file.
+ * @returns {Promise<TreeNode>} The root node of the tree structure.
+ */
+export async function diveInEffect(
+  path: string,
+): Promise<TreeNode> {
+  const tree = await getTree(path);
+  const newTree = diveIn(tree);
+  D && validateTree(newTree, "diveInEffect");
+  await writeTree(newTree, path);
+  return newTree;
+}
+
+/**
+ * Changes focus to the next sibling item in the tree structure.
+ * If the current item is the last sibling, it cycles to the first sibling.
+ * If no siblings exist, the focus remains unchanged.
+ * @param {string} path - The path to the markdown file.
+ * @returns {Promise<TreeNode>} The updated tree structure.
+ */
+export async function focusNextSiblingEffect(path: string): Promise<TreeNode> {
+  const tree = await getTree(path);
+  const newTree = focusNextSibling(tree);
+  D && validateTree(newTree, "focusNextSiblingEffect");
+  await writeTree(newTree, path);
+  return newTree;
+}
+
+/**
+ * Changes focus to the previous sibling item in the tree structure.
+ * If the current item is the first sibling, it cycles to the last sibling.
+ * If no siblings exist, the focus remains unchanged.
+ * @param {string} path - The path to the markdown file.
+ * @returns {Promise<TreeNode>} The updated tree structure.
+ */
+export async function focusPreviousSiblingEffect(
+  path: string,
+): Promise<TreeNode> {
+  const tree = await getTree(path);
+  const newTree = focusPreviousSibling(tree);
+  D && validateTree(newTree, "focusPreviousSiblingEffect");
+  await writeTree(newTree, path);
+  return newTree;
+}
+
+/**
+ * Wraps the current focus item in a new parent node and updates the tree structure in the markdown file.
+ * Throws an error if the root node is the current focus item.
+ * @param {string} newParentName - The name of the new parent node.
+ * @param {string} path - The path to the markdown file.
+ * @returns {Promise<TreeNode>} The updated tree structure.
+ * @throws {Error} If the root node is the current focus item.
+ */
+export async function wrapCurrentItemInNewParentEffect(
+  newParentName: string,
+  path: string,
+): Promise<TreeNode> {
+  const tree = await getTree(path);
+  const newTree = wrapCurrentItemInNewParent(tree, newParentName);
+  D && validateTree(newTree, "wrapCurrentItemInNewParentEffect");
+  await writeTree(newTree, path);
+  return newTree;
+}
+
+/**
+ * Moves a node to be the last child of a new parent node in the tree structure and updates the tree structure in the markdown file.
+ *
+ * @param {string} nodeKey - The key of the node to move.
+ * @param {string} newParentKey - The key of the new parent node.
+ * @param {string} path - The path to the markdown file.
+ * @returns {Promise<TreeNode>} The updated tree structure.
+ * @throws {Error} If the nodeKey is the same as the newParentKey.
+ */
+export async function moveNodeToNewParentEffect(
+  nodeKey: string,
+  newParentKey: string,
+  path: string,
+): Promise<TreeNode> {
+  const tree = await getTree(path);
+  const before = getCurrentItemDetails(tree);
+  const newTree = moveNodeToNewParent(tree, nodeKey, newParentKey);
+  const after = getCurrentItemDetails(tree);
+  D && validateTree(newTree, "moveNodeToNewParentEffect");
+  await writeTree(newTree, path);
+  return newTree;
 }

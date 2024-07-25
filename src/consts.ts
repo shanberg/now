@@ -4,3 +4,5 @@ export const DATA_STR = {
   lineSeparator: "\n",
   lineMarker: "- ",
 } as const;
+
+export const D = false;

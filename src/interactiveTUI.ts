@@ -8,24 +8,31 @@ import {
   displayCurrentFocus,
   findOrCreateFrameFile,
   promptOptions,
+  SEPARATOR_STR,
   showHint,
+  styleOptions,
   SYNTAX_HINT,
 } from "./cliUtils.ts";
 import {
   addNextSiblingToCurrentItemEffect,
   completeCurrentItemEffect,
   createNestedChildrenEffect,
+  diveInEffect,
   editCurrentItemNameEffect,
-  getCurrentFocus,
+  focusNextSiblingEffect,
+  focusPreviousSiblingEffect,
+  getCurrentItemDetails,
+  getItemsList,
   getItemsListEffect,
   getTree,
+  moveNodeToNewParentEffect,
   setCurrentItemEffect,
+  wrapCurrentItemInNewParentEffect,
 } from "./frame.ts";
-
-const d = false; // debug mode
+import { D } from "./consts.ts";
 
 async function interactiveTUI(path?: string) {
-  d || console.clear();
+  D || console.clear();
   const frameFilePath = path || await findOrCreateFrameFile();
   if (!path && !frameFilePath) {
     await createFrameFile(frameFilePath);
@@ -43,18 +50,28 @@ async function interactiveTUI(path?: string) {
 async function promptMainAction(
   tree: TreeNode,
 ): Promise<string> {
-  d || console.clear();
+  D || console.clear();
   displayCurrentFocus(tree);
+  const { isLeaf, siblingCount } = getCurrentItemDetails(tree);
+
+  const options = styleOptions([
+    !isLeaf && { name: "Dive in", value: "diveIn" },
+    { name: "Narrow focus", value: "add" },
+    { name: "Finish this", value: "complete" },
+    { name: "Add followup", value: "later" },
+    Select.separator(SEPARATOR_STR),
+    { name: "Switch focus", value: "switch" },
+    { name: "Edit focus", value: "edit" },
+    { name: "Wrap in new parent", value: "wrap" },
+    { name: "Move to new parent", value: "move" },
+    siblingCount > 1 && { name: "Next", value: "nextSibling" },
+    siblingCount > 1 && { name: "Prev", value: "previousSibling" },
+  ]).filter(Boolean);
+
   return await Select.prompt({
     ...promptOptions,
     message: colors.dim("Actions"),
-    options: [
-      { name: "Narrow focus", value: "add" },
-      { name: "Finish this", value: "complete" },
-      { name: "Switch focus", value: "switch" },
-      { name: "Add followup", value: "later" },
-      { name: "Edit focus", value: "edit" },
-    ],
+    options,
   });
 }
 
@@ -71,14 +88,30 @@ async function handleMainAction(
       return await handleAddLater(path);
     case "switch":
       return await handleSwitchAction(path);
+    case "diveIn":
+      return await handleDiveInAction(path);
     case "edit":
       return await handleEditAction(path);
+    case "wrap":
+      return await handleWrapAction(path);
+    case "move":
+      return await handleMoveAction(path);
+    case "nextSibling":
+      return await handleNextSiblingAction(path);
+    case "previousSibling":
+      return await handlePreviousSiblingAction(path);
     case "quit":
       console.log("Exiting...");
       Deno.exit();
+      break;
     default:
       return await getTree(path); // Return the current tree if action is unrecognized
   }
+}
+
+async function handleDiveInAction(path: string): Promise<TreeNode> {
+  await diveInEffect(path);
+  return await getTree(path);
 }
 
 async function handleCompleteAction(path: string): Promise<TreeNode> {
@@ -88,7 +121,7 @@ async function handleCompleteAction(path: string): Promise<TreeNode> {
 }
 
 async function handleAddNestedAction(path: string): Promise<TreeNode> {
-  d || console.clear();
+  D || console.clear();
   const tree = await getTree(path);
   displayCurrentFocus(tree);
   showHint(SYNTAX_HINT);
@@ -101,7 +134,7 @@ async function handleAddNestedAction(path: string): Promise<TreeNode> {
 }
 
 async function handleAddLater(path: string): Promise<TreeNode> {
-  d || console.clear();
+  D || console.clear();
   const tree = await getTree(path);
   displayCurrentFocus(tree);
   showHint(SYNTAX_HINT);
@@ -113,37 +146,20 @@ async function handleAddLater(path: string): Promise<TreeNode> {
   return await getTree(path);
 }
 
-async function handleMoreAction(path: string): Promise<TreeNode> {
-  d || console.clear();
-  const tree = await getTree(path);
-  displayCurrentFocus(tree);
-  const moreAction = await Select.prompt({
-    ...promptOptions,
-    message: "More Options",
-    options: [
-      { name: "Edit current focus", value: "edit" },
-      { name: "Go back", value: "back" },
-      { name: "Quit", value: "quit" },
-    ],
-  });
+async function handleNextSiblingAction(path: string): Promise<TreeNode> {
+  await focusNextSiblingEffect(path);
+  return await getTree(path);
+}
 
-  switch (moreAction) {
-    case "edit":
-      return await handleEditAction(path);
-    case "back":
-      return tree; // Go back to the previous menu
-    case "quit":
-      console.log("Exiting...");
-      Deno.exit();
-      break;
-  }
-  return tree;
+async function handlePreviousSiblingAction(path: string): Promise<TreeNode> {
+  await focusPreviousSiblingEffect(path);
+  return await getTree(path);
 }
 
 async function handleEditAction(path: string): Promise<TreeNode> {
   const tree = await getTree(path);
   const currentItem = getCurrentFocus(tree).focusStr;
-  d || console.clear();
+  D || console.clear();
   displayCurrentFocus(tree);
   const newText = await Input.prompt({
     ...promptOptions,
@@ -156,7 +172,7 @@ async function handleEditAction(path: string): Promise<TreeNode> {
 }
 
 async function handleSwitchAction(path: string): Promise<TreeNode> {
-  d || console.clear();
+  D || console.clear();
   const tree = await getTree(path);
   displayCurrentFocus(tree);
   const items = await getItemsListEffect(path);
@@ -176,6 +192,45 @@ async function handleSwitchAction(path: string): Promise<TreeNode> {
   if (switchToKey !== "back") {
     console.log("Switching to " + switchToKey);
     await setCurrentItemEffect(switchToKey, path);
+  }
+  return await getTree(path);
+}
+
+async function handleWrapAction(path: string): Promise<TreeNode> {
+  D || console.clear();
+  const tree = await getTree(path);
+  displayCurrentFocus(tree);
+  const newParentName = await Input.prompt({
+    ...promptOptions,
+    message: "New parent name:",
+  });
+  await wrapCurrentItemInNewParentEffect(newParentName, path);
+  return await getTree(path);
+}
+
+async function handleMoveAction(path: string): Promise<TreeNode> {
+  D || console.clear();
+  const tree = await getTree(path);
+  const items = getItemsList(tree);
+  const { key: currentKey } = getCurrentItemDetails(tree);
+
+  const moveToKey = await Select.prompt({
+    ...promptOptions,
+    message: "Select a new parent for the current item:",
+    options: [
+      ...items
+        .filter(([_, key]) => key !== currentKey) // Disable the current item
+        .map(([name, key]: [string, string]) => ({
+          name: name,
+          value: key,
+        })),
+      Select.separator(),
+      { name: "Go Back", value: "back" },
+    ],
+  });
+
+  if (moveToKey !== "back") {
+    await moveNodeToNewParentEffect(currentKey, moveToKey, path);
   }
   return await getTree(path);
 }
