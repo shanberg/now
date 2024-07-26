@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { getCurrentItemDetails } from "../src/frame.ts";
+import { getCurrentItemDetails } from "../src/operations/index.ts";
 
 Deno.test("getCurrentItemDetails - single root node", () => {
   const tree: TreeNode = {

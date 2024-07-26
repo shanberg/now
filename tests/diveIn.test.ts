@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { diveIn } from "../src/frame.ts";
+import { diveIn } from "../src/operations/index.ts";
 
 Deno.test("diveIn - first deepest child becomes current", () => {
   const initialTree = {
@@ -220,92 +220,95 @@ Deno.test("diveIn - no children, current remains the same", () => {
   assertEquals(updatedTree, expectedTree);
 });
 
-Deno.test("diveIn - multiple children, first deepest child becomes current", () => {
-  const initialTree = {
-    key: "0",
-    name: "Root Frame",
-    isCurrent: true,
-    children: [
-      {
-        key: "1",
-        name: "Item 1",
-        isCurrent: false,
-        children: [
-          {
-            key: "1.1",
-            name: "Item 1.1",
-            isCurrent: false,
-            children: [],
-          },
-        ],
-      },
-      {
-        key: "2",
-        name: "Item 2",
-        isCurrent: false,
-        children: [
-          {
-            key: "2.1",
-            name: "Item 2.1",
-            isCurrent: false,
-            children: [
-              {
-                key: "2.1.1",
-                name: "Item 2.1.1",
-                children: [],
-                isCurrent: false,
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  };
+Deno.test(
+  "diveIn - multiple children, first deepest child becomes current",
+  () => {
+    const initialTree = {
+      key: "0",
+      name: "Root Frame",
+      isCurrent: true,
+      children: [
+        {
+          key: "1",
+          name: "Item 1",
+          isCurrent: false,
+          children: [
+            {
+              key: "1.1",
+              name: "Item 1.1",
+              isCurrent: false,
+              children: [],
+            },
+          ],
+        },
+        {
+          key: "2",
+          name: "Item 2",
+          isCurrent: false,
+          children: [
+            {
+              key: "2.1",
+              name: "Item 2.1",
+              isCurrent: false,
+              children: [
+                {
+                  key: "2.1.1",
+                  name: "Item 2.1.1",
+                  children: [],
+                  isCurrent: false,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
 
-  const expectedTree = {
-    key: "0",
-    name: "Root Frame",
-    isCurrent: false,
-    children: [
-      {
-        key: "1",
-        name: "Item 1",
-        isCurrent: false,
-        children: [
-          {
-            key: "1.1",
-            name: "Item 1.1",
-            isCurrent: true,
-            children: [],
-          },
-        ],
-      },
-      {
-        key: "2",
-        name: "Item 2",
-        isCurrent: false,
-        children: [
-          {
-            key: "2.1",
-            name: "Item 2.1",
-            isCurrent: false,
-            children: [
-              {
-                key: "2.1.1",
-                name: "Item 2.1.1",
-                children: [],
-                isCurrent: false,
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  };
+    const expectedTree = {
+      key: "0",
+      name: "Root Frame",
+      isCurrent: false,
+      children: [
+        {
+          key: "1",
+          name: "Item 1",
+          isCurrent: false,
+          children: [
+            {
+              key: "1.1",
+              name: "Item 1.1",
+              isCurrent: true,
+              children: [],
+            },
+          ],
+        },
+        {
+          key: "2",
+          name: "Item 2",
+          isCurrent: false,
+          children: [
+            {
+              key: "2.1",
+              name: "Item 2.1",
+              isCurrent: false,
+              children: [
+                {
+                  key: "2.1.1",
+                  name: "Item 2.1.1",
+                  children: [],
+                  isCurrent: false,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
 
-  const updatedTree = diveIn(initialTree);
-  assertEquals(updatedTree, expectedTree);
-});
+    const updatedTree = diveIn(initialTree);
+    assertEquals(updatedTree, expectedTree);
+  },
+);
 
 Deno.test("diveIn - intermediate level with multiple siblings", () => {
   const initialTree = {

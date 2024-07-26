@@ -3,6 +3,7 @@ import {
   Select,
 } from "https://deno.land/x/cliffy@v0.25.7/prompt/mod.ts";
 import { colors } from "https://deno.land/x/cliffy@v0.25.7/ansi/colors.ts";
+import { D } from "./consts.ts";
 import {
   createFrameFile,
   displayCurrentFocus,
@@ -19,7 +20,9 @@ import {
   createNestedChildrenEffect,
   diveInEffect,
   editCurrentItemNameEffect,
+  focusFirstChildEffect,
   focusNextSiblingEffect,
+  focusParentEffect,
   focusPreviousSiblingEffect,
   getCurrentItemDetails,
   getItemsList,
@@ -28,12 +31,11 @@ import {
   moveNodeToNewParentEffect,
   setCurrentItemEffect,
   wrapCurrentItemInNewParentEffect,
-} from "./frame.ts";
-import { D } from "./consts.ts";
+} from "./operations/index.ts";
 
 async function interactiveTUI(path?: string) {
   D || console.clear();
-  const frameFilePath = path || await findOrCreateFrameFile();
+  const frameFilePath = path || (await findOrCreateFrameFile());
   if (!path && !frameFilePath) {
     await createFrameFile(frameFilePath);
   }
@@ -47,12 +49,10 @@ async function interactiveTUI(path?: string) {
   }
 }
 
-async function promptMainAction(
-  tree: TreeNode,
-): Promise<string> {
+async function promptMainAction(tree: TreeNode): Promise<string> {
   D || console.clear();
   displayCurrentFocus(tree);
-  const { isLeaf, siblingCount } = getCurrentItemDetails(tree);
+  const { isLeaf, isRoot, siblingCount } = getCurrentItemDetails(tree);
 
   const options = styleOptions([
     !isLeaf && { name: "Dive in", value: "diveIn" },
@@ -60,16 +60,19 @@ async function promptMainAction(
     { name: "Finish this", value: "complete" },
     { name: "Add followup", value: "later" },
     Select.separator(SEPARATOR_STR),
-    { name: "Switch focus", value: "switch" },
-    { name: "Edit focus", value: "edit" },
-    { name: "Wrap in new parent", value: "wrap" },
-    { name: "Move to new parent", value: "move" },
-    siblingCount > 1 && { name: "Next", value: "nextSibling" },
-    siblingCount > 1 && { name: "Prev", value: "previousSibling" },
-  ].filter(Boolean))
+    { name: "Switch", value: "switch" },
+    { name: "Edit", value: "edit" },
+    { name: "Wrap", value: "wrap" },
+    { name: "Move", value: "move" },
+    siblingCount > 0 && { name: "Next", value: "focusNnextSibling" },
+    siblingCount > 0 && { name: "Previous", value: "focusPreviousSibling" },
+    !isLeaf && { name: "Down", value: "focusChild" },
+    !isRoot && { name: "Up", value: "focusParent" },
+  ]).filter(Boolean);
 
   return await Select.prompt({
     ...promptOptions,
+    maxRows: 3,
     message: colors.dim("Actions"),
     options,
   });
@@ -96,10 +99,14 @@ async function handleMainAction(
       return await handleWrapAction(path);
     case "move":
       return await handleMoveAction(path);
-    case "nextSibling":
+    case "focusNextSibling":
       return await handleNextSiblingAction(path);
-    case "previousSibling":
+    case "focusPreviousSibling":
       return await handlePreviousSiblingAction(path);
+    case "focusChild":
+      return await handleFocusChildAction(path);
+    case "focusParent":
+      return await handleFocusParentAction(path);
     case "quit":
       console.log("Exiting...");
       Deno.exit();
@@ -156,10 +163,19 @@ async function handlePreviousSiblingAction(path: string): Promise<TreeNode> {
   return await getTree(path);
 }
 
+async function handleFocusParentAction(path: string): Promise<TreeNode> {
+  await focusParentEffect(path);
+  return await getTree(path);
+}
+
+async function handleFocusChildAction(path: string): Promise<TreeNode> {
+  await focusFirstChildEffect(path);
+  return await getTree(path);
+}
+
 async function handleEditAction(path: string): Promise<TreeNode> {
   const tree = await getTree(path);
   const { focusStr } = getCurrentItemDetails(tree);
-
   D || console.clear();
   displayCurrentFocus(tree);
   const newText = await Input.prompt({
