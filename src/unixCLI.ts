@@ -11,10 +11,10 @@ import {
   editCurrentItemNameEffect,
   getItemsListEffect,
   setCurrentItemEffect,
-} from "./frame.ts";
+} from "./operations/index.ts";
 
 async function unixCLI(command: string, path?: string, ...args: Argument[]) {
-  const frameFilePath = path || await findOrCreateFrameFile();
+  const frameFilePath = path || (await findOrCreateFrameFile());
   if (!path && !frameFilePath) {
     await createFrameFile(frameFilePath);
   }

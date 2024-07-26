@@ -28,12 +28,12 @@ import {
   moveNodeToNewParentEffect,
   setCurrentItemEffect,
   wrapCurrentItemInNewParentEffect,
-} from "./frame.ts";
+} from "./operations/index.ts";
 import { D } from "./consts.ts";
 
 async function interactiveTUI(path?: string) {
   D || console.clear();
-  const frameFilePath = path || await findOrCreateFrameFile();
+  const frameFilePath = path || (await findOrCreateFrameFile());
   if (!path && !frameFilePath) {
     await createFrameFile(frameFilePath);
   }
@@ -47,9 +47,7 @@ async function interactiveTUI(path?: string) {
   }
 }
 
-async function promptMainAction(
-  tree: TreeNode,
-): Promise<string> {
+async function promptMainAction(tree: TreeNode): Promise<string> {
   D || console.clear();
   displayCurrentFocus(tree);
   const { isLeaf, siblingCount } = getCurrentItemDetails(tree);

@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { completeCurrentItem } from "../src/frame.ts";
+import { completeCurrentItem } from "../src/operations/index.ts";
 
 Deno.test("completeCurrentItem - previous sibling becomes current", () => {
   const initialTree = {
