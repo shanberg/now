@@ -555,3 +555,53 @@ export function focusPreviousSibling(tree: TreeNode): TreeNode {
   traverse(tree);
   return tree;
 }
+
+/**
+ * Moves the focus to the parent of the current item in the tree.
+ * If the current item is the root, the focus remains unchanged.
+ * @param {TreeNode} tree - The root node of the tree structure.
+ * @returns {TreeNode} The updated tree structure.
+ */
+export function focusParent(tree: TreeNode): TreeNode {
+  function traverse(node: TreeNode, parent: TreeNode | null = null): boolean {
+    if (node.isCurrent && parent) {
+      node.isCurrent = false;
+      parent.isCurrent = true;
+      return true;
+    }
+    for (const child of node.children) {
+      if (traverse(child, node)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  traverse(tree);
+  return tree;
+}
+
+/**
+ * Moves the focus to the first child of the current item in the tree.
+ * If the current item has no children, the focus remains unchanged.
+ * @param {TreeNode} tree - The root node of the tree structure.
+ * @returns {TreeNode} The updated tree structure.
+ */
+export function focusFirstChild(tree: TreeNode): TreeNode {
+  function traverse(node: TreeNode): boolean {
+    if (node.isCurrent && node.children.length > 0) {
+      node.isCurrent = false;
+      node.children[0].isCurrent = true;
+      return true;
+    }
+    for (const child of node.children) {
+      if (traverse(child)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  traverse(tree);
+  return tree;
+}

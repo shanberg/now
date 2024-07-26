@@ -82,6 +82,7 @@ export function getCurrentItemBreadcrumb(tree: TreeNode): string {
 export function getCurrentItemDetails(tree: TreeNode): {
   breadcrumbStr: string;
   focusStr: string;
+  isRoot: boolean;
   isLeaf: boolean;
   depth: number;
   siblingCount: number;
@@ -139,6 +140,7 @@ export function getCurrentItemDetails(tree: TreeNode): {
     return {
       breadcrumbStr,
       focusStr,
+      isRoot: depth === 0,
       isLeaf,
       depth,
       siblingCount,
@@ -149,6 +151,7 @@ export function getCurrentItemDetails(tree: TreeNode): {
     const focusStr = breadcrumbPath;
     return {
       breadcrumbStr: "Focusing on",
+      isRoot: depth === 0,
       focusStr,
       isLeaf,
       depth,

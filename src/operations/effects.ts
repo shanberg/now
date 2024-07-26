@@ -11,7 +11,9 @@ import {
   createNestedChildren,
   diveIn,
   editCurrentItemName,
+  focusFirstChild,
   focusNextSibling,
+  focusParent,
   focusPreviousSibling,
   moveNodeToNewParent,
   setCurrentItem,
@@ -285,6 +287,34 @@ export async function moveNodeToNewParentEffect(
   const tree = await getTree(path);
   const newTree = moveNodeToNewParent(tree, nodeKey, newParentKey);
   D && validateTree(newTree, "moveNodeToNewParentEffect");
+  await writeTree(newTree, path);
+  return newTree;
+}
+
+/**
+ * Moves the focus to the parent of the current item in the tree structure.
+ * If the current item is the root, the focus remains unchanged.
+ * @param {string} path - The path to the markdown file.
+ * @returns {Promise<TreeNode>} The updated tree structure.
+ */
+export async function focusParentEffect(path: string): Promise<TreeNode> {
+  const tree = await getTree(path);
+  const newTree = focusParent(tree);
+  D && validateTree(newTree, "focusParentEffect");
+  await writeTree(newTree, path);
+  return newTree;
+}
+
+/**
+ * Moves the focus to the first child of the current item in the tree structure.
+ * If the current item has no children, the focus remains unchanged.
+ * @param {string} path - The path to the markdown file.
+ * @returns {Promise<TreeNode>} The updated tree structure.
+ */
+export async function focusFirstChildEffect(path: string): Promise<TreeNode> {
+  const tree = await getTree(path);
+  const newTree = focusFirstChild(tree);
+  D && validateTree(newTree, "focusFirstChildEffect");
   await writeTree(newTree, path);
   return newTree;
 }
