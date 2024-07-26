@@ -28,7 +28,7 @@ const STYLE = {
 
 export const SYNTAX_HINT = STYLE.hint("Syntax: Item 1, Item 2 / Item 2.1");
 
-export const styleOptions = (options: SelectOption[]) => {
+export const styleOptions = (options: SelectOption[]): SelectOption[] => {
   return options.map((option) => {
     if (!option.name) return option;
     if (option.disabled) {
@@ -45,7 +45,7 @@ export const styleOptions = (options: SelectOption[]) => {
   });
 };
 
-export const showHint = (text: string) => {
+export const showHint = (text: string): void => {
   console.log(STYLE.hint(text));
 };
 

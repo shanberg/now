@@ -66,7 +66,7 @@ async function promptMainAction(
     { name: "Move to new parent", value: "move" },
     siblingCount > 1 && { name: "Next", value: "nextSibling" },
     siblingCount > 1 && { name: "Prev", value: "previousSibling" },
-  ]).filter(Boolean);
+  ].filter(Boolean))
 
   return await Select.prompt({
     ...promptOptions,
@@ -158,13 +158,14 @@ async function handlePreviousSiblingAction(path: string): Promise<TreeNode> {
 
 async function handleEditAction(path: string): Promise<TreeNode> {
   const tree = await getTree(path);
-  const currentItem = getCurrentFocus(tree).focusStr;
+  const { focusStr } = getCurrentItemDetails(tree);
+
   D || console.clear();
   displayCurrentFocus(tree);
   const newText = await Input.prompt({
     ...promptOptions,
     minLength: 1,
-    default: currentItem,
+    default: focusStr,
     message: "New name:",
   });
   await editCurrentItemNameEffect(newText, path);
