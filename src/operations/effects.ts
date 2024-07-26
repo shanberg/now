@@ -19,7 +19,11 @@ import {
   setCurrentItem,
   wrapCurrentItemInNewParent,
 } from "./treeManipulation.ts";
-import { readMarkdownFile, writeMarkdownFile } from "./fileOperations.ts";
+import {
+  logAction,
+  readMarkdownFile,
+  writeMarkdownFile,
+} from "./fileOperations.ts";
 import { deserialize, serialize } from "./treeSerialization.ts";
 
 /**
@@ -155,9 +159,15 @@ export async function addNextSiblingToCurrentItemEffect(
  */
 export async function completeCurrentItemEffect(path: string): Promise<void> {
   const tree = await getTree(path);
+  // const { breadcrumbStr, focusStr } = getCurrentItemBreadcrumb(tree);
+  const item = getCurrentItemBreadcrumb(tree);
   const newTree = completeCurrentItem(tree);
   D && validateTree(newTree, "completeCurrentItemEffect");
   await writeTree(newTree, path);
+
+  // Log the action
+  await logAction("Complete", `${item}`);
+
   return;
 }
 

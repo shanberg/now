@@ -65,13 +65,14 @@ async function promptMainAction(tree: TreeNode): Promise<string> {
     { name: "Wrap", value: "wrap" },
     { name: "Move", value: "move" },
     siblingCount > 0 && { name: "Next", value: "focusNnextSibling" },
-    siblingCount > 0 && { name: "Prev", value: "focusPreviousSibling" },
+    siblingCount > 0 && { name: "Previous", value: "focusPreviousSibling" },
     !isLeaf && { name: "Down", value: "focusChild" },
     !isRoot && { name: "Up", value: "focusParent" },
   ]).filter(Boolean);
 
   return await Select.prompt({
     ...promptOptions,
+    maxRows: 3,
     message: colors.dim("Actions"),
     options,
   });
