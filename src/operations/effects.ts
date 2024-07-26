@@ -166,7 +166,7 @@ export async function completeCurrentItemEffect(path: string): Promise<void> {
   await writeTree(newTree, path);
 
   // Log the action
-  await logAction("Complete", `${item}`);
+  await logAction("Complete", item);
 
   return;
 }
