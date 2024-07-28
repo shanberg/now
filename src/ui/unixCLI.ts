@@ -11,7 +11,7 @@ import {
   editCurrentItemNameEffect,
   getItemsListEffect,
   setCurrentItemEffect,
-} from "./operations/index.ts";
+} from "../operations/index.ts";
 
 async function unixCLI(command: string, path?: string, ...args: Argument[]) {
   const frameFilePath = path || (await findOrCreateFrameFile());

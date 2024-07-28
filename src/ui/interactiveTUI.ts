@@ -3,7 +3,7 @@ import {
   Select,
 } from "https://deno.land/x/cliffy@v0.25.7/prompt/mod.ts";
 import { colors } from "https://deno.land/x/cliffy@v0.25.7/ansi/colors.ts";
-import { D } from "./consts.ts";
+import { D } from "../consts.ts";
 import {
   createFrameFile,
   displayCurrentFocus,
@@ -31,7 +31,7 @@ import {
   moveNodeToNewParentEffect,
   setCurrentItemEffect,
   wrapCurrentItemInNewParentEffect,
-} from "./operations/index.ts";
+} from "../operations/index.ts";
 
 async function interactiveTUI(path?: string) {
   D || console.clear();

@@ -3,8 +3,8 @@ import {
   SelectOption,
 } from "https://deno.land/x/cliffy@v0.25.7/prompt/mod.ts";
 import { colors } from "https://deno.land/x/cliffy@v0.25.7/ansi/colors.ts";
-import { getCurrentItemDetails, getTree } from "./operations/index.ts";
-import { DATA_STR } from "./consts.ts";
+import { getCurrentItemDetails, getTree } from "../operations/index.ts";
+import { DATA_STR } from "../consts.ts";
 
 export const FOCUS_ARROW = "▶︎";
 
