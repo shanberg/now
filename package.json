@@ -1,0 +1,21 @@
+{
+  "name": "focusframe",
+  "version": "0.1.0",
+  "description": "A terminal-based, minimal productivity tool for keeping track of what you're working on.",
+  "main": "dist/bundle.js",
+  "scripts": {
+    "build": "deno bundle src/index.ts dist/bundle.js",
+    "compile": "deno compile --output dist/focus src/index.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shanberg/focusframe.git"
+  },
+  "author": "shanberg",
+  "license": "MIT",
+  "dependencies": {
+    "cliffy": "https://deno.land/x/cliffy@v0.25.7/mod.ts",
+    "emit": "https://deno.land/x/emit@0.40.0/mod.ts",
+    "fs": "https://deno.land/std@0.224.0/fs/mod.ts"
+  }
+}

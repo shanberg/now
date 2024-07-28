@@ -12,6 +12,8 @@
     "fmt:watch": "deno fmt --watch",
     "test": "deno test --allow-read --allow-write tests/",
     "test:watch": "deno test --watch --allow-read --allow-write tests/",
-    "compile": "deno compile --allow-read --allow-write src/index.ts"
-  }
+    "compile": "deno compile --allow-read --allow-write --output dist/focus src/index.ts",
+    "bundle": "deno bundle src/index.ts dist/bundle.js",
+  },
+  "version": "0.1.0"
 }
