@@ -2,7 +2,7 @@ import {
   assertEquals,
   assertThrows,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { deserialize } from "../src/frame.ts";
+import { deserialize } from "../src/operations/index.ts";
 
 Deno.test("deserialize - basic structure", () => {
   const input = `

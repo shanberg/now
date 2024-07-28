@@ -1,6 +1,6 @@
 import { Command } from "https://deno.land/x/cliffy@v0.25.7/command/mod.ts";
-import { interactiveTUI } from "./interactiveTUI.ts";
-import { unixCLI } from "./unixCLI.ts";
+import { interactiveTUI } from "./ui/interactiveTUI.ts";
+import { unixCLI } from "./ui/unixCLI.ts";
 import { D } from "./consts.ts";
 
 D || console.clear();

@@ -3,8 +3,8 @@ import {
   SelectOption,
 } from "https://deno.land/x/cliffy@v0.25.7/prompt/mod.ts";
 import { colors } from "https://deno.land/x/cliffy@v0.25.7/ansi/colors.ts";
-import { getCurrentItemDetails, getTree } from "./frame.ts";
-import { DATA_STR } from "./consts.ts";
+import { getCurrentItemDetails, getTree } from "../operations/index.ts";
+import { DATA_STR } from "../consts.ts";
 
 export const FOCUS_ARROW = "▶︎";
 
@@ -28,7 +28,7 @@ const STYLE = {
 
 export const SYNTAX_HINT = STYLE.hint("Syntax: Item 1, Item 2 / Item 2.1");
 
-export const styleOptions = (options: SelectOption[]) => {
+export const styleOptions = (options: SelectOption[]): SelectOption[] => {
   return options.map((option) => {
     if (!option.name) return option;
     if (option.disabled) {
@@ -45,15 +45,15 @@ export const styleOptions = (options: SelectOption[]) => {
   });
 };
 
-export const showHint = (text: string) => {
+export const showHint = (text: string): void => {
   console.log(STYLE.hint(text));
 };
 
 export function findOrCreateFrameFile(): string {
   const folderName = Deno.cwd().split("/").pop();
   const fileName = `.${folderName}.frame.md`;
-  const files = [...Deno.readDirSync(".")].filter((file) =>
-    file.isFile && file.name.endsWith(".frame.md")
+  const files = [...Deno.readDirSync(".")].filter(
+    (file) => file.isFile && file.name.endsWith(".frame.md"),
   );
   if (files.length > 0) {
     return files[0].name;
@@ -82,17 +82,14 @@ export async function createFrameFile(fileName: string): Promise<string> {
 }
 
 export function displayCurrentFocus(tree: TreeNode): void {
-  const {
-    breadcrumbStr,
-    focusStr,
-    isLeaf,
-  } = getCurrentItemDetails(tree);
+  const { breadcrumbStr, focusStr, isLeaf } = getCurrentItemDetails(tree);
 
   const trimmedBread = breadcrumbStr.split(" / ").slice(1).join(" / ");
   console.log(colors.dim(trimmedBread || "—"));
   console.log(
     [colors.yellow(`${FOCUS_ARROW} ${focusStr}`), !isLeaf && colors.dim(" / …")]
-      .filter(Boolean).join(""),
+      .filter(Boolean)
+      .join(""),
   );
   console.log();
 }

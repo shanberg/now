@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { createNestedChildren } from "../src/frame.ts";
+import { createNestedChildren } from "../src/operations/index.ts";
 
 Deno.test("createNestedChildren - single item", () => {
   const initialTree = {

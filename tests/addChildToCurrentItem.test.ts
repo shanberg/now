@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { addChildToCurrentItem } from "../src/frame.ts";
+import { addChildToCurrentItem } from "../src/operations/index.ts";
 
 Deno.test("addChildToCurrentItem - basic", () => {
   const tree: TreeNode = {
