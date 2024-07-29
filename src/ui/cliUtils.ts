@@ -8,8 +8,6 @@ import { DATA_STR } from "../consts.ts";
 
 export const FOCUS_ARROW = "▶︎";
 
-export const SEPARATOR_STR = "---";
-
 export const promptOptions = {
   prefix: "",
   pointer: "",
@@ -21,9 +19,12 @@ export const promptOptions = {
 };
 
 const STYLE = {
+  focus: colors.yellow,
+  breadcrumb: colors.dim.yellow,
   hint: colors.dim,
-  menuItem: colors.bold,
+  menuItem: colors.bold.gray,
   menuItemDisabled: colors.dim.strikethrough,
+  menuItemPrimary: colors.bold.white,
 };
 
 export const SYNTAX_HINT = STYLE.hint("Syntax: Item 1, Item 2 / Item 2.1");
@@ -35,6 +36,12 @@ export const styleOptions = (options: SelectOption[]): SelectOption[] => {
       return {
         ...option,
         name: STYLE.menuItemDisabled(option.name),
+      };
+    }
+    if (option.primary) {
+      return {
+        ...option,
+        name: STYLE.menuItemPrimary(option.name),
       };
     } else {
       return {
@@ -85,9 +92,9 @@ export function displayCurrentFocus(tree: TreeNode): void {
   const { breadcrumbStr, focusStr, isLeaf } = getCurrentItemDetails(tree);
 
   const trimmedBread = breadcrumbStr.split(" / ").slice(1).join(" / ");
-  console.log(colors.dim(trimmedBread || "—"));
+  console.log(STYLE.breadcrumb(trimmedBread || "—"));
   console.log(
-    [colors.yellow(`${FOCUS_ARROW} ${focusStr}`), !isLeaf && colors.dim(" / …")]
+    [STYLE.focus(`${FOCUS_ARROW} ${focusStr}`), !isLeaf && colors.dim(" / …")]
       .filter(Boolean)
       .join(""),
   );

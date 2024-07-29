@@ -9,7 +9,6 @@ import {
   displayCurrentFocus,
   findOrCreateFrameFile,
   promptOptions,
-  SEPARATOR_STR,
   showHint,
   styleOptions,
   SYNTAX_HINT,
@@ -55,11 +54,10 @@ async function promptMainAction(tree: TreeNode): Promise<string> {
   const { isLeaf, isRoot, siblingCount } = getCurrentItemDetails(tree);
 
   const options = styleOptions([
-    !isLeaf && { name: "Dive in", value: "diveIn" },
-    { name: "Narrow focus", value: "add" },
-    { name: "Finish this", value: "complete" },
-    { name: "Add followup", value: "later" },
-    Select.separator(SEPARATOR_STR),
+    !isLeaf && { name: "Dive in", value: "diveIn", primary: true },
+    { name: "Narrow focus", value: "add", primary: true },
+    { name: "Finish this", value: "complete", primary: true },
+    { name: "Add followup", value: "later", primary: true },
     { name: "Switch", value: "switch" },
     { name: "Edit", value: "edit" },
     { name: "Wrap", value: "wrap" },
@@ -72,7 +70,7 @@ async function promptMainAction(tree: TreeNode): Promise<string> {
 
   return await Select.prompt({
     ...promptOptions,
-    maxRows: 3,
+    maxRows: 6,
     message: colors.dim("Actions"),
     options,
   });
