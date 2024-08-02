@@ -4,11 +4,11 @@
 INSTALL_DIR="/usr/local/bin"
 
 # Define the name of the executable
-EXECUTABLE_NAME="focus-md"
+EXECUTABLE_NAME="now"
 
 # Download the bundled JavaScript file to a temporary location
 TEMP_FILE=$(mktemp)
-curl -o "$TEMP_FILE" https://your-server.com/path/to/bundle.js
+curl -o "$TEMP_FILE" https://raw.githubusercontent.com/shanberg/now/dist/bundle.js
 
 # Ensure the installation directory exists
 sudo mkdir -p "$INSTALL_DIR"
