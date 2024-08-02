@@ -6,6 +6,33 @@ INSTALL_DIR="/usr/local/bin"
 # Define the name of the executable
 EXECUTABLE_NAME="now"
 
+# Function to install Deno
+install_deno() {
+  echo "Deno is not installed. Installing Deno..."
+  curl -fsSL https://deno.land/x/install/install.sh | sh
+  # Move Deno binary to /usr/local/bin
+  sudo mv "$HOME/.deno/bin/deno" "$INSTALL_DIR/deno"
+  # Add Deno to the PATH for bash
+  if [ -n "$BASH_VERSION" ]; then
+    echo 'export DENO_INSTALL="$HOME/.deno"' >> ~/.bashrc
+    echo 'export PATH="$DENO_INSTALL/bin:$PATH"' >> ~/.bashrc
+    source ~/.bashrc
+  fi
+  # Add Deno to the PATH for zsh
+  if [ -n "$ZSH_VERSION" ]; then
+    echo 'export DENO_INSTALL="$HOME/.deno"' >> ~/.zshrc
+    echo 'export PATH="$DENO_INSTALL/bin:$PATH"' >> ~/.zshrc
+    source ~/.zshrc
+  fi
+}
+
+# Check if Deno is installed
+if ! command -v deno &> /dev/null; then
+  install_deno
+else
+  echo "Deno is already installed."
+fi
+
 # Download the bundled JavaScript file to a temporary location
 TEMP_FILE=$(mktemp)
 curl -o "$TEMP_FILE" https://raw.githubusercontent.com/shanberg/now/dist/bundle.js
