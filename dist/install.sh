@@ -35,7 +35,7 @@ fi
 
 # Download the bundled JavaScript file to a temporary location
 TEMP_FILE=$(mktemp)
-curl -o "$TEMP_FILE" https://raw.githubusercontent.com/shanberg/now/dist/bundle.js
+curl -o "$TEMP_FILE" https://raw.githubusercontent.com/shanberg/now/main/dist/bundle.js
 
 # Ensure the installation directory exists
 sudo mkdir -p "$INSTALL_DIR"
