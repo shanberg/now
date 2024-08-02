@@ -1,4 +1,4 @@
-import { bundle } from "https://deno.land/x/emit@0.40.0/mod.ts";
+import { bundle } from "jsr:@deno/emit";
 
 const entryPoint = new URL("./index.ts", import.meta.url);
 const result = await bundle(entryPoint);

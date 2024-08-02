@@ -1,10 +1,11 @@
 import {
   Confirm,
-  SelectOption,
+  type SelectOption,
 } from "https://deno.land/x/cliffy@v0.25.7/prompt/mod.ts";
 import { colors } from "https://deno.land/x/cliffy@v0.25.7/ansi/colors.ts";
 import { getCurrentItemDetails, getTree } from "../operations/index.ts";
 import { DATA_STR } from "../consts.ts";
+import { type SelectOptionWithPrimary, type TreeNode } from "../../types.d.ts";
 
 export const FOCUS_ARROW = "▶︎";
 
@@ -29,7 +30,9 @@ const STYLE = {
 
 export const SYNTAX_HINT = STYLE.hint("Syntax: Item 1, Item 2 / Item 2.1");
 
-export const styleOptions = (options: SelectOption[]): SelectOption[] => {
+export const styleOptions = (
+  options: SelectOptionWithPrimary[],
+): SelectOption[] => {
   return options.map((option) => {
     if (!option.name) return option;
     if (option.disabled) {

@@ -1,5 +1,6 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { focusParent, focusFirstChild } from "../src/operations/index.ts";
+import { focusFirstChild, focusParent } from "../src/operations/index.ts";
+import { type TreeNode } from "../types.d.ts";
 
 Deno.test("focusParent - move focus to parent", () => {
   const tree: TreeNode = {

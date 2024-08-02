@@ -3,6 +3,7 @@ import {
   assertThrows,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { setCurrentItem } from "../src/operations/index.ts";
+import { type TreeNode } from "../types.d.ts";
 
 Deno.test("setCurrentItem - basic", () => {
   const tree: TreeNode = {

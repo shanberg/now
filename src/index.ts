@@ -8,43 +8,40 @@ await new Command()
   .name("focus")
   .version("0.1.0")
   .description("Stay on target while yak-shaving")
-  .command("tui [path:string]", "Start the TUI")
-  .arguments("[path:string]")
-  .action((_options, path) => {
-    interactiveTUI(path);
+  .command("tui", "Start the TUI")
+  .action(() => {
+    interactiveTUI();
   })
-  .command("status [path:string]", "Display the current status")
-  .arguments("[path:string]")
-  .action((_options, path) => {
-    unixCLI("status", path);
+  .command("status", "Display the current status")
+  .action(() => {
+    unixCLI("status");
   })
-  .command("complete [path:string]", "Complete the current frame")
-  .arguments("[path:string]")
-  .action((_options, path) => {
-    unixCLI("complete", path);
+  .command("complete", "Complete the current frame")
+  .action(() => {
+    unixCLI("complete");
   })
-  .command("add [path:string] <items:string>", "Add nested frames")
-  .arguments("[path:string] <items:string>")
-  .action((_options, path, items) => {
-    unixCLI("add", path, items);
+  .command("add <items:string>", "Add nested frames")
+  .arguments("<items:string>")
+  .action((_options, items) => {
+    unixCLI("add", items);
   })
-  .command("later [path:string] <items:string>", "Add follow-up frames")
-  .arguments("[path:string] <items:string>")
-  .action((_options, path, items) => {
-    unixCLI("later", path, items);
+  .command("later <items:string>", "Add follow-up frames")
+  .arguments("<items:string>")
+  .action((_options, items) => {
+    unixCLI("later", items);
   })
   .command(
-    "edit [path:string] <newName:string>",
+    "edit <newName:string>",
     "Edit the current frame's description",
   )
-  .arguments("[path:string] <newName:string>")
-  .action((_options, path, newName) => {
-    unixCLI("edit", path, newName);
+  .arguments("<newName:string>")
+  .action((_options, newName) => {
+    unixCLI("edit", newName);
   })
-  .command("switch [path:string] <index:number>", "Switch to a different frame")
-  .arguments("[path:string] <index:number>")
-  .action((_options, path, index) => {
-    unixCLI("switch", path, index);
+  .command("switch <index:string>", "Switch to a different frame")
+  .arguments("<index:string>")
+  .action((_options, index: string) => {
+    unixCLI("switch", index);
   })
   .default("status")
   .parse(Deno.args);

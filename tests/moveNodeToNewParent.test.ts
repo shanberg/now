@@ -2,6 +2,7 @@ import {
   assertEquals,
   assertThrows,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { type TreeNode } from "../types.d.ts";
 import { moveNodeToNewParent } from "../src/operations/index.ts";
 
 Deno.test("moveNodeToNewParent - move root child to another root child", () => {

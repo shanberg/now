@@ -1,4 +1,3 @@
-import { Argument } from "https://deno.land/x/cliffy@v0.25.7/command/mod.ts";
 import {
   createFrameFile,
   displayCurrentFocusEffect,
@@ -13,9 +12,9 @@ import {
   setCurrentItemEffect,
 } from "../operations/index.ts";
 
-async function unixCLI(command: string, path?: string, ...args: Argument[]) {
-  const frameFilePath = path || (await findOrCreateFrameFile());
-  if (!path && !frameFilePath) {
+async function unixCLI(command: string, ...args: string[]) {
+  const frameFilePath = await findOrCreateFrameFile();
+  if (!frameFilePath) {
     await createFrameFile(frameFilePath);
   }
   console.log(`Executing command: ${command} with path: ${frameFilePath}`);
@@ -42,7 +41,7 @@ async function unixCLI(command: string, path?: string, ...args: Argument[]) {
       break;
     case "switch": {
       const items = await getItemsListEffect(frameFilePath);
-      const index = args[0];
+      const index = parseInt(args[0], 10);
       if (index >= 0 && index < items.length) {
         console.log("Calling setCurrentItemEffect");
         await setCurrentItemEffect(index.toString(), frameFilePath);

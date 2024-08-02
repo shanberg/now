@@ -1,4 +1,5 @@
 import { DATA_STR } from "../consts.ts";
+import { type TreeNode } from "../../types.d.ts";
 
 /**
  * Gets a list of items in the tree as strings.

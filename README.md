@@ -29,11 +29,25 @@ what you're working on.
 1. Ensure you have [Deno](https://deno.land/) installed.
 2. Clone this repository:
 
-```
+```bash
 git clone https://github.com/shanberg/frame-md.git
 cd frame-md
 ```
 
 To start Frame-MD, run:
 
-...
+```bash
+deno task dev
+```
+
+## Usage
+
+FocusFrame provides a set of commands to manage your focus frames.
+
+- `focus tui`: Start the TUI (Text User Interface)
+- `focus status`: Display the current status
+- `focus complete`: Complete the current frame
+- `focus add <items>`: Add nested frames
+- `focus later <items>`: Add follow-up frames
+- `focus edit <newName>`: Edit the current frame's description
+- `focus switch <index>`: Switch to a different frame

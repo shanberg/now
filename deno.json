@@ -12,6 +12,7 @@
     "fmt:watch": "deno fmt --watch",
     "test": "deno test --allow-read --allow-write tests/",
     "test:watch": "deno test --watch --allow-read --allow-write tests/",
+    "bundle": "deno bundle src/index.ts dist/bundle.js",
     "compile": "deno compile --allow-read --allow-write src/index.ts"
   }
 }

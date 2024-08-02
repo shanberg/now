@@ -1,4 +1,5 @@
 import { D } from "../consts.ts";
+import { type TreeNode } from "../../types.d.ts";
 import {
   getCurrentItemBreadcrumb,
   getItemsList,

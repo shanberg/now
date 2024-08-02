@@ -3,6 +3,7 @@ import {
   assertThrows,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { moveNodeToNewParent } from "../src/operations/index.ts";
+import { type TreeNode } from "../types.d.ts";
 
 Deno.test("moveNodeToNewParent - move root child to another root child", () => {
   const tree: TreeNode = {

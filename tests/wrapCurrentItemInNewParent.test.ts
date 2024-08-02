@@ -3,6 +3,7 @@ import {
   assertThrows,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { wrapCurrentItemInNewParent } from "../src/operations/index.ts";
+import { type TreeNode } from "../types.d.ts";
 
 Deno.test("wrapCurrentItemInNewParent - root node as current focus", () => {
   const tree: TreeNode = {

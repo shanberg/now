@@ -4,6 +4,7 @@ import {
 } from "https://deno.land/x/cliffy@v0.25.7/prompt/mod.ts";
 import { colors } from "https://deno.land/x/cliffy@v0.25.7/ansi/colors.ts";
 import { D } from "../consts.ts";
+import { TreeNode } from "../../types.d.ts";
 import {
   createFrameFile,
   displayCurrentFocus,
@@ -31,11 +32,12 @@ import {
   setCurrentItemEffect,
   wrapCurrentItemInNewParentEffect,
 } from "../operations/index.ts";
+import { SelectOption } from "https://deno.land/x/cliffy@v0.25.7/prompt/select.ts";
 
-async function interactiveTUI(path?: string) {
+async function interactiveTUI() {
   D || console.clear();
-  const frameFilePath = path || (await findOrCreateFrameFile());
-  if (!path && !frameFilePath) {
+  const frameFilePath = await findOrCreateFrameFile();
+  if (!frameFilePath) {
     await createFrameFile(frameFilePath);
   }
   let tree = await getTree(frameFilePath);
@@ -53,7 +55,7 @@ async function promptMainAction(tree: TreeNode): Promise<string> {
   displayCurrentFocus(tree);
   const { isLeaf, isRoot, siblingCount } = getCurrentItemDetails(tree);
 
-  const options = styleOptions([
+  const availableOptions = [
     !isLeaf && { name: "Dive in", value: "diveIn", primary: true },
     { name: "Narrow focus", value: "add", primary: true },
     { name: "Finish this", value: "complete", primary: true },
@@ -66,7 +68,9 @@ async function promptMainAction(tree: TreeNode): Promise<string> {
     siblingCount > 0 && { name: "Previous", value: "focusPreviousSibling" },
     !isLeaf && { name: "Down", value: "focusChild" },
     !isRoot && { name: "Up", value: "focusParent" },
-  ]).filter(Boolean);
+  ].filter((option) => !!option);
+
+  const options = styleOptions(availableOptions as SelectOption[]);
 
   return await Select.prompt({
     ...promptOptions,

@@ -1,3 +1,5 @@
+import { type TreeNode } from "../../types.d.ts";
+
 /**
  * Checks if the given node is a leaf node (i.e., it has no children).
  * @param {TreeNode} node - The node to check.
@@ -9,16 +11,6 @@ function isLeafNode(node: TreeNode): boolean {
 
 export function completeCurrentItem(tree: TreeNode): TreeNode {
   // Helper function to traverse the tree and find the current item
-
-  // const D = tree.name === "Root x";
-  const dbg = (x: any, args: any) => {
-    if (tree.name === "Root") {
-      true && console.log(x, args);
-      console.log();
-      true && alert([x, args].join("\n"));
-      console.log();
-    }
-  };
 
   function traverse(node: TreeNode, parent: TreeNode | null = null): boolean {
     // Iterate over the children of the current node
@@ -36,7 +28,6 @@ export function completeCurrentItem(tree: TreeNode): TreeNode {
 
           // If there is a previous sibling, make it the new current item
           if (i > 0) {
-            dbg(child, "prev");
             newCurrentItem = node.children[i - 1];
             // Traverse down to the first leaf node in the previous sibling's subtree
             while (
@@ -47,7 +38,6 @@ export function completeCurrentItem(tree: TreeNode): TreeNode {
             }
             // If there is a next sibling, make it the new current item
           } else if (i < node.children.length - 1) {
-            dbg(child, "next");
             newCurrentItem = node.children[i + 1];
             // Traverse down to the first leaf node in the next sibling's subtree
             while (
@@ -58,7 +48,6 @@ export function completeCurrentItem(tree: TreeNode): TreeNode {
             }
           } // If there are no siblings, make the parent the new current item
           else if (parent) {
-            dbg(child, "parent");
             newCurrentItem = node;
           }
 
