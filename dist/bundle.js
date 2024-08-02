@@ -6132,12 +6132,14 @@ function factory1(stack = []) {
     colors._stack = stack;
     return colors;
 }
-const LOG_FILE_PATH = "log.md";
+const LOG_FILE_PATH = "now.log";
+const NOW_FILE_SUFFIX = "now.md";
 const DATA_STR = {
     currentItemMarker: "@",
     indent: "  ",
     lineSeparator: "\n",
-    lineMarker: "- "
+    lineMarker: "- ",
+    rootFocus: "Root Focus"
 };
 function getItemsList(tree) {
     const items = [];
@@ -7080,29 +7082,29 @@ const styleOptions = (options)=>{
 const showHint = (text)=>{
     console.log(STYLE.hint(text));
 };
-function findOrCreateFrameFile() {
+async function findOrCreateFocusFile() {
     const folderName = Deno.cwd().split("/").pop();
-    const fileName = `.${folderName}.frame.md`;
+    const fileName = `.${folderName}.${NOW_FILE_SUFFIX}`;
     const files = [
         ...Deno.readDirSync(".")
-    ].filter((file)=>file.isFile && file.name.endsWith(".frame.md"));
+    ].filter((file)=>file.isFile && file.name.endsWith(NOW_FILE_SUFFIX));
     if (files.length > 0) {
         return files[0].name;
     } else {
-        return fileName;
+        return await createFocusFile(fileName);
     }
 }
-async function createFrameFile(fileName) {
+async function createFocusFile(fileName) {
     showHint("Files are stored in the current directory.");
     const createFile = await Confirm.prompt({
         ...promptOptions,
-        message: `No frame file found. Create ${fileName}?`
+        message: `No focus file found. Create ${fileName}?`
     });
     if (createFile) {
-        await Deno.writeTextFile(fileName, `#${DATA_STR.lineMarker}Root Frame ${DATA_STR.currentItemMarker}\n`);
+        await Deno.writeTextFile(fileName, `#${DATA_STR.lineMarker}${DATA_STR.rootFocus} ${DATA_STR.currentItemMarker}\n`);
         return fileName;
     } else {
-        console.log("No frame file created. Exiting...");
+        console.log("No focus file created. Exiting...");
         Deno.exit();
     }
 }
@@ -7122,15 +7124,16 @@ async function displayCurrentFocusEffect(path) {
 }
 async function interactiveTUI() {
     false || console.clear();
-    const frameFilePath = await findOrCreateFrameFile();
-    if (!frameFilePath) {
-        await createFrameFile(frameFilePath);
+    const focusFilePath = await findOrCreateFocusFile();
+    console.log(focusFilePath);
+    if (!focusFilePath) {
+        await createFocusFile(focusFilePath);
     }
-    let tree = await getTree(frameFilePath);
+    let tree = await getTree(focusFilePath);
     displayCurrentFocus(tree);
     while(true){
         const action = await promptMainAction(tree);
-        tree = await handleMainAction(action, frameFilePath);
+        tree = await handleMainAction(action, focusFilePath);
         displayCurrentFocus(tree);
     }
 }
@@ -7240,7 +7243,7 @@ async function handleDiveInAction(path) {
 }
 async function handleCompleteAction(path) {
     await completeCurrentItemEffect(path);
-    console.log("All Frames completed. Time for a break?");
+    console.log("All focuses completed. Time for a break?");
     return await getTree(path);
 }
 async function handleAddNestedAction(path) {
@@ -7360,39 +7363,39 @@ async function handleMoveAction(path) {
     return await getTree(path);
 }
 async function unixCLI(command, ...args) {
-    const frameFilePath = await findOrCreateFrameFile();
-    if (!frameFilePath) {
-        await createFrameFile(frameFilePath);
+    const focusFilePath = await findOrCreateFocusFile();
+    if (!focusFilePath) {
+        await createFocusFile(focusFilePath);
     }
-    console.log(`Executing command: ${command} with path: ${frameFilePath}`);
+    console.log(`Executing command: ${command} with path: ${focusFilePath}`);
     switch(command){
         case "status":
             console.log("Calling displayCurrentFocusEffect");
-            await displayCurrentFocusEffect(frameFilePath);
+            await displayCurrentFocusEffect(focusFilePath);
             break;
         case "complete":
             console.log("Calling completeCurrentItemEffect");
-            await completeCurrentItemEffect(frameFilePath);
+            await completeCurrentItemEffect(focusFilePath);
             break;
         case "add":
             console.log("Calling createNestedChildrenEffect");
-            await createNestedChildrenEffect(args[0], frameFilePath);
+            await createNestedChildrenEffect(args[0], focusFilePath);
             break;
         case "later":
             console.log("Calling addNextSiblingToCurrentItemEffect");
-            await addNextSiblingToCurrentItemEffect(args[0], frameFilePath);
+            await addNextSiblingToCurrentItemEffect(args[0], focusFilePath);
             break;
         case "edit":
             console.log("Calling editCurrentItemNameEffect");
-            await editCurrentItemNameEffect(args[0], frameFilePath);
+            await editCurrentItemNameEffect(args[0], focusFilePath);
             break;
         case "switch":
             {
-                const items = await getItemsListEffect(frameFilePath);
+                const items = await getItemsListEffect(focusFilePath);
                 const index = parseInt(args[0], 10);
                 if (index >= 0 && index < items.length) {
                     console.log("Calling setCurrentItemEffect");
-                    await setCurrentItemEffect(index.toString(), frameFilePath);
+                    await setCurrentItemEffect(index.toString(), focusFilePath);
                 } else {
                     console.log("Invalid index");
                 }
@@ -7407,14 +7410,14 @@ await new Command().name("focus").version("0.1.0").description("Stay on target w
     interactiveTUI();
 }).command("status", "Display the current status").action(()=>{
     unixCLI("status");
-}).command("complete", "Complete the current frame").action(()=>{
+}).command("complete", "Complete the current focus").action(()=>{
     unixCLI("complete");
-}).command("add <items:string>", "Add nested frames").arguments("<items:string>").action((_options, items)=>{
+}).command("add <items:string>", "Add nested foci").arguments("<items:string>").action((_options, items)=>{
     unixCLI("add", items);
-}).command("later <items:string>", "Add follow-up frames").arguments("<items:string>").action((_options, items)=>{
+}).command("later <items:string>", "Add follow-up foci").arguments("<items:string>").action((_options, items)=>{
     unixCLI("later", items);
-}).command("edit <newName:string>", "Edit the current frame's description").arguments("<newName:string>").action((_options, newName)=>{
+}).command("edit <newName:string>", "Edit the current focus' description").arguments("<newName:string>").action((_options, newName)=>{
     unixCLI("edit", newName);
-}).command("switch <index:string>", "Switch to a different frame").arguments("<index:string>").action((_options, index)=>{
+}).command("switch <index:string>", "Focus on something else").arguments("<index:string>").action((_options, index)=>{
     unixCLI("switch", index);
 }).default("status").parse(Deno.args);

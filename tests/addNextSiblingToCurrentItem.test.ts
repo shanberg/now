@@ -5,7 +5,7 @@ import { type TreeNode } from "../types.d.ts";
 Deno.test("addNextSiblingToCurrentItem - basic case", () => {
   const tree: TreeNode = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       { key: "1", name: "Item 1", children: [], isCurrent: false },
@@ -18,7 +18,7 @@ Deno.test("addNextSiblingToCurrentItem - basic case", () => {
 
   const expectedTree: TreeNode = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       { key: "1", name: "Item 1", children: [], isCurrent: false },
@@ -34,7 +34,7 @@ Deno.test("addNextSiblingToCurrentItem - basic case", () => {
 Deno.test("addNextSiblingToCurrentItem - nested case", () => {
   const tree: TreeNode = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       {
@@ -64,7 +64,7 @@ Deno.test("addNextSiblingToCurrentItem - nested case", () => {
 
   const expectedTree: TreeNode = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       {
@@ -102,7 +102,7 @@ Deno.test("addNextSiblingToCurrentItem - nested case", () => {
 Deno.test("addNextSiblingToCurrentItem - multiple levels", () => {
   const tree: TreeNode = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       {
@@ -133,7 +133,7 @@ Deno.test("addNextSiblingToCurrentItem - multiple levels", () => {
 
   const expectedTree: TreeNode = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       {
@@ -172,7 +172,7 @@ Deno.test("addNextSiblingToCurrentItem - multiple levels", () => {
 Deno.test("addNextSiblingToCurrentItem - root level", () => {
   const tree: TreeNode = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: true,
     children: [
       { key: "1", name: "Item 1", children: [], isCurrent: false },
@@ -180,14 +180,14 @@ Deno.test("addNextSiblingToCurrentItem - root level", () => {
     ],
   };
 
-  const updatedTree = addNextSiblingToCurrentItem(tree, "Root Frame 2");
+  const updatedTree = addNextSiblingToCurrentItem(tree, "Root Focus 2");
 
   const expectedTree: TreeNode = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: true,
     children: [
-      { key: "3", name: "Root Frame 2", children: [], isCurrent: false },
+      { key: "3", name: "Root Focus 2", children: [], isCurrent: false },
       { key: "1", name: "Item 1", children: [], isCurrent: false },
       { key: "2", name: "Item 2", children: [], isCurrent: false },
     ],

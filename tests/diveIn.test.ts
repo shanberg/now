@@ -4,7 +4,7 @@ import { diveIn } from "../src/operations/index.ts";
 Deno.test("diveIn - first deepest child becomes current", () => {
   const initialTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: true,
     children: [
       {
@@ -33,7 +33,7 @@ Deno.test("diveIn - first deepest child becomes current", () => {
 
   const expectedTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       {
@@ -67,7 +67,7 @@ Deno.test("diveIn - first deepest child becomes current", () => {
 Deno.test("diveIn - first deepest child becomes current 2", () => {
   const initialTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       {
@@ -133,7 +133,7 @@ Deno.test("diveIn - first deepest child becomes current 2", () => {
 
   const expectedTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       {
@@ -204,14 +204,14 @@ Deno.test("diveIn - first deepest child becomes current 2", () => {
 Deno.test("diveIn - no children, current remains the same", () => {
   const initialTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: true,
     children: [],
   };
 
   const expectedTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: true,
     children: [],
   };
@@ -225,7 +225,7 @@ Deno.test(
   () => {
     const initialTree = {
       key: "0",
-      name: "Root Frame",
+      name: "Root Focus",
       isCurrent: true,
       children: [
         {
@@ -266,7 +266,7 @@ Deno.test(
 
     const expectedTree = {
       key: "0",
-      name: "Root Frame",
+      name: "Root Focus",
       isCurrent: false,
       children: [
         {
@@ -313,7 +313,7 @@ Deno.test(
 Deno.test("diveIn - intermediate level with multiple siblings", () => {
   const initialTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: true,
     children: [
       {
@@ -354,7 +354,7 @@ Deno.test("diveIn - intermediate level with multiple siblings", () => {
 
   const expectedTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       {
@@ -400,7 +400,7 @@ Deno.test("diveIn - intermediate level with multiple siblings", () => {
 Deno.test("diveIn - deepest level with multiple siblings", () => {
   const initialTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: true,
     children: [
       {
@@ -441,7 +441,7 @@ Deno.test("diveIn - deepest level with multiple siblings", () => {
 
   const expectedTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       {

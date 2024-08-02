@@ -126,14 +126,14 @@ Deno.test("deserialize - current item marker", () => {
 
 Deno.test("deserialize - corrects invalid indentation", () => {
   const input = `
-- Root Frame
+- Root Focus
  - Child 1
   - Grandchild 1.1 @
 `;
 
   const expected = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       {

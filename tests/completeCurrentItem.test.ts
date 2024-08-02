@@ -4,7 +4,7 @@ import { completeCurrentItem } from "../src/operations/index.ts";
 Deno.test("completeCurrentItem - previous sibling becomes current", () => {
   const initialTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       { key: "1", name: "Item 1", children: [], isCurrent: false },
@@ -15,7 +15,7 @@ Deno.test("completeCurrentItem - previous sibling becomes current", () => {
 
   const expectedTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       { key: "1", name: "Item 1", children: [], isCurrent: true },
@@ -30,7 +30,7 @@ Deno.test("completeCurrentItem - previous sibling becomes current", () => {
 Deno.test("completeCurrentItem - next sibling becomes current", () => {
   const initialTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       { key: "1", name: "Item 1", children: [], isCurrent: true },
@@ -41,7 +41,7 @@ Deno.test("completeCurrentItem - next sibling becomes current", () => {
 
   const expectedTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       { key: "2", name: "Item 2", children: [], isCurrent: true },
@@ -56,7 +56,7 @@ Deno.test("completeCurrentItem - next sibling becomes current", () => {
 Deno.test("completeCurrentItem - parent becomes current", () => {
   const initialTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       {
@@ -78,7 +78,7 @@ Deno.test("completeCurrentItem - parent becomes current", () => {
 
   const expectedTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       {

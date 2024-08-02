@@ -16,29 +16,29 @@ await new Command()
   .action(() => {
     unixCLI("status");
   })
-  .command("complete", "Complete the current frame")
+  .command("complete", "Complete the current focus")
   .action(() => {
     unixCLI("complete");
   })
-  .command("add <items:string>", "Add nested frames")
+  .command("add <items:string>", "Add nested foci")
   .arguments("<items:string>")
   .action((_options, items) => {
     unixCLI("add", items);
   })
-  .command("later <items:string>", "Add follow-up frames")
+  .command("later <items:string>", "Add follow-up foci")
   .arguments("<items:string>")
   .action((_options, items) => {
     unixCLI("later", items);
   })
   .command(
     "edit <newName:string>",
-    "Edit the current frame's description",
+    "Edit the current focus description",
   )
   .arguments("<newName:string>")
   .action((_options, newName) => {
     unixCLI("edit", newName);
   })
-  .command("switch <index:string>", "Switch to a different frame")
+  .command("switch <index:string>", "Focus on something else")
   .arguments("<index:string>")
   .action((_options, index: string) => {
     unixCLI("switch", index);

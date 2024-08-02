@@ -6,9 +6,9 @@ import { colors } from "https://deno.land/x/cliffy@v0.25.7/ansi/colors.ts";
 import { D } from "../consts.ts";
 import { TreeNode } from "../../types.d.ts";
 import {
-  createFrameFile,
+  createFocusFile,
   displayCurrentFocus,
-  findOrCreateFrameFile,
+  findOrCreateFocusFile,
   promptOptions,
   showHint,
   styleOptions,
@@ -36,16 +36,16 @@ import { SelectOption } from "https://deno.land/x/cliffy@v0.25.7/prompt/select.t
 
 async function interactiveTUI() {
   D || console.clear();
-  const frameFilePath = await findOrCreateFrameFile();
-  if (!frameFilePath) {
-    await createFrameFile(frameFilePath);
+  const focusFilePath = await findOrCreateFocusFile();
+  if (!focusFilePath) {
+    await createFocusFile(focusFilePath);
   }
-  let tree = await getTree(frameFilePath);
+  let tree = await getTree(focusFilePath);
   displayCurrentFocus(tree);
 
   while (true) {
     const action = await promptMainAction(tree);
-    tree = await handleMainAction(action, frameFilePath);
+    tree = await handleMainAction(action, focusFilePath);
     displayCurrentFocus(tree);
   }
 }
@@ -125,7 +125,7 @@ async function handleDiveInAction(path: string): Promise<TreeNode> {
 
 async function handleCompleteAction(path: string): Promise<TreeNode> {
   await completeCurrentItemEffect(path);
-  console.log("All Frames completed. Time for a break?");
+  console.log("All focuses completed. Time for a break?");
   return await getTree(path);
 }
 

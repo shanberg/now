@@ -4,7 +4,7 @@ import {
 } from "https://deno.land/x/cliffy@v0.25.7/prompt/mod.ts";
 import { colors } from "https://deno.land/x/cliffy@v0.25.7/ansi/colors.ts";
 import { getCurrentItemDetails, getTree } from "../operations/index.ts";
-import { DATA_STR } from "../consts.ts";
+import { DATA_STR, NOW_FILE_SUFFIX } from "../consts.ts";
 import { type SelectOptionWithPrimary, type TreeNode } from "../../types.d.ts";
 
 export const FOCUS_ARROW = "▶︎";
@@ -59,34 +59,34 @@ export const showHint = (text: string): void => {
   console.log(STYLE.hint(text));
 };
 
-export function findOrCreateFrameFile(): string {
+export async function findOrCreateFocusFile(): Promise<string> {
   const folderName = Deno.cwd().split("/").pop();
-  const fileName = `.${folderName}.frame.md`;
+  const fileName = `.${folderName}.${NOW_FILE_SUFFIX}`;
   const files = [...Deno.readDirSync(".")].filter(
-    (file) => file.isFile && file.name.endsWith(".frame.md"),
+    (file) => file.isFile && file.name.endsWith(NOW_FILE_SUFFIX),
   );
   if (files.length > 0) {
     return files[0].name;
   } else {
-    return fileName;
+    return await createFocusFile(fileName);
   }
 }
 
-export async function createFrameFile(fileName: string): Promise<string> {
+export async function createFocusFile(fileName: string): Promise<string> {
   showHint("Files are stored in the current directory.");
   const createFile = await Confirm.prompt({
     ...promptOptions,
-    message: `No frame file found. Create ${fileName}?`,
+    message: `No focus file found. Create ${fileName}?`,
   });
 
   if (createFile) {
     await Deno.writeTextFile(
       fileName,
-      `#${DATA_STR.lineMarker}Root Frame ${DATA_STR.currentItemMarker}\n`,
+      `#${DATA_STR.lineMarker}${DATA_STR.rootFocus} ${DATA_STR.currentItemMarker}\n`,
     );
     return fileName;
   } else {
-    console.log("No frame file created. Exiting...");
+    console.log("No focus file created. Exiting...");
     Deno.exit();
   }
 }

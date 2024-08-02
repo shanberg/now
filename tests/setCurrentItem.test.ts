@@ -302,7 +302,7 @@ Deno.test("setCurrentItem - nested tree 4", () => {
 Deno.test("setCurrentItem - dastardly", () => {
   const tree: TreeNode = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     children: [
       {
         key: "1",
@@ -348,7 +348,7 @@ Deno.test("setCurrentItem - dastardly", () => {
 
   const expected: TreeNode = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     children: [
       {
         key: "1",
@@ -398,7 +398,7 @@ Deno.test("setCurrentItem - dastardly", () => {
 Deno.test("setCurrentItem - dastardly 2", () => {
   const tree: TreeNode = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     children: [
       {
         key: "1",
@@ -444,7 +444,7 @@ Deno.test("setCurrentItem - dastardly 2", () => {
 
   const expected: TreeNode = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     children: [
       {
         key: "1",
@@ -494,7 +494,7 @@ Deno.test("setCurrentItem - dastardly 2", () => {
 Deno.test("setCurrentItem - dastardly 3", () => {
   const tree: TreeNode = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     children: [
       {
         key: "1",
@@ -540,7 +540,7 @@ Deno.test("setCurrentItem - dastardly 3", () => {
 
   const expected: TreeNode = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     children: [
       {
         key: "1",

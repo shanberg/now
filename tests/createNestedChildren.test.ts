@@ -4,7 +4,7 @@ import { createNestedChildren } from "../src/operations/index.ts";
 Deno.test("createNestedChildren - single item", () => {
   const initialTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       { key: "1", name: "Item 1", children: [], isCurrent: false },
@@ -14,7 +14,7 @@ Deno.test("createNestedChildren - single item", () => {
 
   const expectedTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       { key: "1", name: "Item 1", children: [], isCurrent: false },
@@ -41,7 +41,7 @@ Deno.test("createNestedChildren - single item", () => {
 Deno.test("createNestedChildren - multiple items", () => {
   const initialTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       { key: "1", name: "Item 1", children: [], isCurrent: false },
@@ -51,7 +51,7 @@ Deno.test("createNestedChildren - multiple items", () => {
 
   const expectedTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       { key: "1", name: "Item 1", children: [], isCurrent: false },
@@ -96,7 +96,7 @@ Deno.test("createNestedChildren - multiple items", () => {
 Deno.test("createNestedChildren - existing children", () => {
   const initialTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       {
@@ -124,7 +124,7 @@ Deno.test("createNestedChildren - existing children", () => {
 
   const expectedTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       {
@@ -173,7 +173,7 @@ Deno.test("createNestedChildren - existing children", () => {
 Deno.test("createNestedChildren - different levels of nesting", () => {
   const initialTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       {
@@ -195,7 +195,7 @@ Deno.test("createNestedChildren - different levels of nesting", () => {
 
   const expectedTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       {
@@ -246,7 +246,7 @@ Deno.test("createNestedChildren - different levels of nesting", () => {
 Deno.test("createNestedChildren - siblings", () => {
   const initialTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: true,
     children: [
       { key: "1", name: "Item 1", children: [], isCurrent: false },
@@ -256,7 +256,7 @@ Deno.test("createNestedChildren - siblings", () => {
 
   const expectedTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       { key: "1", name: "Item 1", children: [], isCurrent: false },
@@ -276,7 +276,7 @@ Deno.test("createNestedChildren - siblings", () => {
 Deno.test("createNestedChildren - nested and siblings", () => {
   const initialTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: true,
     children: [
       { key: "1", name: "Item 1", children: [], isCurrent: false },
@@ -286,7 +286,7 @@ Deno.test("createNestedChildren - nested and siblings", () => {
 
   const expectedTree = {
     key: "0",
-    name: "Root Frame",
+    name: "Root Focus",
     isCurrent: false,
     children: [
       { key: "1", name: "Item 1", children: [], isCurrent: false },
