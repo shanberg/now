@@ -31,8 +31,8 @@ accessibility.
 
 ## Installation
 
-```
-curl -fsSL https://raw.githubusercontent.com/shanberg/now/main/dist/install.sh | sh
+```bash
+curl -fsSL https://raw.githubusercontent.com/shanberg/now/main/dist/install.sh | bash
 ```
 
 ## Using `now`
