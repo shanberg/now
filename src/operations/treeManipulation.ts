@@ -9,78 +9,58 @@ function isLeafNode(node: TreeNode): boolean {
   return node.children.length === 0;
 }
 
+/**
+ * Finds the parent and index of the current node in the tree.
+ * @returns { parent, index } such that parent.children[index].isCurrent, or null.
+ */
+function findCurrentNodeContext(
+  node: TreeNode,
+  _container: TreeNode | null,
+): { parent: TreeNode; index: number } | null {
+  for (let i = 0; i < node.children.length; i++) {
+    if (node.children[i].isCurrent) return { parent: node, index: i };
+    const found = findCurrentNodeContext(node.children[i], node);
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * Returns the node that should become current after removing the item at removedIndex.
+ * Prefer previous sibling's last leaf, else next sibling's first leaf, else parent.
+ */
+function selectNewCurrentAfterRemoval(
+  parent: TreeNode,
+  removedIndex: number,
+): TreeNode | null {
+  if (removedIndex > 0) {
+    let n: TreeNode = parent.children[removedIndex - 1];
+    while (n.children.length > 0) n = n.children[0];
+    return n;
+  }
+  if (removedIndex < parent.children.length - 1) {
+    let n: TreeNode = parent.children[removedIndex + 1];
+    while (n.children.length > 0) n = n.children[0];
+    return n;
+  }
+  return parent;
+}
+
 export function completeCurrentItem(tree: TreeNode): TreeNode {
-  // Helper function to traverse the tree and find the current item
-
-  function traverse(node: TreeNode, parent: TreeNode | null = null): boolean {
-    // Iterate over the children of the current node
-    for (let i = 0; i < node.children.length; i++) {
-      const child = node.children[i];
-
-      // Check if the current child is the "current" item
-      if (child.isCurrent) {
-        // Mark the current item as no longer current
-        child.isCurrent = false;
-
-        // If the current item is a leaf node
-        if (isLeafNode(child)) {
-          let newCurrentItem: TreeNode | null = null;
-
-          // If there is a previous sibling, make it the new current item
-          if (i > 0) {
-            newCurrentItem = node.children[i - 1];
-            // Traverse down to the first leaf node in the previous sibling's subtree
-            while (
-              !isLeafNode(newCurrentItem) &&
-              newCurrentItem.children.length > 0
-            ) {
-              newCurrentItem = newCurrentItem.children[0];
-            }
-            // If there is a next sibling, make it the new current item
-          } else if (i < node.children.length - 1) {
-            newCurrentItem = node.children[i + 1];
-            // Traverse down to the first leaf node in the next sibling's subtree
-            while (
-              !isLeafNode(newCurrentItem) &&
-              newCurrentItem.children.length > 0
-            ) {
-              newCurrentItem = newCurrentItem.children[0];
-            }
-          } // If there are no siblings, make the parent the new current item
-          else if (parent) {
-            newCurrentItem = node;
-          }
-
-          // Mark the new current item as current
-          if (newCurrentItem) {
-            newCurrentItem.isCurrent = true;
-          }
-
-          // Remove the current item from its parent's children
-          node.children.splice(i, 1);
-          return true;
-        } else {
-          // If the current item is not a leaf node, just remove it
-          node.children.splice(i, 1);
-          return true;
-        }
-      }
-
-      // Recursively traverse the child's subtree
-      if (traverse(child, node)) {
-        return true;
-      }
-    }
-
-    return false;
+  const ctx = findCurrentNodeContext(tree, null);
+  if (!ctx) {
+    if (tree.children.length === 0) tree.isCurrent = true;
+    return tree;
   }
-
-  // Start the traversal from the root of the tree
-  if (!traverse(tree) && tree.children.length === 0) {
-    // If no current item was found and the tree is empty, mark the root as current
-    tree.isCurrent = true;
-  }
-
+  const { parent, index } = ctx;
+  const current = parent.children[index];
+  current.isCurrent = false;
+  const wasLeaf = isLeafNode(current);
+  const newCurrent = wasLeaf
+    ? selectNewCurrentAfterRemoval(parent, index)
+    : null;
+  if (newCurrent) newCurrent.isCurrent = true;
+  parent.children.splice(index, 1);
   return tree;
 }
 
@@ -399,6 +379,31 @@ export function setCurrentItem(tree: TreeNode, key: string): TreeNode {
   return newTree;
 }
 
+function findNodeWithParent(
+  node: TreeNode,
+  key: string,
+  parent: TreeNode | null,
+): { node: TreeNode; parent: TreeNode } | null {
+  if (node.key === key) {
+    if (parent === null) return null;
+    return { node, parent };
+  }
+  for (const child of node.children) {
+    const found = findNodeWithParent(child, key, node);
+    if (found) return found;
+  }
+  return null;
+}
+
+function findNode(node: TreeNode, key: string): TreeNode | null {
+  if (node.key === key) return node;
+  for (const child of node.children) {
+    const found = findNode(child, key);
+    if (found) return found;
+  }
+  return null;
+}
+
 /**
  * Moves a node to be the last child of a new parent node in the tree.
  *
@@ -419,70 +424,16 @@ export function moveNodeToNewParent(
     );
   }
 
-  let nodeToMove: TreeNode | null = null;
-  let parentOfNodeToMove: TreeNode | null = null;
+  const moved = findNodeWithParent(tree, nodeKey, null);
+  if (!moved) return tree;
 
-  /**
-   * Recursively finds the node to move and its parent.
-   *
-   * @param {TreeNode} node - The current node being checked.
-   * @param {TreeNode | null} parent - The parent of the current node.
-   * @returns {boolean} True if the node is found, otherwise false.
-   */
-  function findNodeAndParent(node: TreeNode, parent: TreeNode | null): boolean {
-    if (node.key === nodeKey) {
-      nodeToMove = node;
-      parentOfNodeToMove = parent;
-      return true;
-    }
-    for (const child of node.children) {
-      if (findNodeAndParent(child, node)) {
-        return true;
-      }
-    }
-    return false;
-  }
+  const newParentNode = findNode(tree, newParentKey);
+  if (!newParentNode) return tree;
 
-  /**
-   * Recursively finds a node by its key.
-   *
-   * @param {TreeNode} node - The current node being checked.
-   * @param {string} key - The key of the node to find.
-   * @returns {TreeNode | null} The node if found, otherwise null.
-   */
-  function findNodeByKey(node: TreeNode, key: string): TreeNode | null {
-    if (node.key === key) {
-      return node;
-    }
-    for (const child of node.children) {
-      const result = findNodeByKey(child, key);
-      if (result) {
-        return result;
-      }
-    }
-    return null;
-  }
-
-  findNodeAndParent(tree, null);
-
-  if (!nodeToMove || !parentOfNodeToMove) {
-    return tree; // Node to move not found
-  }
-
-  const newParentNode = findNodeByKey(tree, newParentKey);
-
-  if (!newParentNode) {
-    return tree; // New parent node not found
-  }
-
-  // Remove node from its current parent's children
-  if (parentOfNodeToMove && (parentOfNodeToMove as TreeNode).children) {
-    (parentOfNodeToMove as TreeNode).children = (
-      parentOfNodeToMove as TreeNode
-    ).children.filter((child: TreeNode) => child.key !== nodeKey);
-  }
-
-  // Add node to the new parent's children
+  const { node: nodeToMove, parent: parentOfNodeToMove } = moved;
+  parentOfNodeToMove.children = parentOfNodeToMove.children.filter(
+    (c) => c.key !== nodeKey,
+  );
   newParentNode.children.push(nodeToMove);
 
   return tree;

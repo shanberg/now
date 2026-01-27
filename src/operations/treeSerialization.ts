@@ -1,6 +1,19 @@
 import { TreeNode } from "../../types.d.ts";
 import { DATA_STR } from "../consts.ts";
 
+function parseLine(
+  line: string,
+): { spaces: number; indent: number; name: string; isMarkedCurrent: boolean } {
+  const spaces = line.search(/\S/);
+  const indent = Math.ceil(spaces / DATA_STR.indent.length);
+  const isMarkedCurrent = line.endsWith(" " + DATA_STR.currentItemMarker);
+  const name = line
+    .trimStart()
+    .slice(DATA_STR.lineMarker.length)
+    .replace(" " + DATA_STR.currentItemMarker, "");
+  return { spaces, indent, name, isMarkedCurrent };
+}
+
 /**
  * Deserializes a markdown string into a tree structure.
  * @param {string} input - The markdown string to deserialize.
@@ -17,13 +30,7 @@ export function deserialize(input: string): TreeNode {
   for (const line of lines) {
     if (!line.trim()) continue;
 
-    const spaces = line.search(/\S/);
-    let indent = Math.ceil(spaces / DATA_STR.indent.length); // Convert spaces to indentation level
-    const isMarkedCurrent = line.endsWith(" " + DATA_STR.currentItemMarker);
-    const name = line
-      .trimStart()
-      .slice(DATA_STR.lineMarker.length)
-      .replace(" " + DATA_STR.currentItemMarker, "");
+    let { spaces, indent, name, isMarkedCurrent } = parseLine(line);
 
     const newNode: TreeNode = {
       key: keyCounter.toString(),
@@ -50,7 +57,6 @@ export function deserialize(input: string): TreeNode {
     } else {
       const prevIndent = stack[stack.length - 1].indent;
 
-      // Normalize indentation if it's more than one level deeper, or more than one space
       if (spaces > prevSpaces || indent > prevIndent + 1) {
         indent = prevIndent + 1;
       }
@@ -74,7 +80,6 @@ export function deserialize(input: string): TreeNode {
     throw new Error("Root node not found in the input content.");
   }
 
-  // If no item is current, set the first node as current
   if (!hasFoundCurrent) {
     root.isCurrent = true;
   }
