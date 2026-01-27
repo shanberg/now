@@ -1,6 +1,14 @@
+/**
+ * @fileoverview Tree serialization: deserialize markdown to TreeNode, serialize TreeNode to markdown.
+ */
 import { TreeNode } from "../../types.d.ts";
 import { DATA_STR } from "../consts.ts";
 
+/**
+ * Parses a single markdown list line into indent, name, and current-marker.
+ * @param line - One line of markdown list.
+ * @returns { spaces, indent, name, isMarkedCurrent }.
+ */
 function parseLine(
   line: string,
 ): { spaces: number; indent: number; name: string; isMarkedCurrent: boolean } {
@@ -14,6 +22,13 @@ function parseLine(
   return { spaces, indent, name, isMarkedCurrent };
 }
 
+/**
+ * Validates at most one current marker; throws if a second is seen.
+ * @param isMarkedCurrent - Whether this line has the current marker.
+ * @param hasFoundCurrent - Whether we already saw a current marker.
+ * @param line - Line content for error message.
+ * @returns Updated hasFoundCurrent.
+ */
 function checkCurrentMarker(
   isMarkedCurrent: boolean,
   hasFoundCurrent: boolean,
@@ -28,6 +43,13 @@ function checkCurrentMarker(
   return hasFoundCurrent;
 }
 
+/**
+ * Sets root to newNode if null; throws if root already set (multiple roots).
+ * @param root - Current root or null.
+ * @param newNode - Node to set as root.
+ * @param line - Line content for error message.
+ * @returns The root node.
+ */
 function setRoot(
   root: TreeNode | null,
   newNode: TreeNode,
@@ -37,6 +59,14 @@ function setRoot(
   throw new Error(`Multiple root nodes found at line: "${line}"`);
 }
 
+/**
+ * Resolves effective indent level from prev/current spaces and indent.
+ * @param prevSpaces - Leading spaces on previous line.
+ * @param prevIndent - Indent level of previous line.
+ * @param spaces - Leading spaces on current line.
+ * @param indent - Raw indent level of current line.
+ * @returns Resolved indent level.
+ */
 function effectiveIndent(
   prevSpaces: number,
   prevIndent: number,
@@ -47,6 +77,12 @@ function effectiveIndent(
   return indent;
 }
 
+/**
+ * Pops stack entries until parent indent is less than the given indent.
+ * @param stack - Stack of { node, indent }.
+ * @param indent - Target indent; pops until stack top has lower indent.
+ * @returns void
+ */
 function popStackToParent(
   stack: { node: TreeNode; indent: number }[],
   indent: number,
@@ -56,6 +92,17 @@ function popStackToParent(
   }
 }
 
+/**
+ * Attaches newNode to the correct parent on the stack and returns used indent.
+ * @param newNode - Node to attach.
+ * @param stack - Stack of { node, indent }.
+ * @param indent - Indent of newNode.
+ * @param prevIndent - Indent of previous line.
+ * @param prevSpaces - Leading spaces of previous line.
+ * @param spaces - Leading spaces of current line.
+ * @param line - Line content for error message.
+ * @returns Resolved indent used for newNode.
+ */
 function attachChild(
   newNode: TreeNode,
   stack: { node: TreeNode; indent: number }[],
@@ -74,6 +121,14 @@ function attachChild(
   return resolved;
 }
 
+/**
+ * Mutable state used during deserialization.
+ * @property stack - Stack of { node, indent } for parent resolution.
+ * @property keyCounter - Counter for assigning keys to new nodes.
+ * @property root - Root node once found; null until first line processed.
+ * @property hasFoundCurrent - Whether a current-marker line has been seen.
+ * @property prevSpaces - Leading spaces on the previous line.
+ */
 type DeserializeState = {
   stack: { node: TreeNode; indent: number }[];
   keyCounter: number;
@@ -82,6 +137,11 @@ type DeserializeState = {
   prevSpaces: number;
 };
 
+/**
+ * Processes one line and updates deserialize state (stack, root, current marker).
+ * @param state - Mutable deserialize state.
+ * @param line - One non-empty line of markdown list.
+ */
 function processLine(state: DeserializeState, line: string): void {
   const { spaces, indent, name, isMarkedCurrent } = parseLine(line);
   const newNode: TreeNode = {
@@ -153,6 +213,7 @@ export function deserialize(input: string): TreeNode {
 export function serialize(tree: TreeNode): string {
   let result = "";
 
+  /** Appends markdown lines for this node and descendants. */
   function traverse(node: TreeNode, depth: number) {
     const prefix = DATA_STR.indent.repeat(depth) + "- ";
     const marker = node.isCurrent ? " " + DATA_STR.currentItemMarker : "";

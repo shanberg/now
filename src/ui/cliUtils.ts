@@ -30,6 +30,7 @@ const STYLE = {
 
 export const SYNTAX_HINT = STYLE.hint("Syntax: Item 1, Item 2 / Item 2.1");
 
+/** Maps options to styled names (primary, disabled, default). */
 export const styleOptions = (
   options: SelectOptionWithPrimary[],
 ): SelectOption[] => {
@@ -55,10 +56,12 @@ export const styleOptions = (
   });
 };
 
+/** Logs a hint line using dim style. */
 export const showHint = (text: string): void => {
   console.log(STYLE.hint(text));
 };
 
+/** Finds an existing focus file in cwd or prompts to create one; returns its filename. */
 export async function findOrCreateFocusFile(): Promise<string> {
   const folderName = Deno.cwd().split("/").pop();
   const fileName = `.${folderName}.${NOW_FILE_SUFFIX}`;
@@ -72,6 +75,7 @@ export async function findOrCreateFocusFile(): Promise<string> {
   }
 }
 
+/** Prompts to create a focus file; writes initial content and returns filename, or exits if declined. */
 export async function createFocusFile(fileName: string): Promise<string> {
   showHint("Files are stored in the current directory.");
   const createFile = await Confirm.prompt({
@@ -91,6 +95,7 @@ export async function createFocusFile(fileName: string): Promise<string> {
   }
 }
 
+/** Prints the current focus breadcrumb and focus line to the console. */
 export function displayCurrentFocus(tree: TreeNode): void {
   const { breadcrumbStr, focusStr, isLeaf } = getCurrentItemDetails(tree);
 
@@ -104,6 +109,7 @@ export function displayCurrentFocus(tree: TreeNode): void {
   console.log();
 }
 
+/** Loads the tree from path and displays the current focus. */
 export async function displayCurrentFocusEffect(path: string): Promise<void> {
   const tree = await getTree(path);
   displayCurrentFocus(tree);

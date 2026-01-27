@@ -12,6 +12,11 @@ import {
   setCurrentItemEffect,
 } from "../operations/index.ts";
 
+/**
+ * Runs a single CLI command against the focus file.
+ * @param {string} command - One of: status, complete, add, later, edit, switch.
+ * @param {...string} args - Arguments for the command (e.g. item text, index).
+ */
 async function unixCLI(command: string, ...args: string[]) {
   const focusFilePath = await findOrCreateFocusFile();
   if (!focusFilePath) {

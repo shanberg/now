@@ -44,6 +44,11 @@ curl -fsSL https://raw.githubusercontent.com/shanberg/now/main/dist/install.sh |
 
   ![Now in VSCode](https://github.com/user-attachments/assets/fdc0464f-abb0-45ff-abda-becaa26bf948)
 
+## Development
+
+- Run tests: `deno test`
+- Code quality: use [Valknut](https://github.com/valknut-org/valknut) with `path` set to `src` to validate application code (health gate passes for `src`; full repo includes tests and may report lower scores).
+
 ## License
 
 This project is licensed under the Apache License, Version 2.0, January 2004.

@@ -34,6 +34,10 @@ import {
 } from "../operations/index.ts";
 import { SelectOption } from "https://deno.land/x/cliffy@v0.25.7/prompt/select.ts";
 
+/**
+ * Runs the interactive text UI: finds or creates a focus file, loads the tree, then loops
+ * prompting for actions (narrow, complete, add later, switch, edit, wrap, move, navigate) until quit.
+ */
 async function interactiveTUI() {
   D || console.clear();
   const focusFilePath = await findOrCreateFocusFile();
@@ -50,10 +54,12 @@ async function interactiveTUI() {
   }
 }
 
+/** Returns items if condition is true, otherwise an empty array. Used to conditionally include options. */
 function when<T>(condition: boolean, ...items: T[]): T[] {
   return condition ? items : [];
 }
 
+/** Builds the main action menu options based on current focus (leaf/root/siblings). */
 function buildMainActionOptions(
   isLeaf: boolean,
   isRoot: boolean,
@@ -77,6 +83,7 @@ function buildMainActionOptions(
   return [...base, ...nav];
 }
 
+/** Prompts the user to choose an action from the main menu. */
 async function promptMainAction(tree: TreeNode): Promise<string> {
   D || console.clear();
   displayCurrentFocus(tree);
@@ -90,6 +97,7 @@ async function promptMainAction(tree: TreeNode): Promise<string> {
   });
 }
 
+/** Dispatches the chosen action and returns the updated tree. */
 async function handleMainAction(
   action: string,
   path: string,
@@ -128,17 +136,20 @@ async function handleMainAction(
   }
 }
 
+/** Runs the dive-in effect and returns the updated tree. */
 async function handleDiveInAction(path: string): Promise<TreeNode> {
   await diveInEffect(path);
   return await getTree(path);
 }
 
+/** Marks the current item complete and returns the updated tree. */
 async function handleCompleteAction(path: string): Promise<TreeNode> {
   await completeCurrentItemEffect(path);
   console.log("All focuses completed. Time for a break?");
   return await getTree(path);
 }
 
+/** Prompts for new items, runs the given effect, and returns the updated tree. */
 async function handleAddItems(
   path: string,
   message: string,
@@ -156,34 +167,41 @@ async function handleAddItems(
   return await getTree(path);
 }
 
+/** Adds nested focus items under the current item. */
 async function handleAddNestedAction(path: string): Promise<TreeNode> {
   return handleAddItems(path, "Focus on:", createNestedChildrenEffect);
 }
 
+/** Adds a sibling "for later" after the current item. */
 async function handleAddLater(path: string): Promise<TreeNode> {
   return handleAddItems(path, "Add for later:", addNextSiblingToCurrentItemEffect);
 }
 
+/** Moves focus to the next sibling. */
 async function handleNextSiblingAction(path: string): Promise<TreeNode> {
   await focusNextSiblingEffect(path);
   return await getTree(path);
 }
 
+/** Moves focus to the previous sibling. */
 async function handlePreviousSiblingAction(path: string): Promise<TreeNode> {
   await focusPreviousSiblingEffect(path);
   return await getTree(path);
 }
 
+/** Moves focus to the parent. */
 async function handleFocusParentAction(path: string): Promise<TreeNode> {
   await focusParentEffect(path);
   return await getTree(path);
 }
 
+/** Moves focus to the first child. */
 async function handleFocusChildAction(path: string): Promise<TreeNode> {
   await focusFirstChildEffect(path);
   return await getTree(path);
 }
 
+/** Prompts for a new name and updates the current item. */
 async function handleEditAction(path: string): Promise<TreeNode> {
   const tree = await getTree(path);
   const { focusStr } = getCurrentItemDetails(tree);
@@ -199,6 +217,7 @@ async function handleEditAction(path: string): Promise<TreeNode> {
   return await getTree(path);
 }
 
+/** Prompts to pick another item as current (switch focus). */
 async function handleSwitchAction(path: string): Promise<TreeNode> {
   D || console.clear();
   const tree = await getTree(path);
@@ -224,6 +243,7 @@ async function handleSwitchAction(path: string): Promise<TreeNode> {
   return await getTree(path);
 }
 
+/** Prompts for a parent name and wraps the current item in a new parent. */
 async function handleWrapAction(path: string): Promise<TreeNode> {
   D || console.clear();
   const tree = await getTree(path);
@@ -236,6 +256,7 @@ async function handleWrapAction(path: string): Promise<TreeNode> {
   return await getTree(path);
 }
 
+/** Prompts to choose a new parent and moves the current item there. */
 async function handleMoveAction(path: string): Promise<TreeNode> {
   D || console.clear();
   const tree = await getTree(path);
