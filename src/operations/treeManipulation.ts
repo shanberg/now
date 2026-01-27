@@ -9,6 +9,16 @@ function isLeafNode(node: TreeNode): boolean {
   return node.children.length === 0;
 }
 
+function findMaxKey(node: TreeNode): number {
+  const key = parseInt(node.key, 10);
+  let max = key;
+  for (const child of node.children) {
+    const childMax = findMaxKey(child);
+    if (childMax > max) max = childMax;
+  }
+  return max;
+}
+
 /**
  * Finds the parent and index of the current node in the tree.
  * @returns { parent, index } such that parent.children[index].isCurrent, or null.
@@ -141,23 +151,8 @@ export function addChildToCurrentItem(
  * @returns {TreeNode} The updated tree structure.
  */
 export function createNestedChildren(tree: TreeNode, items: string): TreeNode {
-  // Split the input into nested levels
   const levels = items.split("/").map((level) => level.trim());
-
-  // Find the highest key value in the tree
-  let maxKey = 0;
-  function findMaxKey(node: TreeNode) {
-    const key = parseInt(node.key, 10);
-    if (key > maxKey) {
-      maxKey = key;
-    }
-    for (const child of node.children) {
-      findMaxKey(child);
-    }
-  }
-  findMaxKey(tree);
-
-  let keyCounter = maxKey + 1;
+  let keyCounter = findMaxKey(tree) + 1;
 
   function traverseAndAdd(node: TreeNode): boolean {
     if (node.isCurrent) {
@@ -210,20 +205,7 @@ export function addNextSiblingToCurrentItem(
   tree: TreeNode,
   newName: string,
 ): TreeNode {
-  // Find the highest key value in the tree
-  let maxKey = 0;
-  function findMaxKey(node: TreeNode) {
-    const key = parseInt(node.key, 10);
-    if (key > maxKey) {
-      maxKey = key;
-    }
-    for (const child of node.children) {
-      findMaxKey(child);
-    }
-  }
-  findMaxKey(tree);
-
-  let keyCounter = maxKey + 1;
+  let keyCounter = findMaxKey(tree) + 1;
 
   function traverseAndAdd(node: TreeNode): boolean {
     if (node.isCurrent && node === tree) {
@@ -308,20 +290,7 @@ export function wrapCurrentItemInNewParent(
     throw new Error("Root node cannot be wrapped in a new parent");
   }
 
-  // Find the highest key value in the tree
-  let maxKey = 0;
-  function findMaxKey(node: TreeNode) {
-    const key = parseInt(node.key, 10);
-    if (key > maxKey) {
-      maxKey = key;
-    }
-    for (const child of node.children) {
-      findMaxKey(child);
-    }
-  }
-  findMaxKey(tree);
-
-  let keyCounter = maxKey + 1;
+  let keyCounter = findMaxKey(tree) + 1;
 
   function traverseAndWrap(node: TreeNode): boolean {
     for (let i = 0; i < node.children.length; i++) {

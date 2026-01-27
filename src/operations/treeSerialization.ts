@@ -14,6 +14,51 @@ function parseLine(
   return { spaces, indent, name, isMarkedCurrent };
 }
 
+function checkCurrentMarker(
+  isMarkedCurrent: boolean,
+  hasFoundCurrent: boolean,
+  line: string,
+): boolean {
+  if (isMarkedCurrent) {
+    if (hasFoundCurrent) {
+      throw new Error(`Multiple items marked as current at line: "${line}"`);
+    }
+    return true;
+  }
+  return hasFoundCurrent;
+}
+
+function setRoot(
+  root: TreeNode | null,
+  newNode: TreeNode,
+  line: string,
+): TreeNode {
+  if (!root) return newNode;
+  throw new Error(`Multiple root nodes found at line: "${line}"`);
+}
+
+function attachChild(
+  newNode: TreeNode,
+  stack: { node: TreeNode; indent: number }[],
+  indent: number,
+  prevIndent: number,
+  prevSpaces: number,
+  spaces: number,
+  line: string,
+): number {
+  if (spaces > prevSpaces || indent > prevIndent + 1) {
+    indent = prevIndent + 1;
+  }
+  while (stack.length && stack[stack.length - 1].indent >= indent) {
+    stack.pop();
+  }
+  if (stack.length === 0) {
+    throw new Error(`Invalid indentation at line: "${line}"`);
+  }
+  stack[stack.length - 1].node.children.push(newNode);
+  return indent;
+}
+
 /**
  * Deserializes a markdown string into a tree structure.
  * @param {string} input - The markdown string to deserialize.
@@ -33,44 +78,29 @@ export function deserialize(input: string): TreeNode {
     let { spaces, indent, name, isMarkedCurrent } = parseLine(line);
 
     const newNode: TreeNode = {
-      key: keyCounter.toString(),
+      key: (keyCounter++).toString(),
       name,
       children: [],
       isCurrent: hasFoundCurrent ? false : isMarkedCurrent,
     };
 
-    if (isMarkedCurrent) {
-      if (hasFoundCurrent) {
-        throw new Error(`Multiple items marked as current at line: "${line}"`);
-      }
-      hasFoundCurrent = true;
-    }
-    keyCounter++;
+    hasFoundCurrent = checkCurrentMarker(isMarkedCurrent, hasFoundCurrent, line);
 
     if (indent === 0) {
-      if (!root) {
-        root = newNode;
-      } else {
-        throw new Error(`Multiple root nodes found at line: "${line}"`);
-      }
+      root = setRoot(root, newNode, line);
       stack.push({ node: newNode, indent });
     } else {
       const prevIndent = stack[stack.length - 1].indent;
-
-      if (spaces > prevSpaces || indent > prevIndent + 1) {
-        indent = prevIndent + 1;
-      }
-
-      while (stack.length && stack[stack.length - 1].indent >= indent) {
-        stack.pop();
-      }
-
-      if (stack.length === 0) {
-        throw new Error(`Invalid indentation at line: "${line}"`);
-      }
-
-      stack[stack.length - 1].node.children.push(newNode);
-      stack.push({ node: newNode, indent });
+      const usedIndent = attachChild(
+        newNode,
+        stack,
+        indent,
+        prevIndent,
+        prevSpaces,
+        spaces,
+        line,
+      );
+      stack.push({ node: newNode, indent: usedIndent });
     }
 
     prevSpaces = spaces;
