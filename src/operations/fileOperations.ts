@@ -1,26 +1,24 @@
 import { ensureFile } from "https://deno.land/std@0.224.0/fs/mod.ts";
 import { LOG_FILE_PATH } from "../consts.ts";
 
+/** Reads file at path; returns "" if not found, otherwise throws. */
+async function readFileOrEmpty(path: string): Promise<string> {
+  try {
+    return await Deno.readTextFile(path);
+  } catch (error) {
+    if (error instanceof Deno.errors.NotFound) return "";
+    throw error;
+  }
+}
+
 /**
  * Reads the content of a markdown file.
  * @param {string} path - The path to the markdown file.
  * @returns {Promise<string>} The content of the markdown file.
  */
 export async function readMarkdownFile(path: string): Promise<string> {
-  if (!path) {
-    throw new Error("Path is required");
-  }
-  try {
-    return await Deno.readTextFile(path);
-  } catch (error) {
-    if (error instanceof Deno.errors.NotFound) {
-      console.log("File not found.");
-      return "";
-    } else {
-      console.error("Error reading file:", error);
-      return "";
-    }
-  }
+  if (!path) throw new Error("Path is required");
+  return readFileOrEmpty(path);
 }
 
 /**

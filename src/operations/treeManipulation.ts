@@ -35,6 +35,18 @@ function findCurrentNodeContext(
   return null;
 }
 
+function firstLeafOf(node: TreeNode): TreeNode {
+  let n = node;
+  while (n.children.length > 0) n = n.children[0];
+  return n;
+}
+
+function lastLeafOf(node: TreeNode): TreeNode {
+  let n = node;
+  while (n.children.length > 0) n = n.children[n.children.length - 1];
+  return n;
+}
+
 /**
  * Returns the node that should become current after removing the item at removedIndex.
  * Prefer previous sibling's last leaf, else next sibling's first leaf, else parent.
@@ -43,17 +55,29 @@ function selectNewCurrentAfterRemoval(
   parent: TreeNode,
   removedIndex: number,
 ): TreeNode | null {
-  if (removedIndex > 0) {
-    let n: TreeNode = parent.children[removedIndex - 1];
-    while (n.children.length > 0) n = n.children[0];
-    return n;
-  }
+  if (removedIndex > 0) return lastLeafOf(parent.children[removedIndex - 1]);
   if (removedIndex < parent.children.length - 1) {
-    let n: TreeNode = parent.children[removedIndex + 1];
-    while (n.children.length > 0) n = n.children[0];
-    return n;
+    return firstLeafOf(parent.children[removedIndex + 1]);
   }
   return parent;
+}
+
+/**
+ * Removes the current node from its parent and assigns focus to the next logical node
+ * (previous sibling's last leaf, next sibling's first leaf, or parent).
+ */
+function removeCurrentAndAssignNext(ctx: {
+  parent: TreeNode;
+  index: number;
+}): void {
+  const { parent, index } = ctx;
+  const current = parent.children[index];
+  current.isCurrent = false;
+  const newCurrent = isLeafNode(current)
+    ? selectNewCurrentAfterRemoval(parent, index)
+    : null;
+  if (newCurrent) newCurrent.isCurrent = true;
+  parent.children.splice(index, 1);
 }
 
 export function completeCurrentItem(tree: TreeNode): TreeNode {
@@ -62,15 +86,7 @@ export function completeCurrentItem(tree: TreeNode): TreeNode {
     if (tree.children.length === 0) tree.isCurrent = true;
     return tree;
   }
-  const { parent, index } = ctx;
-  const current = parent.children[index];
-  current.isCurrent = false;
-  const wasLeaf = isLeafNode(current);
-  const newCurrent = wasLeaf
-    ? selectNewCurrentAfterRemoval(parent, index)
-    : null;
-  if (newCurrent) newCurrent.isCurrent = true;
-  parent.children.splice(index, 1);
+  removeCurrentAndAssignNext(ctx);
   return tree;
 }
 
@@ -150,44 +166,44 @@ export function addChildToCurrentItem(
  * @param {string} items - The string of items to add, using slashes for nesting and commas for siblings.
  * @returns {TreeNode} The updated tree structure.
  */
+function addNestedLevelsUnder(
+  startNode: TreeNode,
+  levels: string[],
+  keyCounter: { value: number },
+): void {
+  let currentNode = startNode;
+  for (const level of levels) {
+    const siblings = level.split(",").map((s) => s.trim());
+    for (let i = 0; i < siblings.length; i++) {
+      const isLastLevel = levels.indexOf(level) === levels.length - 1;
+      const isFirstSibling = i === 0;
+      const newChild: TreeNode = {
+        key: keyCounter.value.toString(),
+        name: siblings[i],
+        children: [],
+        isCurrent: isLastLevel && isFirstSibling,
+      };
+      keyCounter.value++;
+      currentNode.children.push(newChild);
+      if (i === siblings.length - 1) currentNode = newChild;
+    }
+  }
+}
+
 export function createNestedChildren(tree: TreeNode, items: string): TreeNode {
   const levels = items.split("/").map((level) => level.trim());
-  let keyCounter = findMaxKey(tree) + 1;
+  const keyCounter = { value: findMaxKey(tree) + 1 };
 
   function traverseAndAdd(node: TreeNode): boolean {
-    if (node.isCurrent) {
-      node.isCurrent = false;
-      let currentNode = node;
-
-      levels.forEach((level, levelIndex) => {
-        const siblings = level.split(",").map((sibling) => sibling.trim());
-
-        siblings.forEach((sibling, siblingIndex) => {
-          const newChild: TreeNode = {
-            key: keyCounter.toString(),
-            name: sibling,
-            children: [],
-            isCurrent: levelIndex === levels.length - 1 && siblingIndex === 0,
-          };
-          keyCounter++;
-          currentNode.children.push(newChild);
-
-          // If it's the last sibling, it becomes the current node for the next level
-          if (siblingIndex === siblings.length - 1) {
-            currentNode = newChild;
-          }
-        });
-      });
-
-      return true;
-    }
-
-    for (const child of node.children) {
-      if (traverseAndAdd(child)) {
-        return true;
+    if (!node.isCurrent) {
+      for (const child of node.children) {
+        if (traverseAndAdd(child)) return true;
       }
+      return false;
     }
-    return false;
+    node.isCurrent = false;
+    addNestedLevelsUnder(node, levels, keyCounter);
+    return true;
   }
 
   traverseAndAdd(tree);
@@ -201,44 +217,49 @@ export function createNestedChildren(tree: TreeNode, items: string): TreeNode {
  * @param {string} newName - The name of the new sibling item.
  * @returns {TreeNode} The updated tree structure.
  */
-export function addNextSiblingToCurrentItem(
-  tree: TreeNode,
+function addSiblingAfterCurrentAmongChildren(
+  node: TreeNode,
   newName: string,
-): TreeNode {
-  let keyCounter = findMaxKey(tree) + 1;
-
-  function traverseAndAdd(node: TreeNode): boolean {
-    if (node.isCurrent && node === tree) {
-      // If the current item is the root, add the new item to the top of the list of children of the root
-      const newChild: TreeNode = {
-        key: keyCounter.toString(),
+  keyCounter: { value: number },
+): boolean {
+  for (let i = 0; i < node.children.length; i++) {
+    if (node.children[i].isCurrent) {
+      const newSibling: TreeNode = {
+        key: keyCounter.value.toString(),
         name: newName,
         children: [],
         isCurrent: false,
       };
-      keyCounter++;
+      keyCounter.value++;
+      node.children.splice(i + 1, 0, newSibling);
+      return true;
+    }
+    if (addSiblingAfterCurrentAmongChildren(node.children[i], newName, keyCounter)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function addNextSiblingToCurrentItem(
+  tree: TreeNode,
+  newName: string,
+): TreeNode {
+  const keyCounter = { value: findMaxKey(tree) + 1 };
+
+  function traverseAndAdd(node: TreeNode): boolean {
+    if (node.isCurrent && node === tree) {
+      const newChild: TreeNode = {
+        key: keyCounter.value.toString(),
+        name: newName,
+        children: [],
+        isCurrent: false,
+      };
+      keyCounter.value++;
       node.children.unshift(newChild);
       return true;
     }
-
-    for (let i = 0; i < node.children.length; i++) {
-      const child = node.children[i];
-      if (child.isCurrent) {
-        const newSibling: TreeNode = {
-          key: keyCounter.toString(),
-          name: newName,
-          children: [],
-          isCurrent: false,
-        };
-        keyCounter++;
-        node.children.splice(i + 1, 0, newSibling);
-        return true;
-      }
-      if (traverseAndAdd(child)) {
-        return true;
-      }
-    }
-    return false;
+    return addSiblingAfterCurrentAmongChildren(node, newName, keyCounter);
   }
 
   traverseAndAdd(tree);
@@ -282,6 +303,30 @@ export function editCurrentItemName(tree: TreeNode, newName: string): TreeNode {
  * @returns {TreeNode} The updated tree structure.
  * @throws {Error} If the root node is the current focus item.
  */
+function tryWrapCurrentChildHere(
+  node: TreeNode,
+  newParentName: string,
+  keyCounter: { value: number },
+): boolean {
+  for (let i = 0; i < node.children.length; i++) {
+    if (node.children[i].isCurrent) {
+      const child = node.children[i];
+      const newParent: TreeNode = {
+        key: (keyCounter.value++).toString(),
+        name: newParentName,
+        isCurrent: false,
+        children: [child],
+      };
+      node.children[i] = newParent;
+      return true;
+    }
+    if (tryWrapCurrentChildHere(node.children[i], newParentName, keyCounter)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function wrapCurrentItemInNewParent(
   tree: TreeNode,
   newParentName: string,
@@ -290,29 +335,8 @@ export function wrapCurrentItemInNewParent(
     throw new Error("Root node cannot be wrapped in a new parent");
   }
 
-  let keyCounter = findMaxKey(tree) + 1;
-
-  function traverseAndWrap(node: TreeNode): boolean {
-    for (let i = 0; i < node.children.length; i++) {
-      const child = node.children[i];
-      if (child.isCurrent) {
-        const newParent: TreeNode = {
-          key: (keyCounter++).toString(),
-          name: newParentName,
-          isCurrent: false,
-          children: [child],
-        };
-        node.children[i] = newParent;
-        return true;
-      }
-      if (traverseAndWrap(child)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  traverseAndWrap(tree);
+  const keyCounter = { value: findMaxKey(tree) + 1 };
+  tryWrapCurrentChildHere(tree, newParentName, keyCounter);
   return tree;
 }
 

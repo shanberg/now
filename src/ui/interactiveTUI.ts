@@ -50,13 +50,16 @@ async function interactiveTUI() {
   }
 }
 
-async function promptMainAction(tree: TreeNode): Promise<string> {
-  D || console.clear();
-  displayCurrentFocus(tree);
-  const { isLeaf, isRoot, siblingCount } = getCurrentItemDetails(tree);
+function when<T>(condition: boolean, ...items: T[]): T[] {
+  return condition ? items : [];
+}
 
-  const availableOptions = [
-    !isLeaf && { name: "Dive in", value: "diveIn", primary: true },
+function buildMainActionOptions(
+  isLeaf: boolean,
+  isRoot: boolean,
+  siblingCount: number,
+): SelectOption[] {
+  const base: SelectOption[] = [
     { name: "Narrow focus", value: "add", primary: true },
     { name: "Finish this", value: "complete", primary: true },
     { name: "Add followup", value: "later", primary: true },
@@ -64,14 +67,21 @@ async function promptMainAction(tree: TreeNode): Promise<string> {
     { name: "Edit", value: "edit" },
     { name: "Wrap", value: "wrap" },
     { name: "Move", value: "move" },
-    siblingCount > 0 && { name: "Next", value: "focusNnextSibling" },
-    siblingCount > 0 && { name: "Previous", value: "focusPreviousSibling" },
-    !isLeaf && { name: "Down", value: "focusChild" },
-    !isRoot && { name: "Up", value: "focusParent" },
-  ].filter((option) => !!option);
+  ];
+  const nav: SelectOption[] = [
+    ...when(!isLeaf, { name: "Dive in", value: "diveIn", primary: true }),
+    ...when(siblingCount > 0, { name: "Next", value: "focusNextSibling" }, { name: "Previous", value: "focusPreviousSibling" }),
+    ...when(!isLeaf, { name: "Down", value: "focusChild" }),
+    ...when(!isRoot, { name: "Up", value: "focusParent" }),
+  ];
+  return [...base, ...nav];
+}
 
-  const options = styleOptions(availableOptions as SelectOption[]);
-
+async function promptMainAction(tree: TreeNode): Promise<string> {
+  D || console.clear();
+  displayCurrentFocus(tree);
+  const { isLeaf, isRoot, siblingCount } = getCurrentItemDetails(tree);
+  const options = styleOptions(buildMainActionOptions(isLeaf, isRoot, siblingCount));
   return await Select.prompt({
     ...promptOptions,
     maxRows: 6,

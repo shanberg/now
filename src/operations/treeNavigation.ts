@@ -72,6 +72,69 @@ export function getCurrentItemBreadcrumb(tree: TreeNode): string {
   return [breadcrumbPath, currentItemName].join(" / ");
 }
 
+function countDescendants(node: TreeNode): number {
+  let count = node.children.length;
+  for (const child of node.children) {
+    count += countDescendants(child);
+  }
+  return count;
+}
+
+function findCurrentNodeInfo(tree: TreeNode): {
+  isLeaf: boolean;
+  depth: number;
+  siblingCount: number;
+  descendantCount: number;
+  key: string;
+} | null {
+  let result: {
+    isLeaf: boolean;
+    depth: number;
+    siblingCount: number;
+    descendantCount: number;
+    key: string;
+  } | null = null;
+
+  function traverse(
+    node: TreeNode,
+    currentDepth: number,
+    path: TreeNode[],
+  ): boolean {
+    if (node.isCurrent) {
+      result = {
+        isLeaf: node.children.length === 0,
+        depth: currentDepth,
+        siblingCount: path.length > 0
+          ? path[path.length - 1].children.length - 1
+          : 0,
+        descendantCount: countDescendants(node),
+        key: node.key,
+      };
+      return true;
+    }
+    for (const child of node.children) {
+      if (traverse(child, currentDepth + 1, [...path, node])) return true;
+    }
+    return false;
+  }
+
+  traverse(tree, 0, []);
+  return result;
+}
+
+function splitBreadcrumbPath(breadcrumbPath: string): {
+  breadcrumbStr: string;
+  focusStr: string;
+} {
+  const parts = breadcrumbPath.split(" / ");
+  if (parts.length <= 1) {
+    return { breadcrumbStr: "Focusing on", focusStr: breadcrumbPath };
+  }
+  const focusStr = parts[parts.length - 1];
+  const breadcrumbStr = parts.slice(0, -1).join(" / ");
+  return { breadcrumbStr, focusStr };
+}
+
 /**
  * Gets detailed information about the current item in the tree,
  * including the breadcrumb path, focus string, whether it is a leaf node,
@@ -91,74 +154,30 @@ export function getCurrentItemDetails(tree: TreeNode): {
   key: string;
 } {
   const breadcrumbPath = getCurrentItemBreadcrumb(tree);
-  let isLeaf = false;
-  let depth = 0;
-  let siblingCount = 0;
-  let descendantCount = 0;
-  let currentKey = "";
+  const nodeInfo = findCurrentNodeInfo(tree);
+  const { breadcrumbStr, focusStr } = splitBreadcrumbPath(breadcrumbPath);
 
-  function traverse(
-    node: TreeNode,
-    currentDepth: number,
-    path: TreeNode[],
-  ): boolean {
-    if (node.isCurrent) {
-      isLeaf = node.children.length === 0;
-      depth = currentDepth;
-      siblingCount = path.length > 0
-        ? path[path.length - 1].children.length - 1
-        : 0;
-      descendantCount = countDescendants(node);
-      currentKey = node.key;
-      return true;
-    }
-    for (const child of node.children) {
-      if (traverse(child, currentDepth + 1, [...path, node])) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  function countDescendants(node: TreeNode): number {
-    let count = node.children.length;
-    for (const child of node.children) {
-      count += countDescendants(child);
-    }
-    return count;
-  }
-
-  traverse(tree, 0, []);
-
-  if (breadcrumbPath.split(" / ").length > 1) {
-    const breadcrumbStr = breadcrumbPath.slice(
-      0,
-      breadcrumbPath.lastIndexOf(" / "),
-    );
-    const focusStr = breadcrumbPath.slice(
-      breadcrumbPath.lastIndexOf(" / ") + 3,
-    );
+  if (!nodeInfo) {
     return {
       breadcrumbStr,
       focusStr,
-      isRoot: depth === 0,
-      isLeaf,
-      depth,
-      siblingCount,
-      descendantCount,
-      key: currentKey,
-    };
-  } else {
-    const focusStr = breadcrumbPath;
-    return {
-      breadcrumbStr: "Focusing on",
-      isRoot: depth === 0,
-      focusStr,
-      isLeaf,
-      depth,
-      siblingCount,
-      descendantCount,
-      key: currentKey,
+      isRoot: true,
+      isLeaf: true,
+      depth: 0,
+      siblingCount: 0,
+      descendantCount: 0,
+      key: "",
     };
   }
+
+  return {
+    breadcrumbStr,
+    focusStr,
+    isRoot: nodeInfo.depth === 0,
+    isLeaf: nodeInfo.isLeaf,
+    depth: nodeInfo.depth,
+    siblingCount: nodeInfo.siblingCount,
+    descendantCount: nodeInfo.descendantCount,
+    key: nodeInfo.key,
+  };
 }
