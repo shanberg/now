@@ -37,6 +37,25 @@ function setRoot(
   throw new Error(`Multiple root nodes found at line: "${line}"`);
 }
 
+function effectiveIndent(
+  prevSpaces: number,
+  prevIndent: number,
+  spaces: number,
+  indent: number,
+): number {
+  if (spaces > prevSpaces || indent > prevIndent + 1) return prevIndent + 1;
+  return indent;
+}
+
+function popStackToParent(
+  stack: { node: TreeNode; indent: number }[],
+  indent: number,
+): void {
+  while (stack.length && stack[stack.length - 1].indent >= indent) {
+    stack.pop();
+  }
+}
+
 function attachChild(
   newNode: TreeNode,
   stack: { node: TreeNode; indent: number }[],
@@ -46,17 +65,55 @@ function attachChild(
   spaces: number,
   line: string,
 ): number {
-  if (spaces > prevSpaces || indent > prevIndent + 1) {
-    indent = prevIndent + 1;
-  }
-  while (stack.length && stack[stack.length - 1].indent >= indent) {
-    stack.pop();
-  }
+  const resolved = effectiveIndent(prevSpaces, prevIndent, spaces, indent);
+  popStackToParent(stack, resolved);
   if (stack.length === 0) {
     throw new Error(`Invalid indentation at line: "${line}"`);
   }
   stack[stack.length - 1].node.children.push(newNode);
-  return indent;
+  return resolved;
+}
+
+type DeserializeState = {
+  stack: { node: TreeNode; indent: number }[];
+  keyCounter: number;
+  root: TreeNode | null;
+  hasFoundCurrent: boolean;
+  prevSpaces: number;
+};
+
+function processLine(state: DeserializeState, line: string): void {
+  const { spaces, indent, name, isMarkedCurrent } = parseLine(line);
+  const newNode: TreeNode = {
+    key: (state.keyCounter++).toString(),
+    name,
+    children: [],
+    isCurrent: state.hasFoundCurrent ? false : isMarkedCurrent,
+  };
+
+  state.hasFoundCurrent = checkCurrentMarker(
+    isMarkedCurrent,
+    state.hasFoundCurrent,
+    line,
+  );
+
+  if (indent === 0) {
+    state.root = setRoot(state.root, newNode, line);
+    state.stack.push({ node: newNode, indent });
+  } else {
+    const prevIndent = state.stack[state.stack.length - 1].indent;
+    const usedIndent = attachChild(
+      newNode,
+      state.stack,
+      indent,
+      prevIndent,
+      state.prevSpaces,
+      spaces,
+      line,
+    );
+    state.stack.push({ node: newNode, indent: usedIndent });
+  }
+  state.prevSpaces = spaces;
 }
 
 /**
@@ -66,55 +123,26 @@ function attachChild(
  */
 export function deserialize(input: string): TreeNode {
   const lines = input.split(DATA_STR.lineSeparator);
-  const stack: { node: TreeNode; indent: number }[] = [];
-  let keyCounter = 0;
-  let root: TreeNode | null = null;
-  let hasFoundCurrent = false;
-  let prevSpaces = 0;
+  const state: DeserializeState = {
+    stack: [],
+    keyCounter: 0,
+    root: null,
+    hasFoundCurrent: false,
+    prevSpaces: 0,
+  };
 
   for (const line of lines) {
     if (!line.trim()) continue;
-
-    let { spaces, indent, name, isMarkedCurrent } = parseLine(line);
-
-    const newNode: TreeNode = {
-      key: (keyCounter++).toString(),
-      name,
-      children: [],
-      isCurrent: hasFoundCurrent ? false : isMarkedCurrent,
-    };
-
-    hasFoundCurrent = checkCurrentMarker(isMarkedCurrent, hasFoundCurrent, line);
-
-    if (indent === 0) {
-      root = setRoot(root, newNode, line);
-      stack.push({ node: newNode, indent });
-    } else {
-      const prevIndent = stack[stack.length - 1].indent;
-      const usedIndent = attachChild(
-        newNode,
-        stack,
-        indent,
-        prevIndent,
-        prevSpaces,
-        spaces,
-        line,
-      );
-      stack.push({ node: newNode, indent: usedIndent });
-    }
-
-    prevSpaces = spaces;
+    processLine(state, line);
   }
 
-  if (!root) {
+  if (!state.root) {
     throw new Error("Root node not found in the input content.");
   }
-
-  if (!hasFoundCurrent) {
-    root.isCurrent = true;
+  if (!state.hasFoundCurrent) {
+    state.root.isCurrent = true;
   }
-
-  return root;
+  return state.root;
 }
 
 /**

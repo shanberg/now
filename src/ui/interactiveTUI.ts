@@ -129,30 +129,29 @@ async function handleCompleteAction(path: string): Promise<TreeNode> {
   return await getTree(path);
 }
 
-async function handleAddNestedAction(path: string): Promise<TreeNode> {
+async function handleAddItems(
+  path: string,
+  message: string,
+  effect: (items: string, path: string) => Promise<void>,
+): Promise<TreeNode> {
   D || console.clear();
   const tree = await getTree(path);
   displayCurrentFocus(tree);
   showHint(SYNTAX_HINT);
   const newItems = await Input.prompt({
     ...promptOptions,
-    message: "Focus on:",
+    message,
   });
-  await createNestedChildrenEffect(newItems, path);
+  await effect(newItems, path);
   return await getTree(path);
 }
 
+async function handleAddNestedAction(path: string): Promise<TreeNode> {
+  return handleAddItems(path, "Focus on:", createNestedChildrenEffect);
+}
+
 async function handleAddLater(path: string): Promise<TreeNode> {
-  D || console.clear();
-  const tree = await getTree(path);
-  displayCurrentFocus(tree);
-  showHint(SYNTAX_HINT);
-  const newItems = await Input.prompt({
-    ...promptOptions,
-    message: "Add for later:",
-  });
-  await addNextSiblingToCurrentItemEffect(newItems, path);
-  return await getTree(path);
+  return handleAddItems(path, "Add for later:", addNextSiblingToCurrentItemEffect);
 }
 
 async function handleNextSiblingAction(path: string): Promise<TreeNode> {
