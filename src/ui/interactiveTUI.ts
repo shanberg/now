@@ -76,7 +76,10 @@ function buildMainActionOptions(
   ];
   const nav: SelectOption[] = [
     ...when(!isLeaf, { name: "Dive in", value: "diveIn", primary: true }),
-    ...when(siblingCount > 0, { name: "Next", value: "focusNextSibling" }, { name: "Previous", value: "focusPreviousSibling" }),
+    ...when(siblingCount > 0, { name: "Next", value: "focusNextSibling" }, {
+      name: "Previous",
+      value: "focusPreviousSibling",
+    }),
     ...when(!isLeaf, { name: "Down", value: "focusChild" }),
     ...when(!isRoot, { name: "Up", value: "focusParent" }),
   ];
@@ -88,7 +91,9 @@ async function promptMainAction(tree: TreeNode): Promise<string> {
   D || console.clear();
   displayCurrentFocus(tree);
   const { isLeaf, isRoot, siblingCount } = getCurrentItemDetails(tree);
-  const options = styleOptions(buildMainActionOptions(isLeaf, isRoot, siblingCount));
+  const options = styleOptions(
+    buildMainActionOptions(isLeaf, isRoot, siblingCount),
+  );
   return await Select.prompt({
     ...promptOptions,
     maxRows: 6,
@@ -153,7 +158,7 @@ async function handleCompleteAction(path: string): Promise<TreeNode> {
 async function handleAddItems(
   path: string,
   message: string,
-  effect: (items: string, path: string) => Promise<void>,
+  effect: (path: string, items: string) => Promise<void>,
 ): Promise<TreeNode> {
   D || console.clear();
   const tree = await getTree(path);
@@ -163,7 +168,7 @@ async function handleAddItems(
     ...promptOptions,
     message,
   });
-  await effect(newItems, path);
+  await effect(path, newItems);
   return await getTree(path);
 }
 
@@ -174,7 +179,11 @@ async function handleAddNestedAction(path: string): Promise<TreeNode> {
 
 /** Adds a sibling "for later" after the current item. */
 async function handleAddLater(path: string): Promise<TreeNode> {
-  return handleAddItems(path, "Add for later:", addNextSiblingToCurrentItemEffect);
+  return handleAddItems(
+    path,
+    "Add for later:",
+    addNextSiblingToCurrentItemEffect,
+  );
 }
 
 /** Moves focus to the next sibling. */
@@ -213,7 +222,7 @@ async function handleEditAction(path: string): Promise<TreeNode> {
     default: focusStr,
     message: "New name:",
   });
-  await editCurrentItemNameEffect(newText, path);
+  await editCurrentItemNameEffect(path, newText);
   return await getTree(path);
 }
 
@@ -238,7 +247,7 @@ async function handleSwitchAction(path: string): Promise<TreeNode> {
 
   if (switchToKey !== "back") {
     console.log("Switching to " + switchToKey);
-    await setCurrentItemEffect(switchToKey, path);
+    await setCurrentItemEffect(path, switchToKey);
   }
   return await getTree(path);
 }

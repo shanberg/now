@@ -34,22 +34,22 @@ async function unixCLI(command: string, ...args: string[]) {
       break;
     case "add":
       console.log("Calling createNestedChildrenEffect");
-      await createNestedChildrenEffect(args[0], focusFilePath);
+      await createNestedChildrenEffect(focusFilePath, args[0]);
       break;
     case "later":
       console.log("Calling addNextSiblingToCurrentItemEffect");
-      await addNextSiblingToCurrentItemEffect(args[0], focusFilePath);
+      await addNextSiblingToCurrentItemEffect(focusFilePath, args[0]);
       break;
     case "edit":
       console.log("Calling editCurrentItemNameEffect");
-      await editCurrentItemNameEffect(args[0], focusFilePath);
+      await editCurrentItemNameEffect(focusFilePath, args[0]);
       break;
     case "switch": {
       const items = await getItemsListEffect(focusFilePath);
       const index = parseInt(args[0], 10);
       if (index >= 0 && index < items.length) {
         console.log("Calling setCurrentItemEffect");
-        await setCurrentItemEffect(index.toString(), focusFilePath);
+        await setCurrentItemEffect(focusFilePath, index.toString());
       } else {
         console.log("Invalid index");
       }
