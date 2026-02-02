@@ -239,26 +239,6 @@ function buildCurrentNodeMetadata(
   };
 }
 
-function findCurrentNodeInfo(tree: TreeNode): CurrentNodeMetadata | null {
-  let result: CurrentNodeMetadata | null = null;
-  function traverse(
-    node: TreeNode,
-    currentDepth: number,
-    parent: TreeNode | null,
-  ): boolean {
-    if (node.isCurrent) {
-      result = buildCurrentNodeMetadata(node, currentDepth, parent);
-      return true;
-    }
-    for (const child of node.children) {
-      if (traverse(child, currentDepth + 1, node)) return true;
-    }
-    return false;
-  }
-  traverse(tree, 0, null);
-  return result;
-}
-
 function splitBreadcrumbPath(breadcrumbPath: string): {
   breadcrumbStr: string;
   focusStr: string;
@@ -272,6 +252,41 @@ function splitBreadcrumbPath(breadcrumbPath: string): {
   return { breadcrumbStr, focusStr };
 }
 
+type CurrentItemDetailsResult = {
+  pathSegments: string[];
+  currentName: string;
+  metadata: CurrentNodeMetadata | null;
+};
+
+/** Single traverse: collect path segments, current name, and metadata when node.isCurrent is found. */
+function getCurrentItemDetailsInternal(
+  tree: TreeNode,
+): CurrentItemDetailsResult {
+  let pathSegments: string[] = [];
+  let currentName = "";
+  let metadata: CurrentNodeMetadata | null = null;
+
+  function traverse(
+    node: TreeNode,
+    depth: number,
+    parent: TreeNode | null,
+    path: string[],
+  ): boolean {
+    if (node.isCurrent) {
+      pathSegments = path;
+      currentName = node.name;
+      metadata = buildCurrentNodeMetadata(node, depth, parent);
+      return true;
+    }
+    for (const child of node.children) {
+      if (traverse(child, depth + 1, node, [...path, node.name])) return true;
+    }
+    return false;
+  }
+  traverse(tree, 0, null, []);
+  return { pathSegments, currentName, metadata };
+}
+
 export function getCurrentItemDetails(tree: TreeNode): {
   breadcrumbStr: string;
   focusStr: string;
@@ -282,11 +297,15 @@ export function getCurrentItemDetails(tree: TreeNode): {
   descendantCount: number;
   key: string;
 } {
-  const breadcrumbPath = getCurrentItemBreadcrumb(tree);
-  const nodeInfo = findCurrentNodeInfo(tree);
-  const { breadcrumbStr, focusStr } = splitBreadcrumbPath(breadcrumbPath);
+  const { pathSegments, currentName, metadata } =
+    getCurrentItemDetailsInternal(tree);
+  const breadcrumbPath = pathSegments.join(" / ");
+  const fullPath = breadcrumbPath
+    ? [breadcrumbPath, currentName].join(" / ")
+    : currentName;
+  const { breadcrumbStr, focusStr } = splitBreadcrumbPath(fullPath);
 
-  if (!nodeInfo) {
+  if (!metadata) {
     return {
       breadcrumbStr,
       focusStr,
@@ -302,13 +321,74 @@ export function getCurrentItemDetails(tree: TreeNode): {
   return {
     breadcrumbStr,
     focusStr,
-    isRoot: nodeInfo.depth === 0,
-    isLeaf: nodeInfo.isLeaf,
-    depth: nodeInfo.depth,
-    siblingCount: nodeInfo.siblingCount,
-    descendantCount: nodeInfo.descendantCount,
-    key: nodeInfo.key,
+    isRoot: metadata.depth === 0,
+    isLeaf: metadata.isLeaf,
+    depth: metadata.depth,
+    siblingCount: metadata.siblingCount,
+    descendantCount: metadata.descendantCount,
+    key: metadata.key,
   };
+}
+
+/** Leading indent from a display string (same convention as getItemsList output: strip trailing " @", then leading whitespace). */
+export function getIndentFromDisplay(display: string): string {
+  const raw = display.replace(/\s+@\s*$/, "").trimEnd();
+  const m = raw.match(/^(\s*)/);
+  return m ? m[1] : "";
+}
+
+/**
+ * Index of the item that would be next in focus after completing the current item.
+ * Matches selectNewCurrentAfterRemoval: previous sibling's last leaf, else next sibling's first leaf, else parent.
+ */
+export function getNextFocusIndex(
+  items: { display: string }[],
+  currentIndex: number,
+): number | null {
+  if (currentIndex < 0 || currentIndex >= items.length) return null;
+  const currentDepth = getIndentFromDisplay(items[currentIndex].display).length;
+  // Previous sibling's last leaf: walk back, first with same depth
+  for (let j = currentIndex - 1; j >= 0; j--) {
+    const d = getIndentFromDisplay(items[j].display).length;
+    if (d === currentDepth) return j;
+    if (d < currentDepth) break;
+  }
+  // Next sibling's first leaf: walk forward, first with same depth
+  for (let j = currentIndex + 1; j < items.length; j++) {
+    const d = getIndentFromDisplay(items[j].display).length;
+    if (d === currentDepth) return j;
+    if (d < currentDepth) break;
+  }
+  // Parent: walk back, first with depth one level up
+  const parentDepth = currentDepth - DATA_STR.indent.length;
+  if (parentDepth < 0) return null;
+  for (let j = currentIndex - 1; j >= 0; j--) {
+    if (getIndentFromDisplay(items[j].display).length === parentDepth) return j;
+  }
+  return null;
+}
+
+/** Placeholder line for "narrow focus" (add child): insert after current line. */
+export function getPlaceholderNarrow(currentIndent: string): string {
+  return `${currentIndent}${DATA_STR.indent}${DATA_STR.focus} ${DATA_STR.placeholder}`;
+}
+
+/** Placeholder line for "add followup" (add sibling): insert after current line. */
+export function getPlaceholderLater(currentIndent: string): string {
+  return `${currentIndent}${DATA_STR.placeholder}`;
+}
+
+/** Placeholder for "wrap": new parent line and current line indented one level. */
+export function getPlaceholderWrap(
+  currentIndent: string,
+  currentLine: string,
+): { wrapParentLine: string; indentedCurrentLine: string } {
+  const wrapParentLine = `${currentIndent}✎ ${DATA_STR.placeholder}`;
+  const indentedCurrentLine = currentLine.replace(
+    /^(\s*)(.*)$/,
+    `${DATA_STR.indent}$1$2`,
+  );
+  return { wrapParentLine, indentedCurrentLine };
 }
 
 /**

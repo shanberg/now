@@ -1,7 +1,7 @@
 import { exec, execFile } from "child_process";
 import { existsSync } from "fs";
 import { readFile } from "fs/promises";
-import { dirname, resolve } from "path";
+import { basename, dirname, resolve } from "path";
 import { promisify } from "util";
 import {
   type JsonFocus,
@@ -51,6 +51,11 @@ async function getEnvForSubprocess(): Promise<NodeJS.ProcessEnv> {
 /** GitHub repo with install instructions. */
 export const NOW_INSTALL_URL = "https://github.com/shanberg/now#installation";
 
+/** URL to update One Thing menu bar app with the given focus text (one-thing:?text=…). */
+export function getOneThingUrl(focusText: string): string {
+  return `one-thing:?text=${encodeURIComponent(focusText)}`;
+}
+
 /** Install script URL (run in Terminal so sudo works). */
 const NOW_INSTALL_SCRIPT_URL =
   "https://raw.githubusercontent.com/shanberg/now/main/dist/install.sh";
@@ -75,6 +80,122 @@ function debugLog(
       sessionId: "raycast-now",
     }),
   }).catch(() => { });
+}
+
+/** LocalStorage key: when "true", always use the global (default) Now file. */
+export const NOW_USE_GLOBAL_KEY = "nowUseGlobal";
+/** LocalStorage key: JSON object of app bundleId/name → path for app-specific files (merged with preference). */
+export const NOW_APP_PATHS_KEY = "nowAppPaths";
+/** LocalStorage key: JSON object of document path → now file path for document-specific files. */
+export const NOW_DOCUMENT_PATHS_KEY = "nowDocumentPaths";
+/** LocalStorage key: last resolved now file path (used when app/document resolution fails so we don't flip to Global). */
+export const NOW_LAST_RESOLVED_PATH_KEY = "nowLastResolvedPath";
+
+/**
+ * Returns the path of the frontmost application's current document, or null if not available.
+ * Uses AppleScript; only works with scriptable apps that expose a document path.
+ */
+export async function getCurrentDocumentPath(): Promise<string | null> {
+  const script = `
+    tell application "System Events"
+      set appName to name of first process whose frontmost is true
+    end tell
+    try
+      tell application appName
+        set docPath to path of document 1
+      end tell
+      if docPath is not missing value then
+        return docPath
+      end if
+    end try
+    return ""
+  `;
+  try {
+    const { stdout } = await execAsync(`osascript -e ${JSON.stringify(script)}`, {
+      encoding: "utf-8",
+      timeout: 3000,
+    });
+    const raw = stdout.trim();
+    if (!raw) return null;
+    let path = raw;
+    if (path.startsWith("file://")) {
+      path = decodeURIComponent(path.slice(7));
+    }
+    if (path.includes(":")) {
+      path = path.replace(/:/g, "/");
+      if (path.startsWith("/")) path = path.slice(1);
+      path = "/" + path;
+    }
+    return path || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolves which Now file path to use for a document path and optional JSON mapping.
+ * mappingJson format: { "documentPath": "nowFilePath", ... }. Keys are exact document paths.
+ */
+export function resolveNowFilePathForDocument(
+  defaultPath: string,
+  mappingJson: string | undefined,
+  documentPath: string,
+): string {
+  if (!mappingJson?.trim() || !documentPath) return resolveNowFilePath(defaultPath);
+  let map: Record<string, string>;
+  try {
+    map = JSON.parse(mappingJson) as Record<string, string>;
+  } catch {
+    return resolveNowFilePath(defaultPath);
+  }
+  const raw = map[documentPath];
+  if (!raw) return resolveNowFilePath(defaultPath);
+  return resolveNowFilePath(raw);
+}
+
+/**
+ * Suggested Now file path for a document: ~/.now/<SanitizedBasename>.now.md
+ */
+export function suggestedNowPathForDocument(docPath: string): string {
+  const base = basename(docPath);
+  const name = (base.endsWith(".md") ? base.slice(0, -3) : base) || "document";
+  const sanitized = name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  return `~/.now/${sanitized}.now.md`;
+}
+
+/**
+ * Resolves which Now file path to use given the frontmost app and an optional JSON mapping.
+ * mappingJson format: { "bundleId_or_app_name": "path", ... } e.g. {"com.googlecode.iterm2": "~/.now/term.now.md"}.
+ * Keys are matched against app.bundleId then app.name; values are paths (passed through resolveNowFilePath).
+ * Returns defaultPath (resolved) if mapping is empty/invalid or no key matches.
+ */
+export function resolveNowFilePathForApp(
+  defaultPath: string,
+  mappingJson: string | undefined,
+  app: { bundleId?: string; name: string },
+): string {
+  if (!mappingJson?.trim()) return resolveNowFilePath(defaultPath);
+  let map: Record<string, string>;
+  try {
+    map = JSON.parse(mappingJson) as Record<string, string>;
+  } catch {
+    return resolveNowFilePath(defaultPath);
+  }
+  const key =
+    (app.bundleId && map[app.bundleId] !== undefined && app.bundleId) ||
+    (app.name && map[app.name] !== undefined && app.name) ||
+    null;
+  const raw = key ? map[key] : defaultPath;
+  return resolveNowFilePath(raw);
+}
+
+/**
+ * Suggested Now file path for an app: ~/.now/<SanitizedName>.now.md
+ */
+export function suggestedNowPathForApp(app: { name: string }): string {
+  const sanitized = app.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const name = sanitized || "app";
+  return `~/.now/${name}.now.md`;
 }
 
 /**

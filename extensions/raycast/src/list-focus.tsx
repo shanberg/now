@@ -2,9 +2,11 @@ import {
   Action,
   ActionPanel,
   Form,
+  getFrontmostApplication,
   getPreferenceValues,
   Icon,
   List,
+  LocalStorage,
   open,
   openExtensionPreferences,
   showToast,
@@ -15,86 +17,63 @@ import { useCallback, useEffect, useState } from "react";
 import {
   createFocusFile,
   focusFileExists,
+  getCurrentDocumentPath,
   getJsonFocus,
   getJsonItems,
   isNowOnPath,
   JsonFocus,
   JsonItem,
+  NOW_APP_PATHS_KEY,
+  NOW_DOCUMENT_PATHS_KEY,
   NOW_INSTALL_URL,
+  NOW_LAST_RESOLVED_PATH_KEY,
+  NOW_USE_GLOBAL_KEY,
   openTerminalWithNowStatus,
   openTerminalWithNowTui,
+  getOneThingUrl,
   resolveNowFilePath,
+  resolveNowFilePathForApp,
   runAdd,
+  suggestedNowPathForApp,
+  suggestedNowPathForDocument,
   runComplete,
-  runDown,
-  runDiveIn,
   runEdit,
   runLater,
   runMove,
-  runNext,
   runNowInstallInTerminal,
-  runPrevious,
   runSwitch,
-  runUp,
   runWrap,
 } from "./lib/now";
-import { DATA_STR } from "now-format";
+import {
+  DATA_STR,
+  getIndentFromDisplay,
+  getNextFocusIndex,
+  getPlaceholderLater,
+  getPlaceholderNarrow,
+  getPlaceholderWrap,
+} from "now-format";
 
 interface Preferences {
   focusFilePath: string;
+  updateOneThing?: boolean;
+  appSpecificNowFiles?: string;
 }
 
-const PLACEHOLDER = "______";
-
-/** Leading indent from a display string (uses same convention as now-format getItemsList). */
-function getIndent(display: string): string {
-  const raw = display.replace(/\s+@\s*$/, "").trimEnd();
-  const m = raw.match(/^(\s*)/);
-  return m ? m[1] : "";
-}
-
-/**
- * Index of the item that would be next in focus after completing the current item.
- * Matches selectNewCurrentAfterRemoval: previous sibling's last leaf, else next sibling's first leaf, else parent.
- */
-function getNextFocusIndex(
-  items: JsonItem[],
-  currentIndex: number,
-): number | null {
-  if (currentIndex < 0 || currentIndex >= items.length) return null;
-  const currentDepth = getIndent(items[currentIndex].display).length;
-  // Previous sibling's last leaf: walk back, first with same depth
-  for (let j = currentIndex - 1; j >= 0; j--) {
-    const d = getIndent(items[j].display).length;
-    if (d === currentDepth) return j;
-    if (d < currentDepth) break;
-  }
-  // Next sibling's first leaf: walk forward, first with same depth
-  for (let j = currentIndex + 1; j < items.length; j++) {
-    const d = getIndent(items[j].display).length;
-    if (d === currentDepth) return j;
-    if (d < currentDepth) break;
-  }
-  // Parent: walk back, first with depth one level up
-  const parentDepth = currentDepth - DATA_STR.indent.length;
-  if (parentDepth < 0) return null;
-  for (let j = currentIndex - 1; j >= 0; j--) {
-    if (getIndent(items[j].display).length === parentDepth) return j;
-  }
-  return null;
-}
+const FOCUS_PREFIX = `${DATA_STR.focus} `;
+const PREVIOUS_FOCUS_PREFIX = `${DATA_STR.focusPrevious} `;
 
 /** Builds markdown showing all items with indentation, current focus and selected item (▶), and command-specific placeholders/indicators. */
 function detailMarkdown(
   items: JsonItem[],
   currentKey: string,
   breadcrumb: string,
+  currentItemName: string,
   selectedKey: string | null,
   selectedId: string | null,
 ): string {
   const currentIndex = items.findIndex((i) => i.key === currentKey);
   const currentIndent =
-    currentIndex >= 0 ? getIndent(items[currentIndex].display) : "";
+    currentIndex >= 0 ? getIndentFromDisplay(items[currentIndex].display) : "";
   const nextFocusIndex =
     selectedId === "action-complete" && currentIndex >= 0
       ? getNextFocusIndex(items, currentIndex)
@@ -107,24 +86,28 @@ function detailMarkdown(
     const isNextFocus = nextFocusIndex !== null && index === nextFocusIndex;
     let line = raw;
     if (isCurrent) {
-      if (selectedId === "action-complete") {
-        line = raw.replace(/^(\s*)(.*)$/, "$1$2 ✓");
+      if (selectedId === "action-add" || selectedId === "action-later") {
+        line = raw.replace(/^(\s*)(.*)$/, `$1${PREVIOUS_FOCUS_PREFIX}$2`);
+      } else if (selectedKey !== null && selectedKey !== currentKey) {
+        line = raw.replace(/^(\s*)(.*)$/, `$1${PREVIOUS_FOCUS_PREFIX}$2`);
       } else {
-        line = raw.replace(/^(\s*)(.*)$/, "$1▶ $2");
-      }
-      if (selectedId === "action-edit") {
-        line = line.replace(/^(\s*)(.*)$/, "$1$2 ✎");
+        line = raw.replace(/^(\s*)(.*)$/, `$1${FOCUS_PREFIX}$2`);
+        if (selectedId === "action-complete") {
+          line = line.replace(FOCUS_PREFIX, "✓ ");
+        } else if (selectedId === "action-edit") {
+          line = line.replace(FOCUS_PREFIX, "✎ ");
+        }
       }
     } else if (isNextFocus && selectedId === "action-complete") {
-      line = raw.replace(/^(\s*)(.*)$/, "$1▶ $2");
+      line = raw.replace(/^(\s*)(.*)$/, `$1${FOCUS_PREFIX}$2`);
     } else if (isSelected) {
-      line = raw.replace(/^(\s*)(.*)$/, "$1▶ $2");
+      line = raw.replace(/^(\s*)(.*)$/, `$1${FOCUS_PREFIX}$2`);
     }
     return line;
   });
 
   if (selectedId === "action-add" && currentIndex >= 0) {
-    const placeholder = `${currentIndent}${DATA_STR.indent}${PLACEHOLDER} ▶`;
+    const placeholder = getPlaceholderNarrow(currentIndent);
     lines = [
       ...lines.slice(0, currentIndex + 1),
       placeholder,
@@ -133,7 +116,7 @@ function detailMarkdown(
   }
 
   if (selectedId === "action-later" && currentIndex >= 0) {
-    const placeholder = `${currentIndent}${PLACEHOLDER} ▶`;
+    const placeholder = getPlaceholderLater(currentIndent);
     lines = [
       ...lines.slice(0, currentIndex + 1),
       placeholder,
@@ -142,21 +125,22 @@ function detailMarkdown(
   }
 
   if (selectedId === "action-wrap" && currentIndex >= 0) {
-    const wrapParent = `${currentIndent}${PLACEHOLDER}`;
-    const currentLine = lines[currentIndex];
-    const indentedCurrent = currentLine.replace(
-      /^(\s*)(.*)$/,
-      `${DATA_STR.indent}$1$2`,
+    const { wrapParentLine, indentedCurrentLine } = getPlaceholderWrap(
+      currentIndent,
+      lines[currentIndex],
     );
     lines = [
       ...lines.slice(0, currentIndex),
-      wrapParent,
-      indentedCurrent,
+      wrapParentLine,
+      indentedCurrentLine,
       ...lines.slice(currentIndex + 1),
     ];
   }
 
-  const header = breadcrumb ? `${breadcrumb}\n\n` : "";
+  const line1 = breadcrumb || "";
+  const line2 = `${DATA_STR.focus} **${currentItemName || "—"}**`;
+  const header =
+    (line1 ? line1 + "\n\n" : "") + line2 + "\n\n";
   return header + "```\n" + lines.join("\n") + "\n```";
 }
 
@@ -264,7 +248,7 @@ function EditForm({
         <ActionPanel>
           <Action.SubmitForm
             title="Edit"
-            icon={Icon.Pencil}
+            icon={Icon.TextCursor}
             onSubmit={async (values: { newName: string }) => {
               const newName = (values.newName ?? "").trim();
               if (!newName) {
@@ -417,7 +401,136 @@ function useFocusData(nowFilePath: string) {
 
 export default function Command() {
   const prefs = getPreferenceValues<Preferences>();
-  const nowFilePath = resolveNowFilePath(prefs.focusFilePath);
+  const defaultPath = resolveNowFilePath(prefs.focusFilePath);
+  const [nowFilePath, setNowFilePath] = useState<string>(defaultPath);
+  const [sourceLabel, setSourceLabel] = useState<string>("Global");
+  const [currentApp, setCurrentApp] = useState<{ name: string; bundleId?: string } | null>(null);
+  const [appPathForCurrent, setAppPathForCurrent] = useState<string | null>(null);
+  const [currentDocumentPath, setCurrentDocumentPath] = useState<string | null>(null);
+  const [docPathForCurrent, setDocPathForCurrent] = useState<string | null>(null);
+
+  const isUsingAppFile = nowFilePath !== defaultPath;
+
+  const refreshPathFromStorage = useCallback(async () => {
+    const useGlobal = (await LocalStorage.getItem<string>(NOW_USE_GLOBAL_KEY)) === "true";
+    const docPathsJson = (await LocalStorage.getItem<string>(NOW_DOCUMENT_PATHS_KEY)) ?? "{}";
+    let docPaths: Record<string, string>;
+    try {
+      docPaths = (JSON.parse(docPathsJson) as Record<string, string>) ?? {};
+    } catch {
+      docPaths = {};
+    }
+    const localPathsJson = (await LocalStorage.getItem<string>(NOW_APP_PATHS_KEY)) ?? "{}";
+    let localPaths: Record<string, string> = {};
+    try {
+      localPaths = JSON.parse(localPathsJson) as Record<string, string>;
+    } catch {
+      localPaths = {};
+    }
+    const prefsJson = prefs.appSpecificNowFiles?.trim() ?? "{}";
+    let prefsMap: Record<string, string> = {};
+    try {
+      prefsMap = JSON.parse(prefsJson) as Record<string, string>;
+    } catch {
+      prefsMap = {};
+    }
+    const mergedAppJson = JSON.stringify({ ...prefsMap, ...localPaths });
+
+    const [docPath, app] = await Promise.all([
+      getCurrentDocumentPath(),
+      getFrontmostApplication().catch(() => null),
+    ]);
+    setCurrentDocumentPath(docPath ?? null);
+    setCurrentApp(app ? { name: app.name, bundleId: app.bundleId } : null);
+
+    const docPathResolved =
+      docPath && docPaths[docPath]
+        ? resolveNowFilePath(docPaths[docPath])
+        : null;
+    setDocPathForCurrent(docPathResolved);
+
+    if (useGlobal) {
+      setNowFilePath(defaultPath);
+      setSourceLabel("Global");
+      setAppPathForCurrent(
+        app
+          ? (() => {
+              let map: Record<string, string> = {};
+              try {
+                map = JSON.parse(mergedAppJson) as Record<string, string>;
+              } catch {}
+              const key = app.bundleId ?? app.name;
+              const raw = map[key];
+              return raw ? resolveNowFilePath(raw) : null;
+            })()
+          : null,
+      );
+      return;
+    }
+
+    if (docPathResolved) {
+      setNowFilePath(docPathResolved);
+      setSourceLabel(`Document — ${docPath}`);
+      await LocalStorage.setItem(NOW_LAST_RESOLVED_PATH_KEY, docPathResolved);
+      setAppPathForCurrent(
+        app
+          ? (() => {
+              let map: Record<string, string> = {};
+              try {
+                map = JSON.parse(mergedAppJson) as Record<string, string>;
+              } catch {}
+              const key = app.bundleId ?? app.name;
+              const raw = map[key];
+              return raw ? resolveNowFilePath(raw) : null;
+            })()
+          : null,
+      );
+      return;
+    }
+
+    if (app) {
+      const path = resolveNowFilePathForApp(
+        prefs.focusFilePath,
+        mergedAppJson,
+        { bundleId: app.bundleId, name: app.name },
+      );
+      const key = app.bundleId ?? app.name;
+      let map: Record<string, string> = {};
+      try {
+        map = JSON.parse(mergedAppJson) as Record<string, string>;
+      } catch {}
+      const rawForApp = map[key];
+      setAppPathForCurrent(rawForApp ? resolveNowFilePath(rawForApp) : null);
+      setNowFilePath(path);
+      setSourceLabel(path !== defaultPath ? `${app.name} — ${path}` : "Global");
+      if (path !== defaultPath) {
+        await LocalStorage.setItem(NOW_LAST_RESOLVED_PATH_KEY, path);
+      }
+      return;
+    }
+
+    const lastPath = await LocalStorage.getItem<string>(NOW_LAST_RESOLVED_PATH_KEY);
+    if (lastPath) {
+      setAppPathForCurrent(null);
+      setNowFilePath(lastPath);
+      setSourceLabel(`Last used — ${lastPath}`);
+    } else {
+      setAppPathForCurrent(null);
+      setNowFilePath(defaultPath);
+      setSourceLabel("Global");
+    }
+  }, [defaultPath, prefs.focusFilePath, prefs.appSpecificNowFiles]);
+
+  useEffect(() => {
+    let cancelled = false;
+    refreshPathFromStorage().then(() => {
+      if (!cancelled) return;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshPathFromStorage]);
+
   const { focus, items, error, errorMessage, isLoading, refresh } =
     useFocusData(nowFilePath);
   const [cliMissing, setCliMissing] = useState<boolean | null>(null);
@@ -428,6 +541,11 @@ export default function Command() {
   const fileMissing = error && !focusFileExists(nowFilePath);
 
   useEffect(() => {
+    if (!prefs.updateOneThing || !focus?.focus) return;
+    open(getOneThingUrl(focus.focus));
+  }, [prefs.updateOneThing, focus?.focus]);
+
+  useEffect(() => {
     if (!showEmpty || !error || fileMissing) {
       setCliMissing(null);
       return;
@@ -436,8 +554,17 @@ export default function Command() {
   }, [showEmpty, error, fileMissing]);
 
   if (showEmpty) {
+    const emptyDescription =
+      (fileMissing
+        ? "Create a new focus file to get started."
+        : cliMissing
+          ? "Install the now CLI to use this extension."
+          : error
+            ? errorMessage ?? "Check path and format, or run 'now status' in Terminal to see the CLI error."
+            : "Set your focus file path in extension preferences and ensure the now CLI is installed.") +
+      `\n\nUsing: ${sourceLabel}`;
     return (
-      <List isLoading={isLoading}>
+      <List isLoading={isLoading} searchBarPlaceholder={`Using: ${sourceLabel}`}>
         <List.EmptyView
           title={
             fileMissing
@@ -448,18 +575,101 @@ export default function Command() {
                   : "Could not read focus file"
                 : "No focusable items"
           }
-          description={
-            fileMissing
-              ? "Create a new focus file to get started."
-              : cliMissing
-                ? "Install the now CLI to use this extension."
-                : error
-                  ? errorMessage ?? "Check path and format, or run 'now status' in Terminal to see the CLI error."
-                  : "Set your focus file path in extension preferences and ensure the now CLI is installed."
-          }
+          description={emptyDescription}
           icon={Icon.Warning}
           actions={
             <ActionPanel>
+              {isUsingAppFile ? (
+                <Action
+                  title="Use global file"
+                  icon={Icon.Circle}
+                  onAction={async () => {
+                    await LocalStorage.setItem(NOW_USE_GLOBAL_KEY, "true");
+                    await refreshPathFromStorage();
+                    await refresh();
+                  }}
+                />
+              ) : null}
+              {docPathForCurrent && nowFilePath !== docPathForCurrent ? (
+                <Action
+                  title="Use document file"
+                  icon={Icon.Circle}
+                  onAction={async () => {
+                    await LocalStorage.setItem(NOW_USE_GLOBAL_KEY, "false");
+                    await LocalStorage.setItem(NOW_LAST_RESOLVED_PATH_KEY, docPathForCurrent);
+                    setNowFilePath(docPathForCurrent);
+                    setSourceLabel(currentDocumentPath ? `Document — ${currentDocumentPath}` : "Document");
+                    await refresh();
+                  }}
+                />
+              ) : null}
+              {appPathForCurrent && currentApp && nowFilePath !== appPathForCurrent ? (
+                <Action
+                  title="Use app file"
+                  icon={Icon.Circle}
+                  onAction={async () => {
+                    await LocalStorage.setItem(NOW_USE_GLOBAL_KEY, "false");
+                    await LocalStorage.setItem(NOW_LAST_RESOLVED_PATH_KEY, appPathForCurrent);
+                    setNowFilePath(appPathForCurrent);
+                    setSourceLabel(`${currentApp.name} — ${appPathForCurrent}`);
+                    await refresh();
+                  }}
+                />
+              ) : null}
+              {currentDocumentPath ? (
+                <Action
+                  title="Create Now File for Current Document"
+                  icon={Icon.Plus}
+                  onAction={async () => {
+                    const path = resolveNowFilePath(suggestedNowPathForDocument(currentDocumentPath));
+                    try {
+                      await createFocusFile(path);
+                      const existing = await LocalStorage.getItem<string>(NOW_DOCUMENT_PATHS_KEY);
+                      let map: Record<string, string> = {};
+                      try {
+                        if (existing) map = JSON.parse(existing) as Record<string, string>;
+                      } catch {}
+                      map[currentDocumentPath] = suggestedNowPathForDocument(currentDocumentPath);
+                      await LocalStorage.setItem(NOW_DOCUMENT_PATHS_KEY, JSON.stringify(map));
+                      await LocalStorage.setItem(NOW_USE_GLOBAL_KEY, "false");
+                      setNowFilePath(path);
+                      setDocPathForCurrent(path);
+                      setSourceLabel(`Document — ${currentDocumentPath}`);
+                      await showToast(Toast.Style.Success, "Created and using for current document");
+                      await refresh();
+                    } catch (e) {
+                      await showToast(Toast.Style.Failure, "Failed to create file", String(e));
+                    }
+                  }}
+                />
+              ) : null}
+              {currentApp ? (
+                <Action
+                  title={`Create Now File for ${currentApp.name}`}
+                  icon={Icon.Plus}
+                  onAction={async () => {
+                    const path = resolveNowFilePath(suggestedNowPathForApp(currentApp));
+                    try {
+                      await createFocusFile(path);
+                      const key = currentApp.bundleId ?? currentApp.name;
+                      const existing = await LocalStorage.getItem<string>(NOW_APP_PATHS_KEY);
+                      let map: Record<string, string> = {};
+                      try {
+                        if (existing) map = JSON.parse(existing) as Record<string, string>;
+                      } catch {}
+                      map[key] = suggestedNowPathForApp(currentApp);
+                      await LocalStorage.setItem(NOW_APP_PATHS_KEY, JSON.stringify(map));
+                      await LocalStorage.setItem(NOW_USE_GLOBAL_KEY, "false");
+                      setNowFilePath(path);
+                      setSourceLabel(`${currentApp.name} — ${path}`);
+                      await showToast(Toast.Style.Success, `Created and using for ${currentApp.name}`);
+                      await refresh();
+                    } catch (e) {
+                      await showToast(Toast.Style.Failure, "Failed to create file", String(e));
+                    }
+                  }}
+                />
+              ) : null}
               {fileMissing ? (
                 <Action
                   title="Init"
@@ -579,39 +789,108 @@ export default function Command() {
     items ?? [],
     currentKey,
     focus?.breadcrumb ?? "",
+    focus?.focus ?? "",
     selectedKeyInTree,
     selectedId,
   );
   const detail = <List.Item.Detail markdown={markdown} />;
-  const siblingCount = focus?.siblingCount ?? 0;
-  const isLeaf = focus?.isLeaf ?? true;
-  const isRoot = focus?.isRoot ?? true;
+
+  const contextSection =
+    isUsingAppFile || docPathForCurrent || (appPathForCurrent && currentApp) || currentDocumentPath ? (
+      <ActionPanel.Section title={`Using: ${sourceLabel}`}>
+        {isUsingAppFile ? (
+          <Action
+            title="Use global file"
+            icon={Icon.Circle}
+            onAction={async () => {
+              await LocalStorage.setItem(NOW_USE_GLOBAL_KEY, "true");
+              await refreshPathFromStorage();
+              await refresh();
+            }}
+          />
+        ) : null}
+        {docPathForCurrent && nowFilePath !== docPathForCurrent ? (
+          <Action
+            title="Use document file"
+            icon={Icon.Circle}
+            onAction={async () => {
+              await LocalStorage.setItem(NOW_USE_GLOBAL_KEY, "false");
+              setNowFilePath(docPathForCurrent);
+              setSourceLabel(currentDocumentPath ? `Document — ${currentDocumentPath}` : "Document");
+              await refresh();
+            }}
+          />
+        ) : null}
+        {appPathForCurrent && currentApp && nowFilePath !== appPathForCurrent ? (
+          <Action
+            title="Use app file"
+            icon={Icon.Circle}
+            onAction={async () => {
+              await LocalStorage.setItem(NOW_USE_GLOBAL_KEY, "false");
+              setNowFilePath(appPathForCurrent);
+              setSourceLabel(`${currentApp.name} — ${appPathForCurrent}`);
+              await refresh();
+            }}
+          />
+        ) : null}
+        {currentDocumentPath && nowFilePath !== docPathForCurrent ? (
+          <Action
+            title="Create Now File for Current Document"
+            icon={Icon.Plus}
+            onAction={async () => {
+              const path = resolveNowFilePath(suggestedNowPathForDocument(currentDocumentPath));
+              try {
+                await createFocusFile(path);
+                const existing = await LocalStorage.getItem<string>(NOW_DOCUMENT_PATHS_KEY);
+                let map: Record<string, string> = {};
+                try {
+                  if (existing) map = JSON.parse(existing) as Record<string, string>;
+                } catch {}
+                map[currentDocumentPath] = suggestedNowPathForDocument(currentDocumentPath);
+                await LocalStorage.setItem(NOW_DOCUMENT_PATHS_KEY, JSON.stringify(map));
+                await LocalStorage.setItem(NOW_USE_GLOBAL_KEY, "false");
+                setNowFilePath(path);
+                setDocPathForCurrent(path);
+                setSourceLabel(`Document — ${currentDocumentPath}`);
+                await showToast(Toast.Style.Success, "Created and using for current document");
+                await refresh();
+              } catch (e) {
+                await showToast(Toast.Style.Failure, "Failed to create file", String(e));
+              }
+            }}
+          />
+        ) : null}
+      </ActionPanel.Section>
+    ) : null;
 
   const otherSection = (
-    <ActionPanel.Section title="Other">
-      <Action
-        title="Tui"
-        icon={Icon.Terminal}
-        onAction={async () => {
-          try {
-            await openTerminalWithNowTui(nowFilePath);
-            await showToast(Toast.Style.Success, "Terminal opened");
-          } catch (e) {
-            await showToast(
-              Toast.Style.Failure,
-              "Could not open Terminal",
-              String(e),
-            );
-          }
-        }}
-      />
-      <Action.Open
-        title="Open in Editor"
-        icon={Icon.Document}
-        target={nowFilePath}
-      />
-      <Action title="Refresh" icon={Icon.ArrowClockwise} onAction={refresh} />
-    </ActionPanel.Section>
+    <>
+      {contextSection}
+      <ActionPanel.Section title="Other">
+        <Action
+          title="Tui"
+          icon={Icon.Terminal}
+          onAction={async () => {
+            try {
+              await openTerminalWithNowTui(nowFilePath);
+              await showToast(Toast.Style.Success, "Terminal opened");
+            } catch (e) {
+              await showToast(
+                Toast.Style.Failure,
+                "Could not open Terminal",
+                String(e),
+              );
+            }
+          }}
+        />
+        <Action.Open
+          title="Open in Editor"
+          icon={Icon.Document}
+          target={nowFilePath}
+        />
+        <Action title="Refresh" icon={Icon.ArrowClockwise} onAction={refresh} />
+      </ActionPanel.Section>
+    </>
   );
 
   const runNav = async (
@@ -632,7 +911,7 @@ export default function Command() {
       isLoading={isLoading}
       isShowingDetail
       navigationTitle="Focus List"
-      searchBarPlaceholder="Search items"
+      searchBarPlaceholder={`Using: ${sourceLabel}`}
       selectedItemId={
         currentKey && items?.some((i) => i.key === currentKey)
           ? currentKey
@@ -644,13 +923,13 @@ export default function Command() {
         <List.Item
           id="action-add"
           title="Narrow focus"
-          icon={Icon.Plus}
+          icon={Icon.ChevronRight}
           detail={detail}
           actions={
             <ActionPanel>
               <Action.Push
                 title="Narrow focus"
-                icon={Icon.Plus}
+                icon={Icon.ChevronRight}
                 target={
                   <AddNestedForm
                     nowFilePath={nowFilePath}
@@ -683,13 +962,13 @@ export default function Command() {
         <List.Item
           id="action-later"
           title="Add followup"
-          icon={Icon.Plus}
+          icon={Icon.Ellipsis}
           detail={detail}
           actions={
             <ActionPanel>
               <Action.Push
                 title="Add followup"
-                icon={Icon.Plus}
+                icon={Icon.Ellipsis}
                 target={
                   <LaterForm
                     nowFilePath={nowFilePath}
@@ -705,13 +984,13 @@ export default function Command() {
           <List.Item
             id="action-edit"
             title="Edit"
-            icon={Icon.Pencil}
+            icon={Icon.TextCursor}
             detail={detail}
             actions={
               <ActionPanel>
                 <Action.Push
                   title="Edit"
-                  icon={Icon.Pencil}
+                  icon={Icon.TextCursor}
                   target={
                     <EditForm
                       nowFilePath={nowFilePath}
@@ -770,169 +1049,12 @@ export default function Command() {
           }
         />
       </List.Section>
-      <List.Section title="Navigation">
-        {!isLeaf ? (
-          <List.Item
-            id="action-dive-in"
-            title="Dive in"
-            icon={Icon.ChevronDown}
-            detail={detail}
-            actions={
-              <ActionPanel>
-                <Action
-                  title="Dive in"
-                  icon={Icon.ChevronDown}
-                  onAction={() =>
-                    runNav(() => runDiveIn(nowFilePath), "Dived in")
-                  }
-                />
-                {otherSection}
-              </ActionPanel>
-            }
-          />
-        ) : null}
-        {siblingCount > 0 ? (
-          <>
-            <List.Item
-              id="action-next"
-              title="Next"
-              icon={Icon.ChevronRight}
-              detail={detail}
-              actions={
-                <ActionPanel>
-                  <Action
-                    title="Next"
-                    icon={Icon.ChevronRight}
-                    onAction={() =>
-                      runNav(() => runNext(nowFilePath), "Next")
-                    }
-                  />
-                  {otherSection}
-                </ActionPanel>
-              }
-            />
-            <List.Item
-              id="action-previous"
-              title="Previous"
-              icon={Icon.ChevronLeft}
-              detail={detail}
-              actions={
-                <ActionPanel>
-                  <Action
-                    title="Previous"
-                    icon={Icon.ChevronLeft}
-                    onAction={() =>
-                      runNav(() => runPrevious(nowFilePath), "Previous")
-                    }
-                  />
-                  {otherSection}
-                </ActionPanel>
-              }
-            />
-          </>
-        ) : null}
-        {!isLeaf ? (
-          <List.Item
-            id="action-down"
-            title="Down"
-            icon={Icon.ChevronDown}
-            detail={detail}
-            actions={
-              <ActionPanel>
-                <Action
-                  title="Down"
-                  icon={Icon.ChevronDown}
-                  onAction={() =>
-                    runNav(() => runDown(nowFilePath), "Down")
-                  }
-                />
-                {otherSection}
-              </ActionPanel>
-            }
-          />
-        ) : null}
-        {!isRoot ? (
-          <List.Item
-            id="action-up"
-            title="Up"
-            icon={Icon.ChevronUp}
-            detail={detail}
-            actions={
-              <ActionPanel>
-                <Action
-                  title="Up"
-                  icon={Icon.ChevronUp}
-                  onAction={() =>
-                    runNav(() => runUp(nowFilePath), "Up")
-                  }
-                />
-                {otherSection}
-              </ActionPanel>
-            }
-          />
-        ) : null}
-      </List.Section>
-      <List.Section title="Setup">
-        <List.Item
-          id="action-init"
-          title="Init"
-          icon={Icon.Document}
-          detail={detail}
-          actions={
-            <ActionPanel>
-              <Action
-                title="Init"
-                icon={Icon.Document}
-                onAction={async () => {
-                  try {
-                    await createFocusFile(nowFilePath);
-                    await showToast(Toast.Style.Success, "Focus file ready");
-                    await refresh();
-                  } catch (e) {
-                    await showToast(
-                      Toast.Style.Failure,
-                      "Init failed",
-                      String(e),
-                    );
-                  }
-                }}
-              />
-              {otherSection}
-            </ActionPanel>
-          }
-        />
-        <List.Item
-          id="action-status"
-          title="Status"
-          icon={Icon.Terminal}
-          detail={detail}
-          actions={
-            <ActionPanel>
-              <Action
-                title="Status"
-                icon={Icon.Terminal}
-                onAction={async () => {
-                  try {
-                    await openTerminalWithNowStatus(nowFilePath);
-                    await showToast(Toast.Style.Success, "Terminal opened");
-                  } catch (e) {
-                    await showToast(
-                      Toast.Style.Failure,
-                      "Could not open Terminal",
-                      String(e),
-                    );
-                  }
-                }}
-              />
-              {otherSection}
-            </ActionPanel>
-          }
-        />
-      </List.Section>
       <List.Section title="Switch">
-        {items?.map((item) => {
-          const isCurrent = item.key === currentKey;
-          return (
+        {items
+          ?.filter((item) => item.key !== currentKey)
+          .map((item) => {
+            const isCurrent = item.key === currentKey;
+            return (
             <List.Item
               key={item.key}
               id={item.key}
@@ -985,7 +1107,7 @@ export default function Command() {
                   <ActionPanel.Section title="Actions">
                     <Action.Push
                       title="Narrow focus"
-                      icon={Icon.Plus}
+                      icon={Icon.ChevronRight}
                       target={
                         <AddNestedForm
                           nowFilePath={nowFilePath}
@@ -995,7 +1117,7 @@ export default function Command() {
                     />
                     <Action.Push
                       title="Add followup"
-                      icon={Icon.Plus}
+                      icon={Icon.Ellipsis}
                       target={
                         <LaterForm
                           nowFilePath={nowFilePath}
@@ -1006,7 +1128,7 @@ export default function Command() {
                     {focus ? (
                       <Action.Push
                         title="Edit"
-                        icon={Icon.Pencil}
+                        icon={Icon.TextCursor}
                         target={
                           <EditForm
                             nowFilePath={nowFilePath}
@@ -1038,53 +1160,6 @@ export default function Command() {
                         />
                       }
                     />
-                  </ActionPanel.Section>
-                  <ActionPanel.Section title="Navigation">
-                    {!isLeaf ? (
-                      <Action
-                        title="Dive in"
-                        icon={Icon.ChevronDown}
-                        onAction={() =>
-                          runNav(() => runDiveIn(nowFilePath), "Dived in")
-                        }
-                      />
-                    ) : null}
-                    {siblingCount > 0 ? (
-                      <>
-                        <Action
-                          title="Next"
-                          icon={Icon.ChevronRight}
-                          onAction={() =>
-                            runNav(() => runNext(nowFilePath), "Next")
-                          }
-                        />
-                        <Action
-                          title="Previous"
-                          icon={Icon.ChevronLeft}
-                          onAction={() =>
-                            runNav(() => runPrevious(nowFilePath), "Previous")
-                          }
-                        />
-                      </>
-                    ) : null}
-                    {!isLeaf ? (
-                      <Action
-                        title="Down"
-                        icon={Icon.ChevronDown}
-                        onAction={() =>
-                          runNav(() => runDown(nowFilePath), "Down")
-                        }
-                      />
-                    ) : null}
-                    {!isRoot ? (
-                      <Action
-                        title="Up"
-                        icon={Icon.ChevronUp}
-                        onAction={() =>
-                          runNav(() => runUp(nowFilePath), "Up")
-                        }
-                      />
-                    ) : null}
                   </ActionPanel.Section>
                   <ActionPanel.Section title="Copy">
                     <Action.CopyToClipboard

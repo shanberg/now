@@ -1,4 +1,4 @@
-# Now Focus – Raycast Extension
+# Now – Raycast Extension
 
 Shows your [now](https://github.com/shanberg/now) CLI focus in the menu bar and in a list with actions (set focus, complete, copy).
 
@@ -16,7 +16,7 @@ This extension follows [Raycast extension standards](https://developers.raycast.
 
 ## Commands
 
-- **Current Focus** (menu bar) – Shows the current focus in the menu bar; refreshes on an interval. Click for a short menu.
+- **Show in menu bar** – Shows the current focus in the menu bar; refreshes on an interval. Click for a short menu.
 - **Focus List** – List of all focusable items with the current focus selected. Actions: Set as Focus, Complete (when current), Copy Title, Refresh.
 
 ## Development

@@ -13,14 +13,8 @@ if (cmd === "tui") {
   Deno.exit(0);
 }
 
-const {
-  runInit,
-  runJsonFocus,
-  runJsonItems,
-  unixCLI,
-} = await import("./ui/unixCLI.ts");
-
 if (cmd === "json") {
+  const { runJsonFocus, runJsonItems } = await import("./ui/jsonCLI.ts");
   const sub = args[1];
   if (sub === "focus") {
     await runJsonFocus();
@@ -34,9 +28,12 @@ if (cmd === "json") {
 }
 
 if (cmd === "init") {
+  const { runInit } = await import("./ui/jsonCLI.ts");
   await runInit();
   Deno.exit(0);
 }
+
+const { unixCLI } = await import("./ui/unixCLI.ts");
 
 const cliCommands = [
   "status",

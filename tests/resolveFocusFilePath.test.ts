@@ -10,7 +10,7 @@ import { resolve } from "std/path/mod.ts";
 import {
   findFocusFileInCwd,
   resolveFocusFilePath,
-} from "../src/ui/cliUtils.ts";
+} from "../src/ui/resolveFocus.ts";
 import { NOW_FILE_SUFFIX } from "../src/consts.ts";
 
 Deno.test("resolveFocusFilePath - NOW_FILE set returns that path resolved", async () => {

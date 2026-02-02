@@ -1,7 +1,7 @@
 {
   "$schema": "https://www.raycast.com/schemas/extension.json",
-  "name": "now-focus",
-  "title": "Now Focus",
+  "name": "now",
+  "title": "Now",
   "description": "Show and switch your now CLI focus from the menu bar and a list with actions.",
   "icon": "icon.png",
   "author": "shanberg",
@@ -15,7 +15,7 @@
   "commands": [
     {
       "name": "menu-bar-focus",
-      "title": "Current Focus",
+      "title": "Show in menu bar",
       "description": "Show current now focus in the menu bar.",
       "mode": "menu-bar",
       "interval": "5m"
@@ -35,6 +35,30 @@
       "type": "textfield",
       "required": true,
       "placeholder": "~/.now/focus.now.md"
+    },
+    {
+      "name": "updateOneThing",
+      "title": "Update One Thing",
+      "description": "When enabled, open the One Thing menu bar app with the current focus (one-thing:?text=…). Requires the One Thing extension installed.",
+      "type": "checkbox",
+      "required": false,
+      "default": false
+    },
+    {
+      "name": "appSpecificNowFiles",
+      "title": "App-specific Now files",
+      "description": "Optional JSON mapping from app bundle ID or name to Now file path. When set, the menubar (and list when opened) uses the path for the frontmost app. Example: {\"com.apple.Terminal\": \"~/.now/term.now.md\"}.",
+      "type": "textfield",
+      "required": false,
+      "placeholder": "{\"com.apple.Terminal\": \"~/.now/term.now.md\"}"
+    },
+    {
+      "name": "menubarTruncateLength",
+      "title": "Menubar truncate length",
+      "description": "Truncate the focus text in the menu bar to this many characters (0 = no truncation).",
+      "type": "textfield",
+      "required": false,
+      "placeholder": "0"
     }
   ],
   "dependencies": {

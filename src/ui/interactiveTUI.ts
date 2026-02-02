@@ -8,11 +8,11 @@ import { TreeNode } from "../../types.d.ts";
 import {
   displayCurrentFocus,
   promptOptions,
-  resolveFocusFilePath,
   showHint,
   styleOptions,
   SYNTAX_HINT,
 } from "./cliUtils.ts";
+import { resolveFocusFilePath } from "./resolveFocus.ts";
 import {
   addNextSiblingToCurrentItemEffect,
   completeCurrentItemEffect,
@@ -27,7 +27,7 @@ import {
   getItemsList,
   getItemsListEffect,
   getTree,
-  moveNodeToNewParentEffect,
+  moveNodeToNewParentEffectWithTree,
   setCurrentItemEffect,
   wrapCurrentItemInNewParentEffect,
 } from "../operations/index.ts";
@@ -284,7 +284,12 @@ async function handleMoveAction(path: string): Promise<TreeNode> {
   });
 
   if (moveToKey !== "back") {
-    await moveNodeToNewParentEffect(currentKey, moveToKey, path);
+    return await moveNodeToNewParentEffectWithTree(
+      path,
+      tree,
+      currentKey,
+      moveToKey,
+    );
   }
   return await getTree(path);
 }

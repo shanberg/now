@@ -2,6 +2,9 @@
 .now.log
 .DS_Store
 
+# Dependencies
+node_modules/
+
 # Raycast extension
 extensions/raycast/node_modules/
 extensions/raycast/dist/

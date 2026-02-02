@@ -89,6 +89,27 @@ async function mutateTree(
 }
 
 /**
+ * Applies a pure mutation to an already-loaded tree, validates, writes, and returns the new tree.
+ * Does not read the file again. Use when the caller already has the tree (e.g. move, complete).
+ * @param {string} path - Path to the markdown file.
+ * @param {TreeNode} tree - Pre-read tree.
+ * @param {(tree: TreeNode) => TreeNode} op - Pure function (tree) => newTree.
+ * @param {string} caller - Name used in validation logs.
+ * @returns {Promise<TreeNode>} The updated tree.
+ */
+async function mutateTreeWithTree(
+  path: string,
+  tree: TreeNode,
+  op: (tree: TreeNode) => TreeNode,
+  caller: string,
+): Promise<TreeNode> {
+  const newTree = op(tree);
+  D && validateTree(newTree, caller);
+  await writeTree(newTree, path);
+  return newTree;
+}
+
+/**
  * Builds an effect that mutates the tree and returns void.
  * @param {string} name - Caller name for validation.
  * @param { (tree: TreeNode, ...args: T) => TreeNode } op - Pure op (tree, ...args) => newTree.
@@ -217,7 +238,7 @@ export const addNextSiblingToCurrentItemEffect = mutationEffectVoid(
 export async function completeCurrentItemEffect(path: string): Promise<void> {
   const tree = await getTree(path);
   const item = getCurrentItemBreadcrumb(tree);
-  await mutateTree(path, completeCurrentItem, "completeCurrentItemEffect");
+  await mutateTreeWithTree(path, tree, completeCurrentItem, "completeCurrentItemEffect");
   await logAction("Complete", item);
 }
 
@@ -299,7 +320,7 @@ export async function wrapCurrentItemInNewParentEffect(
   newParentName: string,
   path: string,
 ): Promise<TreeNode> {
-  return mutateTree(
+  return await mutateTree(
     path,
     (t) => wrapCurrentItemInNewParent(t, newParentName),
     "wrapCurrentItemInNewParentEffect",
@@ -320,8 +341,30 @@ export async function moveNodeToNewParentEffect(
   newParentKey: string,
   path: string,
 ): Promise<TreeNode> {
-  return mutateTree(
+  return await mutateTree(
     path,
+    (t) => moveNodeToNewParent(t, nodeKey, newParentKey),
+    "moveNodeToNewParentEffect",
+  );
+}
+
+/**
+ * Moves a node to a new parent using an already-loaded tree. Avoids a second file read when the caller already has the tree.
+ * @param {string} path - Path to the markdown file.
+ * @param {TreeNode} tree - Pre-read tree.
+ * @param {string} nodeKey - Key of the node to move.
+ * @param {string} newParentKey - Key of the new parent.
+ * @returns {Promise<TreeNode>} The updated tree structure.
+ */
+export async function moveNodeToNewParentEffectWithTree(
+  path: string,
+  tree: TreeNode,
+  nodeKey: string,
+  newParentKey: string,
+): Promise<TreeNode> {
+  return await mutateTreeWithTree(
+    path,
+    tree,
     (t) => moveNodeToNewParent(t, nodeKey, newParentKey),
     "moveNodeToNewParentEffect",
   );

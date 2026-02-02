@@ -9,7 +9,13 @@
 
 type ExtensionPreferences = {
   /** Focus file path - Path to your .now.md focus file. Use ~ for home (e.g. ~/.now/focus.now.md). */
-  "focusFilePath": string
+  "focusFilePath": string,
+  /** Update One Thing - When enabled, open the One Thing menu bar app with the current focus (one-thing:?text=…). Requires the One Thing extension installed. */
+  "updateOneThing": boolean,
+  /** App-specific Now files - Optional JSON mapping from app bundle ID or name to Now file path. When set, the menubar (and list when opened) uses the path for the frontmost app. Example: {"com.apple.Terminal": "~/.now/term.now.md"}. */
+  "appSpecificNowFiles"?: string,
+  /** Menubar truncate length - Truncate the focus text in the menu bar to this many characters (0 = no truncation). */
+  "menubarTruncateLength"?: string
 }
 
 /** Preferences accessible in all the extension's commands */
