@@ -1,0 +1,59 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "now-focus",
+  "title": "Now Focus",
+  "description": "Show and switch your now CLI focus from the menu bar and a list with actions.",
+  "icon": "icon.png",
+  "author": "shanberg",
+  "platforms": [
+    "macOS"
+  ],
+  "categories": [
+    "Productivity"
+  ],
+  "license": "MIT",
+  "commands": [
+    {
+      "name": "menu-bar-focus",
+      "title": "Current Focus",
+      "description": "Show current now focus in the menu bar.",
+      "mode": "menu-bar",
+      "interval": "5m"
+    },
+    {
+      "name": "list-focus",
+      "title": "Focus List",
+      "description": "View focusable items and set focus or complete from a list.",
+      "mode": "view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "focusFilePath",
+      "title": "Focus file path",
+      "description": "Path to your .now.md focus file. Use ~ for home (e.g. ~/.now/focus.now.md).",
+      "type": "textfield",
+      "required": true,
+      "placeholder": "~/.now/focus.now.md"
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^1.69.0",
+    "now-format": "file:../../packages/now-format"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "^2.0.0",
+    "@types/node": "^20.0.0",
+    "@types/react": "^19.0.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.0.0"
+  },
+  "scripts": {
+    "build": "ray build -e dist",
+    "dev": "ray develop",
+    "fix-lint": "ray lint --fix",
+    "lint": "ray lint",
+    "prepublishOnly": "echo \"\\n\\nIt seems like you are trying to publish the Raycast extension to npm.\\n\\nIf you did intend to publish it to npm, remove the \\`prepublishOnly\\` script and rerun \\`npm publish\\` again.\\nIf you wanted to publish it to the Raycast Store instead, use \\`npm run publish\\` instead.\\n\\n\" && exit 1"
+  }
+}

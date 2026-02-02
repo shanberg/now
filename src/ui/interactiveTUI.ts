@@ -6,10 +6,9 @@ import { colors } from "https://deno.land/x/cliffy@v0.25.7/ansi/colors.ts";
 import { D } from "../consts.ts";
 import { TreeNode } from "../../types.d.ts";
 import {
-  createFocusFile,
   displayCurrentFocus,
-  findOrCreateFocusFile,
   promptOptions,
+  resolveFocusFilePath,
   showHint,
   styleOptions,
   SYNTAX_HINT,
@@ -32,7 +31,7 @@ import {
   setCurrentItemEffect,
   wrapCurrentItemInNewParentEffect,
 } from "../operations/index.ts";
-import { SelectOption } from "https://deno.land/x/cliffy@v0.25.7/prompt/select.ts";
+import { type SelectOptionWithPrimary } from "../../types.d.ts";
 
 /**
  * Runs the interactive text UI: finds or creates a focus file, loads the tree, then loops
@@ -40,10 +39,7 @@ import { SelectOption } from "https://deno.land/x/cliffy@v0.25.7/prompt/select.t
  */
 async function interactiveTUI() {
   D || console.clear();
-  const focusFilePath = await findOrCreateFocusFile();
-  if (!focusFilePath) {
-    await createFocusFile(focusFilePath);
-  }
+  const focusFilePath = await resolveFocusFilePath({ interactive: true });
   let tree = await getTree(focusFilePath);
   displayCurrentFocus(tree);
 
@@ -64,8 +60,8 @@ function buildMainActionOptions(
   isLeaf: boolean,
   isRoot: boolean,
   siblingCount: number,
-): SelectOption[] {
-  const base: SelectOption[] = [
+): SelectOptionWithPrimary[] {
+  const base: SelectOptionWithPrimary[] = [
     { name: "Narrow focus", value: "add", primary: true },
     { name: "Finish this", value: "complete", primary: true },
     { name: "Add followup", value: "later", primary: true },
@@ -74,7 +70,7 @@ function buildMainActionOptions(
     { name: "Wrap", value: "wrap" },
     { name: "Move", value: "move" },
   ];
-  const nav: SelectOption[] = [
+  const nav: SelectOptionWithPrimary[] = [
     ...when(!isLeaf, { name: "Dive in", value: "diveIn", primary: true }),
     ...when(siblingCount > 0, { name: "Next", value: "focusNextSibling" }, {
       name: "Previous",

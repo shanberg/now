@@ -1,3 +1,7 @@
 .frame-MD.now.MD
 .now.log
 .DS_Store
+
+# Raycast extension
+extensions/raycast/node_modules/
+extensions/raycast/dist/

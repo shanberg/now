@@ -47,7 +47,7 @@ sudo mv "$TEMP_FILE" "$INSTALL_DIR/$EXECUTABLE_NAME.js"
 WRAPPER_SCRIPT="$INSTALL_DIR/$EXECUTABLE_NAME"
 sudo tee "$WRAPPER_SCRIPT" > /dev/null <<EOL
 #!/bin/bash
-deno run --allow-read --allow-write "$INSTALL_DIR/$EXECUTABLE_NAME.js" "\$@"
+deno run --allow-read --allow-write --allow-env "$INSTALL_DIR/$EXECUTABLE_NAME.js" "\$@"
 EOL
 
 # Make the wrapper script executable

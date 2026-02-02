@@ -37,7 +37,20 @@ import { deserialize, serialize } from "./treeSerialization.ts";
  */
 export const getTree = async (path: string): Promise<TreeNode> => {
   const content = await readMarkdownFile(path);
-  const tree = deserialize(content);
+  if (!content.trim()) {
+    throw new Error(
+      `Could not read focus file at ${path} (missing or empty). Create it with: NOW_FILE=${path} now init`,
+    );
+  }
+  let tree: TreeNode;
+  try {
+    tree = deserialize(content);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Could not read focus file at ${path}: ${detail}. Fix the file format or run NOW_FILE=${path} now init to recreate.`,
+    );
+  }
   D && validateTree(tree, "getTree");
   return tree;
 };

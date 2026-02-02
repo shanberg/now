@@ -3,8 +3,9 @@ import {
   type SelectOption,
 } from "https://deno.land/x/cliffy@v0.25.7/prompt/mod.ts";
 import { colors } from "https://deno.land/x/cliffy@v0.25.7/ansi/colors.ts";
+import { resolve } from "std/path/mod.ts";
 import { getCurrentItemDetails, getTree } from "../operations/index.ts";
-import { DATA_STR, NOW_FILE_SUFFIX } from "../consts.ts";
+import { DATA_STR, INITIAL_FOCUS_CONTENT, NOW_FILE_SUFFIX } from "../consts.ts";
 import { type SelectOptionWithPrimary, type TreeNode } from "../../types.d.ts";
 
 export const FOCUS_ARROW = "▶︎";
@@ -61,18 +62,39 @@ export const showHint = (text: string): void => {
   console.log(STYLE.hint(text));
 };
 
-/** Finds an existing focus file in cwd or prompts to create one; returns its filename. */
-export async function findOrCreateFocusFile(): Promise<string> {
-  const folderName = Deno.cwd().split("/").pop();
-  const fileName = `.${folderName}.${NOW_FILE_SUFFIX}`;
+/** Returns the first focus file (.*.now.md) in cwd, or null. Never prompts. */
+export function findFocusFileInCwd(): string | null {
   const files = [...Deno.readDirSync(".")].filter(
     (file) => file.isFile && file.name.endsWith(NOW_FILE_SUFFIX),
   );
-  if (files.length > 0) {
-    return files[0].name;
-  } else {
-    return await createFocusFile(fileName);
+  return files.length > 0 ? files[0].name : null;
+}
+
+/** Finds an existing focus file in cwd or prompts to create one; returns its filename. */
+export async function findOrCreateFocusFile(): Promise<string> {
+  const found = findFocusFileInCwd();
+  if (found) return found;
+  const folderName = Deno.cwd().split("/").pop();
+  const fileName = `.${folderName}.${NOW_FILE_SUFFIX}`;
+  return await createFocusFile(fileName);
+}
+
+/** Resolves the focus file path: NOW_FILE env, or file in cwd, or (if interactive) prompt. Always returns absolute path. */
+export async function resolveFocusFilePath(
+  options: { interactive?: boolean } = {},
+): Promise<string> {
+  const { interactive = true } = options;
+  const fromEnv = Deno.env.get("NOW_FILE");
+  if (fromEnv) return resolve(Deno.cwd(), fromEnv);
+  const inCwd = findFocusFileInCwd();
+  if (inCwd) return resolve(Deno.cwd(), inCwd);
+  if (interactive) {
+    const path = await findOrCreateFocusFile();
+    return resolve(Deno.cwd(), path);
   }
+  throw new Error(
+    "No focus file found and NOW_FILE not set. Set NOW_FILE to your focus file path (e.g. export NOW_FILE=$HOME/.now/focus.now.md) or run from a directory with a .now.md file. To create a file: NOW_FILE=/path/to/file.now.md now init",
+  );
 }
 
 /** Prompts to create a focus file; writes initial content and returns filename, or exits if declined. */
@@ -84,10 +106,7 @@ export async function createFocusFile(fileName: string): Promise<string> {
   });
 
   if (createFile) {
-    await Deno.writeTextFile(
-      fileName,
-      `#${DATA_STR.lineMarker}${DATA_STR.rootFocus} ${DATA_STR.currentItemMarker}\n`,
-    );
+    await Deno.writeTextFile(fileName, INITIAL_FOCUS_CONTENT);
     return fileName;
   } else {
     console.log("No focus file created. Exiting...");

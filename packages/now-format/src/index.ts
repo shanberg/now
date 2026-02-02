@@ -1,0 +1,342 @@
+/**
+ * Shared .now.md format: deserialize, serialize, and navigation.
+ * Used by the Deno CLI and Raycast extension.
+ */
+import { DATA_STR } from "./constants.ts";
+import type { JsonFocus, JsonItem, TreeNode } from "./types.ts";
+
+function parseLine(line: string): {
+  spaces: number;
+  indent: number;
+  name: string;
+  isMarkedCurrent: boolean;
+} {
+  const spaces = line.search(/\S/);
+  const indent = Math.ceil(spaces / DATA_STR.indent.length);
+  const isMarkedCurrent = line.endsWith(" " + DATA_STR.currentItemMarker);
+  const name = line
+    .trimStart()
+    .slice(DATA_STR.lineMarker.length)
+    .replace(" " + DATA_STR.currentItemMarker, "");
+  return { spaces, indent, name, isMarkedCurrent };
+}
+
+function checkCurrentMarker(
+  isMarkedCurrent: boolean,
+  hasFoundCurrent: boolean,
+  line: string,
+): boolean {
+  if (isMarkedCurrent) {
+    if (hasFoundCurrent) {
+      throw new Error(`Multiple items marked as current at line: "${line}"`);
+    }
+    return true;
+  }
+  return hasFoundCurrent;
+}
+
+function setRoot(
+  root: TreeNode | null,
+  newNode: TreeNode,
+  line: string,
+): TreeNode {
+  if (!root) return newNode;
+  throw new Error(`Multiple root nodes found at line: "${line}"`);
+}
+
+function effectiveIndent(
+  prevSpaces: number,
+  prevIndent: number,
+  spaces: number,
+  indent: number,
+): number {
+  if (spaces > prevSpaces || indent > prevIndent + 1) return prevIndent + 1;
+  return indent;
+}
+
+function popStackToParent(
+  stack: { node: TreeNode; indent: number }[],
+  indent: number,
+): void {
+  while (stack.length && stack[stack.length - 1].indent >= indent) {
+    stack.pop();
+  }
+}
+
+function attachChild(
+  newNode: TreeNode,
+  stack: { node: TreeNode; indent: number }[],
+  indent: number,
+  prevIndent: number,
+  prevSpaces: number,
+  spaces: number,
+  line: string,
+): number {
+  const resolved = effectiveIndent(prevSpaces, prevIndent, spaces, indent);
+  popStackToParent(stack, resolved);
+  if (stack.length === 0) {
+    throw new Error(`Invalid indentation at line: "${line}"`);
+  }
+  stack[stack.length - 1].node.children.push(newNode);
+  return resolved;
+}
+
+type DeserializeState = {
+  stack: { node: TreeNode; indent: number }[];
+  keyCounter: number;
+  root: TreeNode | null;
+  hasFoundCurrent: boolean;
+  prevSpaces: number;
+};
+
+function processLine(state: DeserializeState, line: string): void {
+  const { spaces, indent, name, isMarkedCurrent } = parseLine(line);
+  const newNode: TreeNode = {
+    key: (state.keyCounter++).toString(),
+    name,
+    children: [],
+    isCurrent: state.hasFoundCurrent ? false : isMarkedCurrent,
+  };
+
+  state.hasFoundCurrent = checkCurrentMarker(
+    isMarkedCurrent,
+    state.hasFoundCurrent,
+    line,
+  );
+
+  if (indent === 0) {
+    state.root = setRoot(state.root, newNode, line);
+    state.stack.push({ node: newNode, indent });
+  } else {
+    const prevIndent = state.stack[state.stack.length - 1].indent;
+    const usedIndent = attachChild(
+      newNode,
+      state.stack,
+      indent,
+      prevIndent,
+      state.prevSpaces,
+      spaces,
+      line,
+    );
+    state.stack.push({ node: newNode, indent: usedIndent });
+  }
+  state.prevSpaces = spaces;
+}
+
+export function deserialize(input: string): TreeNode {
+  const lines = input.split(DATA_STR.lineSeparator);
+  const state: DeserializeState = {
+    stack: [],
+    keyCounter: 0,
+    root: null,
+    hasFoundCurrent: false,
+    prevSpaces: 0,
+  };
+
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    processLine(state, line);
+  }
+
+  if (!state.root) {
+    throw new Error("Root node not found in the input content.");
+  }
+  if (!state.hasFoundCurrent) {
+    state.root.isCurrent = true;
+  }
+  return state.root;
+}
+
+export function serialize(tree: TreeNode): string {
+  let result = "";
+  function traverse(node: TreeNode, depth: number) {
+    const prefix = DATA_STR.indent.repeat(depth) + "- ";
+    const marker = node.isCurrent ? " " + DATA_STR.currentItemMarker : "";
+    result += `${prefix}${node.name}${marker}\n`;
+    for (const child of node.children) {
+      traverse(child, depth + 1);
+    }
+  }
+  traverse(tree, 0);
+  return result;
+}
+
+export function getItemsList(tree: TreeNode): [string, string][] {
+  const items: [string, string][] = [];
+  function traverse(node: TreeNode, depth: number) {
+    const indent = DATA_STR.indent.repeat(depth);
+    const marker = node.isCurrent ? " " + DATA_STR.currentItemMarker : "";
+    items.push([`${indent}${node.name}${marker}`, node.key]);
+    for (const child of node.children) {
+      traverse(child, depth + 1);
+    }
+  }
+  traverse(tree, 0);
+  return items;
+}
+
+export function getNodesList(tree: TreeNode): TreeNode[] {
+  const items: TreeNode[] = [];
+  function traverse(node: TreeNode) {
+    items.push(node);
+    for (const child of node.children) {
+      traverse(child);
+    }
+  }
+  traverse(tree);
+  return items;
+}
+
+export function getCurrentItemBreadcrumb(tree: TreeNode): string {
+  let breadcrumb: string[] = [];
+  let currentName = "";
+
+  function traverse(node: TreeNode, path: string[]) {
+    if (node.isCurrent) {
+      breadcrumb = path;
+      currentName = node.name;
+      return true;
+    }
+    for (const child of node.children) {
+      if (traverse(child, [...path, node.name])) return true;
+    }
+    return false;
+  }
+  traverse(tree, []);
+  const breadcrumbPath = breadcrumb.join(" / ");
+  if (!breadcrumbPath) return currentName;
+  return [breadcrumbPath, currentName].join(" / ");
+}
+
+function countDescendants(node: TreeNode): number {
+  let count = node.children.length;
+  for (const child of node.children) {
+    count += countDescendants(child);
+  }
+  return count;
+}
+
+type CurrentNodeMetadata = {
+  isLeaf: boolean;
+  depth: number;
+  siblingCount: number;
+  descendantCount: number;
+  key: string;
+};
+
+function buildCurrentNodeMetadata(
+  node: TreeNode,
+  depth: number,
+  parent: TreeNode | null,
+): CurrentNodeMetadata {
+  const siblingCount = parent ? parent.children.length - 1 : 0;
+  return {
+    isLeaf: node.children.length === 0,
+    depth,
+    siblingCount,
+    descendantCount: countDescendants(node),
+    key: node.key,
+  };
+}
+
+function findCurrentNodeInfo(tree: TreeNode): CurrentNodeMetadata | null {
+  let result: CurrentNodeMetadata | null = null;
+  function traverse(
+    node: TreeNode,
+    currentDepth: number,
+    parent: TreeNode | null,
+  ): boolean {
+    if (node.isCurrent) {
+      result = buildCurrentNodeMetadata(node, currentDepth, parent);
+      return true;
+    }
+    for (const child of node.children) {
+      if (traverse(child, currentDepth + 1, node)) return true;
+    }
+    return false;
+  }
+  traverse(tree, 0, null);
+  return result;
+}
+
+function splitBreadcrumbPath(breadcrumbPath: string): {
+  breadcrumbStr: string;
+  focusStr: string;
+} {
+  const parts = breadcrumbPath.split(" / ");
+  if (parts.length <= 1) {
+    return { breadcrumbStr: "Focusing on", focusStr: breadcrumbPath };
+  }
+  const focusStr = parts[parts.length - 1];
+  const breadcrumbStr = parts.slice(0, -1).join(" / ");
+  return { breadcrumbStr, focusStr };
+}
+
+export function getCurrentItemDetails(tree: TreeNode): {
+  breadcrumbStr: string;
+  focusStr: string;
+  isRoot: boolean;
+  isLeaf: boolean;
+  depth: number;
+  siblingCount: number;
+  descendantCount: number;
+  key: string;
+} {
+  const breadcrumbPath = getCurrentItemBreadcrumb(tree);
+  const nodeInfo = findCurrentNodeInfo(tree);
+  const { breadcrumbStr, focusStr } = splitBreadcrumbPath(breadcrumbPath);
+
+  if (!nodeInfo) {
+    return {
+      breadcrumbStr,
+      focusStr,
+      isRoot: true,
+      isLeaf: true,
+      depth: 0,
+      siblingCount: 0,
+      descendantCount: 0,
+      key: "",
+    };
+  }
+
+  return {
+    breadcrumbStr,
+    focusStr,
+    isRoot: nodeInfo.depth === 0,
+    isLeaf: nodeInfo.isLeaf,
+    depth: nodeInfo.depth,
+    siblingCount: nodeInfo.siblingCount,
+    descendantCount: nodeInfo.descendantCount,
+    key: nodeInfo.key,
+  };
+}
+
+/**
+ * Parse .now.md content and return focus + items (for extensions that read the file directly).
+ */
+export function parseFocusFileContent(content: string): {
+  focus: JsonFocus;
+  items: JsonItem[];
+} {
+  const trimmed = content.trim();
+  if (!trimmed) throw new Error("Empty file");
+
+  const tree = deserialize(content);
+  const d = getCurrentItemDetails(tree);
+  const focus: JsonFocus = {
+    focus: d.focusStr,
+    breadcrumb: d.breadcrumbStr,
+    key: d.key,
+    isLeaf: d.isLeaf,
+    isRoot: d.isRoot,
+    siblingCount: d.siblingCount,
+  };
+  const items: JsonItem[] = getItemsList(tree).map(([display, key]) => ({
+    display,
+    key,
+  }));
+  return { focus, items };
+}
+
+export type { JsonFocus, JsonItem, TreeNode };
+export { DATA_STR } from "./constants.ts";

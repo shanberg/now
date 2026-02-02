@@ -1,7 +1,3 @@
-// deno-fmt-ignore-file
-// deno-lint-ignore-file
-// This code was bundled using `deno bundle` and it's not recommended to edit it manually
-
 function distance(a, b) {
     if (a.length == 0) {
         return b.length;
@@ -5924,53 +5920,6 @@ class Confirm extends GenericSuggestions {
         return value ? this.settings.active : this.settings.inactive;
     }
 }
-class Input extends GenericSuggestions {
-    static prompt(options) {
-        if (typeof options === "string") {
-            options = {
-                message: options
-            };
-        }
-        return new this({
-            pointer: brightBlue(Figures.POINTER_SMALL),
-            prefix: yellow("? "),
-            indent: " ",
-            listPointer: brightBlue(Figures.POINTER),
-            maxRows: 8,
-            minLength: 0,
-            maxLength: Infinity,
-            ...options
-        }).prompt();
-    }
-    static inject(value) {
-        GenericPrompt.inject(value);
-    }
-    success(value) {
-        this.saveSuggestions(value);
-        return super.success(value);
-    }
-    getValue() {
-        return this.settings.files ? normalize3(this.inputValue) : this.inputValue;
-    }
-    validate(value) {
-        if (typeof value !== "string") {
-            return false;
-        }
-        if (value.length < this.settings.minLength) {
-            return `Value must be longer than ${this.settings.minLength} but has a length of ${value.length}.`;
-        }
-        if (value.length > this.settings.maxLength) {
-            return `Value can't be longer than ${this.settings.maxLength} but has a length of ${value.length}.`;
-        }
-        return true;
-    }
-    transform(value) {
-        return value.trim();
-    }
-    format(value) {
-        return value;
-    }
-}
 class Select extends GenericList {
     listIndex = this.getListIndex(this.settings.default);
     static inject(value) {
@@ -6132,6 +6081,1046 @@ function factory1(stack = []) {
     colors._stack = stack;
     return colors;
 }
+const osType1 = (()=>{
+    const { Deno: Deno1 } = globalThis;
+    if (typeof Deno1?.build?.os === "string") {
+        return Deno1.build.os;
+    }
+    const { navigator } = globalThis;
+    if (navigator?.appVersion?.includes?.("Win")) {
+        return "windows";
+    }
+    return "linux";
+})();
+const isWindows1 = osType1 === "windows";
+const CHAR_FORWARD_SLASH1 = 47;
+function assertPath1(path) {
+    if (typeof path !== "string") {
+        throw new TypeError(`Path must be a string. Received ${JSON.stringify(path)}`);
+    }
+}
+function isPosixPathSeparator1(code) {
+    return code === 47;
+}
+function isPathSeparator1(code) {
+    return isPosixPathSeparator1(code) || code === 92;
+}
+function isWindowsDeviceRoot1(code) {
+    return code >= 97 && code <= 122 || code >= 65 && code <= 90;
+}
+function normalizeString1(path, allowAboveRoot, separator, isPathSeparator) {
+    let res = "";
+    let lastSegmentLength = 0;
+    let lastSlash = -1;
+    let dots = 0;
+    let code;
+    for(let i = 0, len = path.length; i <= len; ++i){
+        if (i < len) code = path.charCodeAt(i);
+        else if (isPathSeparator(code)) break;
+        else code = CHAR_FORWARD_SLASH1;
+        if (isPathSeparator(code)) {
+            if (lastSlash === i - 1 || dots === 1) {} else if (lastSlash !== i - 1 && dots === 2) {
+                if (res.length < 2 || lastSegmentLength !== 2 || res.charCodeAt(res.length - 1) !== 46 || res.charCodeAt(res.length - 2) !== 46) {
+                    if (res.length > 2) {
+                        const lastSlashIndex = res.lastIndexOf(separator);
+                        if (lastSlashIndex === -1) {
+                            res = "";
+                            lastSegmentLength = 0;
+                        } else {
+                            res = res.slice(0, lastSlashIndex);
+                            lastSegmentLength = res.length - 1 - res.lastIndexOf(separator);
+                        }
+                        lastSlash = i;
+                        dots = 0;
+                        continue;
+                    } else if (res.length === 2 || res.length === 1) {
+                        res = "";
+                        lastSegmentLength = 0;
+                        lastSlash = i;
+                        dots = 0;
+                        continue;
+                    }
+                }
+                if (allowAboveRoot) {
+                    if (res.length > 0) res += `${separator}..`;
+                    else res = "..";
+                    lastSegmentLength = 2;
+                }
+            } else {
+                if (res.length > 0) res += separator + path.slice(lastSlash + 1, i);
+                else res = path.slice(lastSlash + 1, i);
+                lastSegmentLength = i - lastSlash - 1;
+            }
+            lastSlash = i;
+            dots = 0;
+        } else if (code === 46 && dots !== -1) {
+            ++dots;
+        } else {
+            dots = -1;
+        }
+    }
+    return res;
+}
+function _format1(sep, pathObject) {
+    const dir = pathObject.dir || pathObject.root;
+    const base = pathObject.base || (pathObject.name || "") + (pathObject.ext || "");
+    if (!dir) return base;
+    if (base === sep) return dir;
+    if (dir === pathObject.root) return dir + base;
+    return dir + sep + base;
+}
+const WHITESPACE_ENCODINGS1 = {
+    "\u0009": "%09",
+    "\u000A": "%0A",
+    "\u000B": "%0B",
+    "\u000C": "%0C",
+    "\u000D": "%0D",
+    "\u0020": "%20"
+};
+function encodeWhitespace1(string) {
+    return string.replaceAll(/[\s]/g, (c)=>{
+        return WHITESPACE_ENCODINGS1[c] ?? c;
+    });
+}
+function lastPathSegment(path, isSep, start = 0) {
+    let matchedNonSeparator = false;
+    let end = path.length;
+    for(let i = path.length - 1; i >= start; --i){
+        if (isSep(path.charCodeAt(i))) {
+            if (matchedNonSeparator) {
+                start = i + 1;
+                break;
+            }
+        } else if (!matchedNonSeparator) {
+            matchedNonSeparator = true;
+            end = i + 1;
+        }
+    }
+    return path.slice(start, end);
+}
+function stripTrailingSeparators(segment, isSep) {
+    if (segment.length <= 1) {
+        return segment;
+    }
+    let end = segment.length;
+    for(let i = segment.length - 1; i > 0; i--){
+        if (isSep(segment.charCodeAt(i))) {
+            end = i;
+        } else {
+            break;
+        }
+    }
+    return segment.slice(0, end);
+}
+function stripSuffix(name, suffix) {
+    if (suffix.length >= name.length) {
+        return name;
+    }
+    const lenDiff = name.length - suffix.length;
+    for(let i = suffix.length - 1; i >= 0; --i){
+        if (name.charCodeAt(lenDiff + i) !== suffix.charCodeAt(i)) {
+            return name;
+        }
+    }
+    return name.slice(0, -suffix.length);
+}
+class DenoStdInternalError1 extends Error {
+    constructor(message){
+        super(message);
+        this.name = "DenoStdInternalError";
+    }
+}
+function assert1(expr, msg = "") {
+    if (!expr) {
+        throw new DenoStdInternalError1(msg);
+    }
+}
+const sep4 = "\\";
+const delimiter3 = ";";
+function resolve3(...pathSegments) {
+    let resolvedDevice = "";
+    let resolvedTail = "";
+    let resolvedAbsolute = false;
+    for(let i = pathSegments.length - 1; i >= -1; i--){
+        let path;
+        const { Deno: Deno1 } = globalThis;
+        if (i >= 0) {
+            path = pathSegments[i];
+        } else if (!resolvedDevice) {
+            if (typeof Deno1?.cwd !== "function") {
+                throw new TypeError("Resolved a drive-letter-less path without a CWD.");
+            }
+            path = Deno1.cwd();
+        } else {
+            if (typeof Deno1?.env?.get !== "function" || typeof Deno1?.cwd !== "function") {
+                throw new TypeError("Resolved a relative path without a CWD.");
+            }
+            path = Deno1.cwd();
+            if (path === undefined || path.slice(0, 3).toLowerCase() !== `${resolvedDevice.toLowerCase()}\\`) {
+                path = `${resolvedDevice}\\`;
+            }
+        }
+        assertPath1(path);
+        const len = path.length;
+        if (len === 0) continue;
+        let rootEnd = 0;
+        let device = "";
+        let isAbsolute = false;
+        const code = path.charCodeAt(0);
+        if (len > 1) {
+            if (isPathSeparator1(code)) {
+                isAbsolute = true;
+                if (isPathSeparator1(path.charCodeAt(1))) {
+                    let j = 2;
+                    let last = j;
+                    for(; j < len; ++j){
+                        if (isPathSeparator1(path.charCodeAt(j))) break;
+                    }
+                    if (j < len && j !== last) {
+                        const firstPart = path.slice(last, j);
+                        last = j;
+                        for(; j < len; ++j){
+                            if (!isPathSeparator1(path.charCodeAt(j))) break;
+                        }
+                        if (j < len && j !== last) {
+                            last = j;
+                            for(; j < len; ++j){
+                                if (isPathSeparator1(path.charCodeAt(j))) break;
+                            }
+                            if (j === len) {
+                                device = `\\\\${firstPart}\\${path.slice(last)}`;
+                                rootEnd = j;
+                            } else if (j !== last) {
+                                device = `\\\\${firstPart}\\${path.slice(last, j)}`;
+                                rootEnd = j;
+                            }
+                        }
+                    }
+                } else {
+                    rootEnd = 1;
+                }
+            } else if (isWindowsDeviceRoot1(code)) {
+                if (path.charCodeAt(1) === 58) {
+                    device = path.slice(0, 2);
+                    rootEnd = 2;
+                    if (len > 2) {
+                        if (isPathSeparator1(path.charCodeAt(2))) {
+                            isAbsolute = true;
+                            rootEnd = 3;
+                        }
+                    }
+                }
+            }
+        } else if (isPathSeparator1(code)) {
+            rootEnd = 1;
+            isAbsolute = true;
+        }
+        if (device.length > 0 && resolvedDevice.length > 0 && device.toLowerCase() !== resolvedDevice.toLowerCase()) {
+            continue;
+        }
+        if (resolvedDevice.length === 0 && device.length > 0) {
+            resolvedDevice = device;
+        }
+        if (!resolvedAbsolute) {
+            resolvedTail = `${path.slice(rootEnd)}\\${resolvedTail}`;
+            resolvedAbsolute = isAbsolute;
+        }
+        if (resolvedAbsolute && resolvedDevice.length > 0) break;
+    }
+    resolvedTail = normalizeString1(resolvedTail, !resolvedAbsolute, "\\", isPathSeparator1);
+    return resolvedDevice + (resolvedAbsolute ? "\\" : "") + resolvedTail || ".";
+}
+function normalize4(path) {
+    assertPath1(path);
+    const len = path.length;
+    if (len === 0) return ".";
+    let rootEnd = 0;
+    let device;
+    let isAbsolute = false;
+    const code = path.charCodeAt(0);
+    if (len > 1) {
+        if (isPathSeparator1(code)) {
+            isAbsolute = true;
+            if (isPathSeparator1(path.charCodeAt(1))) {
+                let j = 2;
+                let last = j;
+                for(; j < len; ++j){
+                    if (isPathSeparator1(path.charCodeAt(j))) break;
+                }
+                if (j < len && j !== last) {
+                    const firstPart = path.slice(last, j);
+                    last = j;
+                    for(; j < len; ++j){
+                        if (!isPathSeparator1(path.charCodeAt(j))) break;
+                    }
+                    if (j < len && j !== last) {
+                        last = j;
+                        for(; j < len; ++j){
+                            if (isPathSeparator1(path.charCodeAt(j))) break;
+                        }
+                        if (j === len) {
+                            return `\\\\${firstPart}\\${path.slice(last)}\\`;
+                        } else if (j !== last) {
+                            device = `\\\\${firstPart}\\${path.slice(last, j)}`;
+                            rootEnd = j;
+                        }
+                    }
+                }
+            } else {
+                rootEnd = 1;
+            }
+        } else if (isWindowsDeviceRoot1(code)) {
+            if (path.charCodeAt(1) === 58) {
+                device = path.slice(0, 2);
+                rootEnd = 2;
+                if (len > 2) {
+                    if (isPathSeparator1(path.charCodeAt(2))) {
+                        isAbsolute = true;
+                        rootEnd = 3;
+                    }
+                }
+            }
+        }
+    } else if (isPathSeparator1(code)) {
+        return "\\";
+    }
+    let tail;
+    if (rootEnd < len) {
+        tail = normalizeString1(path.slice(rootEnd), !isAbsolute, "\\", isPathSeparator1);
+    } else {
+        tail = "";
+    }
+    if (tail.length === 0 && !isAbsolute) tail = ".";
+    if (tail.length > 0 && isPathSeparator1(path.charCodeAt(len - 1))) {
+        tail += "\\";
+    }
+    if (device === undefined) {
+        if (isAbsolute) {
+            if (tail.length > 0) return `\\${tail}`;
+            else return "\\";
+        } else if (tail.length > 0) {
+            return tail;
+        } else {
+            return "";
+        }
+    } else if (isAbsolute) {
+        if (tail.length > 0) return `${device}\\${tail}`;
+        else return `${device}\\`;
+    } else if (tail.length > 0) {
+        return device + tail;
+    } else {
+        return device;
+    }
+}
+function isAbsolute3(path) {
+    assertPath1(path);
+    const len = path.length;
+    if (len === 0) return false;
+    const code = path.charCodeAt(0);
+    if (isPathSeparator1(code)) {
+        return true;
+    } else if (isWindowsDeviceRoot1(code)) {
+        if (len > 2 && path.charCodeAt(1) === 58) {
+            if (isPathSeparator1(path.charCodeAt(2))) return true;
+        }
+    }
+    return false;
+}
+function join4(...paths) {
+    const pathsCount = paths.length;
+    if (pathsCount === 0) return ".";
+    let joined;
+    let firstPart = null;
+    for(let i = 0; i < pathsCount; ++i){
+        const path = paths[i];
+        assertPath1(path);
+        if (path.length > 0) {
+            if (joined === undefined) joined = firstPart = path;
+            else joined += `\\${path}`;
+        }
+    }
+    if (joined === undefined) return ".";
+    let needsReplace = true;
+    let slashCount = 0;
+    assert1(firstPart != null);
+    if (isPathSeparator1(firstPart.charCodeAt(0))) {
+        ++slashCount;
+        const firstLen = firstPart.length;
+        if (firstLen > 1) {
+            if (isPathSeparator1(firstPart.charCodeAt(1))) {
+                ++slashCount;
+                if (firstLen > 2) {
+                    if (isPathSeparator1(firstPart.charCodeAt(2))) ++slashCount;
+                    else {
+                        needsReplace = false;
+                    }
+                }
+            }
+        }
+    }
+    if (needsReplace) {
+        for(; slashCount < joined.length; ++slashCount){
+            if (!isPathSeparator1(joined.charCodeAt(slashCount))) break;
+        }
+        if (slashCount >= 2) joined = `\\${joined.slice(slashCount)}`;
+    }
+    return normalize4(joined);
+}
+function relative3(from, to) {
+    assertPath1(from);
+    assertPath1(to);
+    if (from === to) return "";
+    const fromOrig = resolve3(from);
+    const toOrig = resolve3(to);
+    if (fromOrig === toOrig) return "";
+    from = fromOrig.toLowerCase();
+    to = toOrig.toLowerCase();
+    if (from === to) return "";
+    let fromStart = 0;
+    let fromEnd = from.length;
+    for(; fromStart < fromEnd; ++fromStart){
+        if (from.charCodeAt(fromStart) !== 92) break;
+    }
+    for(; fromEnd - 1 > fromStart; --fromEnd){
+        if (from.charCodeAt(fromEnd - 1) !== 92) break;
+    }
+    const fromLen = fromEnd - fromStart;
+    let toStart = 0;
+    let toEnd = to.length;
+    for(; toStart < toEnd; ++toStart){
+        if (to.charCodeAt(toStart) !== 92) break;
+    }
+    for(; toEnd - 1 > toStart; --toEnd){
+        if (to.charCodeAt(toEnd - 1) !== 92) break;
+    }
+    const toLen = toEnd - toStart;
+    const length = fromLen < toLen ? fromLen : toLen;
+    let lastCommonSep = -1;
+    let i = 0;
+    for(; i <= length; ++i){
+        if (i === length) {
+            if (toLen > length) {
+                if (to.charCodeAt(toStart + i) === 92) {
+                    return toOrig.slice(toStart + i + 1);
+                } else if (i === 2) {
+                    return toOrig.slice(toStart + i);
+                }
+            }
+            if (fromLen > length) {
+                if (from.charCodeAt(fromStart + i) === 92) {
+                    lastCommonSep = i;
+                } else if (i === 2) {
+                    lastCommonSep = 3;
+                }
+            }
+            break;
+        }
+        const fromCode = from.charCodeAt(fromStart + i);
+        const toCode = to.charCodeAt(toStart + i);
+        if (fromCode !== toCode) break;
+        else if (fromCode === 92) lastCommonSep = i;
+    }
+    if (i !== length && lastCommonSep === -1) {
+        return toOrig;
+    }
+    let out = "";
+    if (lastCommonSep === -1) lastCommonSep = 0;
+    for(i = fromStart + lastCommonSep + 1; i <= fromEnd; ++i){
+        if (i === fromEnd || from.charCodeAt(i) === 92) {
+            if (out.length === 0) out += "..";
+            else out += "\\..";
+        }
+    }
+    if (out.length > 0) {
+        return out + toOrig.slice(toStart + lastCommonSep, toEnd);
+    } else {
+        toStart += lastCommonSep;
+        if (toOrig.charCodeAt(toStart) === 92) ++toStart;
+        return toOrig.slice(toStart, toEnd);
+    }
+}
+function toNamespacedPath3(path) {
+    if (typeof path !== "string") return path;
+    if (path.length === 0) return "";
+    const resolvedPath = resolve3(path);
+    if (resolvedPath.length >= 3) {
+        if (resolvedPath.charCodeAt(0) === 92) {
+            if (resolvedPath.charCodeAt(1) === 92) {
+                const code = resolvedPath.charCodeAt(2);
+                if (code !== 63 && code !== 46) {
+                    return `\\\\?\\UNC\\${resolvedPath.slice(2)}`;
+                }
+            }
+        } else if (isWindowsDeviceRoot1(resolvedPath.charCodeAt(0))) {
+            if (resolvedPath.charCodeAt(1) === 58 && resolvedPath.charCodeAt(2) === 92) {
+                return `\\\\?\\${resolvedPath}`;
+            }
+        }
+    }
+    return path;
+}
+function dirname3(path) {
+    assertPath1(path);
+    const len = path.length;
+    if (len === 0) return ".";
+    let rootEnd = -1;
+    let end = -1;
+    let matchedSlash = true;
+    let offset = 0;
+    const code = path.charCodeAt(0);
+    if (len > 1) {
+        if (isPathSeparator1(code)) {
+            rootEnd = offset = 1;
+            if (isPathSeparator1(path.charCodeAt(1))) {
+                let j = 2;
+                let last = j;
+                for(; j < len; ++j){
+                    if (isPathSeparator1(path.charCodeAt(j))) break;
+                }
+                if (j < len && j !== last) {
+                    last = j;
+                    for(; j < len; ++j){
+                        if (!isPathSeparator1(path.charCodeAt(j))) break;
+                    }
+                    if (j < len && j !== last) {
+                        last = j;
+                        for(; j < len; ++j){
+                            if (isPathSeparator1(path.charCodeAt(j))) break;
+                        }
+                        if (j === len) {
+                            return path;
+                        }
+                        if (j !== last) {
+                            rootEnd = offset = j + 1;
+                        }
+                    }
+                }
+            }
+        } else if (isWindowsDeviceRoot1(code)) {
+            if (path.charCodeAt(1) === 58) {
+                rootEnd = offset = 2;
+                if (len > 2) {
+                    if (isPathSeparator1(path.charCodeAt(2))) rootEnd = offset = 3;
+                }
+            }
+        }
+    } else if (isPathSeparator1(code)) {
+        return path;
+    }
+    for(let i = len - 1; i >= offset; --i){
+        if (isPathSeparator1(path.charCodeAt(i))) {
+            if (!matchedSlash) {
+                end = i;
+                break;
+            }
+        } else {
+            matchedSlash = false;
+        }
+    }
+    if (end === -1) {
+        if (rootEnd === -1) return ".";
+        else end = rootEnd;
+    }
+    return stripTrailingSeparators(path.slice(0, end), isPosixPathSeparator1);
+}
+function basename3(path, suffix = "") {
+    assertPath1(path);
+    if (path.length === 0) return path;
+    if (typeof suffix !== "string") {
+        throw new TypeError(`Suffix must be a string. Received ${JSON.stringify(suffix)}`);
+    }
+    let start = 0;
+    if (path.length >= 2) {
+        const drive = path.charCodeAt(0);
+        if (isWindowsDeviceRoot1(drive)) {
+            if (path.charCodeAt(1) === 58) start = 2;
+        }
+    }
+    const lastSegment = lastPathSegment(path, isPathSeparator1, start);
+    const strippedSegment = stripTrailingSeparators(lastSegment, isPathSeparator1);
+    return suffix ? stripSuffix(strippedSegment, suffix) : strippedSegment;
+}
+function extname3(path) {
+    assertPath1(path);
+    let start = 0;
+    let startDot = -1;
+    let startPart = 0;
+    let end = -1;
+    let matchedSlash = true;
+    let preDotState = 0;
+    if (path.length >= 2 && path.charCodeAt(1) === 58 && isWindowsDeviceRoot1(path.charCodeAt(0))) {
+        start = startPart = 2;
+    }
+    for(let i = path.length - 1; i >= start; --i){
+        const code = path.charCodeAt(i);
+        if (isPathSeparator1(code)) {
+            if (!matchedSlash) {
+                startPart = i + 1;
+                break;
+            }
+            continue;
+        }
+        if (end === -1) {
+            matchedSlash = false;
+            end = i + 1;
+        }
+        if (code === 46) {
+            if (startDot === -1) startDot = i;
+            else if (preDotState !== 1) preDotState = 1;
+        } else if (startDot !== -1) {
+            preDotState = -1;
+        }
+    }
+    if (startDot === -1 || end === -1 || preDotState === 0 || preDotState === 1 && startDot === end - 1 && startDot === startPart + 1) {
+        return "";
+    }
+    return path.slice(startDot, end);
+}
+function format3(pathObject) {
+    if (pathObject === null || typeof pathObject !== "object") {
+        throw new TypeError(`The "pathObject" argument must be of type Object. Received type ${typeof pathObject}`);
+    }
+    return _format1("\\", pathObject);
+}
+function parse4(path) {
+    assertPath1(path);
+    const ret = {
+        root: "",
+        dir: "",
+        base: "",
+        ext: "",
+        name: ""
+    };
+    const len = path.length;
+    if (len === 0) return ret;
+    let rootEnd = 0;
+    let code = path.charCodeAt(0);
+    if (len > 1) {
+        if (isPathSeparator1(code)) {
+            rootEnd = 1;
+            if (isPathSeparator1(path.charCodeAt(1))) {
+                let j = 2;
+                let last = j;
+                for(; j < len; ++j){
+                    if (isPathSeparator1(path.charCodeAt(j))) break;
+                }
+                if (j < len && j !== last) {
+                    last = j;
+                    for(; j < len; ++j){
+                        if (!isPathSeparator1(path.charCodeAt(j))) break;
+                    }
+                    if (j < len && j !== last) {
+                        last = j;
+                        for(; j < len; ++j){
+                            if (isPathSeparator1(path.charCodeAt(j))) break;
+                        }
+                        if (j === len) {
+                            rootEnd = j;
+                        } else if (j !== last) {
+                            rootEnd = j + 1;
+                        }
+                    }
+                }
+            }
+        } else if (isWindowsDeviceRoot1(code)) {
+            if (path.charCodeAt(1) === 58) {
+                rootEnd = 2;
+                if (len > 2) {
+                    if (isPathSeparator1(path.charCodeAt(2))) {
+                        if (len === 3) {
+                            ret.root = ret.dir = path;
+                            ret.base = "\\";
+                            return ret;
+                        }
+                        rootEnd = 3;
+                    }
+                } else {
+                    ret.root = ret.dir = path;
+                    return ret;
+                }
+            }
+        }
+    } else if (isPathSeparator1(code)) {
+        ret.root = ret.dir = path;
+        ret.base = "\\";
+        return ret;
+    }
+    if (rootEnd > 0) ret.root = path.slice(0, rootEnd);
+    let startDot = -1;
+    let startPart = rootEnd;
+    let end = -1;
+    let matchedSlash = true;
+    let i = path.length - 1;
+    let preDotState = 0;
+    for(; i >= rootEnd; --i){
+        code = path.charCodeAt(i);
+        if (isPathSeparator1(code)) {
+            if (!matchedSlash) {
+                startPart = i + 1;
+                break;
+            }
+            continue;
+        }
+        if (end === -1) {
+            matchedSlash = false;
+            end = i + 1;
+        }
+        if (code === 46) {
+            if (startDot === -1) startDot = i;
+            else if (preDotState !== 1) preDotState = 1;
+        } else if (startDot !== -1) {
+            preDotState = -1;
+        }
+    }
+    if (startDot === -1 || end === -1 || preDotState === 0 || preDotState === 1 && startDot === end - 1 && startDot === startPart + 1) {
+        if (end !== -1) {
+            ret.base = ret.name = path.slice(startPart, end);
+        }
+    } else {
+        ret.name = path.slice(startPart, startDot);
+        ret.base = path.slice(startPart, end);
+        ret.ext = path.slice(startDot, end);
+    }
+    ret.base = ret.base || "\\";
+    if (startPart > 0 && startPart !== rootEnd) {
+        ret.dir = path.slice(0, startPart - 1);
+    } else ret.dir = ret.root;
+    return ret;
+}
+function fromFileUrl3(url) {
+    url = url instanceof URL ? url : new URL(url);
+    if (url.protocol != "file:") {
+        throw new TypeError("Must be a file URL.");
+    }
+    let path = decodeURIComponent(url.pathname.replace(/\//g, "\\").replace(/%(?![0-9A-Fa-f]{2})/g, "%25")).replace(/^\\*([A-Za-z]:)(\\|$)/, "$1\\");
+    if (url.hostname != "") {
+        path = `\\\\${url.hostname}${path}`;
+    }
+    return path;
+}
+function toFileUrl3(path) {
+    if (!isAbsolute3(path)) {
+        throw new TypeError("Must be an absolute path.");
+    }
+    const [, hostname, pathname] = path.match(/^(?:[/\\]{2}([^/\\]+)(?=[/\\](?:[^/\\]|$)))?(.*)/);
+    const url = new URL("file:///");
+    url.pathname = encodeWhitespace1(pathname.replace(/%/g, "%25"));
+    if (hostname != null && hostname != "localhost") {
+        url.hostname = hostname;
+        if (!url.hostname) {
+            throw new TypeError("Invalid hostname.");
+        }
+    }
+    return url;
+}
+const mod4 = {
+    sep: sep4,
+    delimiter: delimiter3,
+    resolve: resolve3,
+    normalize: normalize4,
+    isAbsolute: isAbsolute3,
+    join: join4,
+    relative: relative3,
+    toNamespacedPath: toNamespacedPath3,
+    dirname: dirname3,
+    basename: basename3,
+    extname: extname3,
+    format: format3,
+    parse: parse4,
+    fromFileUrl: fromFileUrl3,
+    toFileUrl: toFileUrl3
+};
+const sep5 = "/";
+const delimiter4 = ":";
+function resolve4(...pathSegments) {
+    let resolvedPath = "";
+    let resolvedAbsolute = false;
+    for(let i = pathSegments.length - 1; i >= -1 && !resolvedAbsolute; i--){
+        let path;
+        if (i >= 0) path = pathSegments[i];
+        else {
+            const { Deno: Deno1 } = globalThis;
+            if (typeof Deno1?.cwd !== "function") {
+                throw new TypeError("Resolved a relative path without a CWD.");
+            }
+            path = Deno1.cwd();
+        }
+        assertPath1(path);
+        if (path.length === 0) {
+            continue;
+        }
+        resolvedPath = `${path}/${resolvedPath}`;
+        resolvedAbsolute = isPosixPathSeparator1(path.charCodeAt(0));
+    }
+    resolvedPath = normalizeString1(resolvedPath, !resolvedAbsolute, "/", isPosixPathSeparator1);
+    if (resolvedAbsolute) {
+        if (resolvedPath.length > 0) return `/${resolvedPath}`;
+        else return "/";
+    } else if (resolvedPath.length > 0) return resolvedPath;
+    else return ".";
+}
+function normalize5(path) {
+    assertPath1(path);
+    if (path.length === 0) return ".";
+    const isAbsolute = isPosixPathSeparator1(path.charCodeAt(0));
+    const trailingSeparator = isPosixPathSeparator1(path.charCodeAt(path.length - 1));
+    path = normalizeString1(path, !isAbsolute, "/", isPosixPathSeparator1);
+    if (path.length === 0 && !isAbsolute) path = ".";
+    if (path.length > 0 && trailingSeparator) path += "/";
+    if (isAbsolute) return `/${path}`;
+    return path;
+}
+function isAbsolute4(path) {
+    assertPath1(path);
+    return path.length > 0 && isPosixPathSeparator1(path.charCodeAt(0));
+}
+function join5(...paths) {
+    if (paths.length === 0) return ".";
+    let joined;
+    for(let i = 0, len = paths.length; i < len; ++i){
+        const path = paths[i];
+        assertPath1(path);
+        if (path.length > 0) {
+            if (!joined) joined = path;
+            else joined += `/${path}`;
+        }
+    }
+    if (!joined) return ".";
+    return normalize5(joined);
+}
+function relative4(from, to) {
+    assertPath1(from);
+    assertPath1(to);
+    if (from === to) return "";
+    from = resolve4(from);
+    to = resolve4(to);
+    if (from === to) return "";
+    let fromStart = 1;
+    const fromEnd = from.length;
+    for(; fromStart < fromEnd; ++fromStart){
+        if (!isPosixPathSeparator1(from.charCodeAt(fromStart))) break;
+    }
+    const fromLen = fromEnd - fromStart;
+    let toStart = 1;
+    const toEnd = to.length;
+    for(; toStart < toEnd; ++toStart){
+        if (!isPosixPathSeparator1(to.charCodeAt(toStart))) break;
+    }
+    const toLen = toEnd - toStart;
+    const length = fromLen < toLen ? fromLen : toLen;
+    let lastCommonSep = -1;
+    let i = 0;
+    for(; i <= length; ++i){
+        if (i === length) {
+            if (toLen > length) {
+                if (isPosixPathSeparator1(to.charCodeAt(toStart + i))) {
+                    return to.slice(toStart + i + 1);
+                } else if (i === 0) {
+                    return to.slice(toStart + i);
+                }
+            } else if (fromLen > length) {
+                if (isPosixPathSeparator1(from.charCodeAt(fromStart + i))) {
+                    lastCommonSep = i;
+                } else if (i === 0) {
+                    lastCommonSep = 0;
+                }
+            }
+            break;
+        }
+        const fromCode = from.charCodeAt(fromStart + i);
+        const toCode = to.charCodeAt(toStart + i);
+        if (fromCode !== toCode) break;
+        else if (isPosixPathSeparator1(fromCode)) lastCommonSep = i;
+    }
+    let out = "";
+    for(i = fromStart + lastCommonSep + 1; i <= fromEnd; ++i){
+        if (i === fromEnd || isPosixPathSeparator1(from.charCodeAt(i))) {
+            if (out.length === 0) out += "..";
+            else out += "/..";
+        }
+    }
+    if (out.length > 0) return out + to.slice(toStart + lastCommonSep);
+    else {
+        toStart += lastCommonSep;
+        if (isPosixPathSeparator1(to.charCodeAt(toStart))) ++toStart;
+        return to.slice(toStart);
+    }
+}
+function toNamespacedPath4(path) {
+    return path;
+}
+function dirname4(path) {
+    if (path.length === 0) return ".";
+    let end = -1;
+    let matchedNonSeparator = false;
+    for(let i = path.length - 1; i >= 1; --i){
+        if (isPosixPathSeparator1(path.charCodeAt(i))) {
+            if (matchedNonSeparator) {
+                end = i;
+                break;
+            }
+        } else {
+            matchedNonSeparator = true;
+        }
+    }
+    if (end === -1) {
+        return isPosixPathSeparator1(path.charCodeAt(0)) ? "/" : ".";
+    }
+    return stripTrailingSeparators(path.slice(0, end), isPosixPathSeparator1);
+}
+function basename4(path, suffix = "") {
+    assertPath1(path);
+    if (path.length === 0) return path;
+    if (typeof suffix !== "string") {
+        throw new TypeError(`Suffix must be a string. Received ${JSON.stringify(suffix)}`);
+    }
+    const lastSegment = lastPathSegment(path, isPosixPathSeparator1);
+    const strippedSegment = stripTrailingSeparators(lastSegment, isPosixPathSeparator1);
+    return suffix ? stripSuffix(strippedSegment, suffix) : strippedSegment;
+}
+function extname4(path) {
+    assertPath1(path);
+    let startDot = -1;
+    let startPart = 0;
+    let end = -1;
+    let matchedSlash = true;
+    let preDotState = 0;
+    for(let i = path.length - 1; i >= 0; --i){
+        const code = path.charCodeAt(i);
+        if (isPosixPathSeparator1(code)) {
+            if (!matchedSlash) {
+                startPart = i + 1;
+                break;
+            }
+            continue;
+        }
+        if (end === -1) {
+            matchedSlash = false;
+            end = i + 1;
+        }
+        if (code === 46) {
+            if (startDot === -1) startDot = i;
+            else if (preDotState !== 1) preDotState = 1;
+        } else if (startDot !== -1) {
+            preDotState = -1;
+        }
+    }
+    if (startDot === -1 || end === -1 || preDotState === 0 || preDotState === 1 && startDot === end - 1 && startDot === startPart + 1) {
+        return "";
+    }
+    return path.slice(startDot, end);
+}
+function format4(pathObject) {
+    if (pathObject === null || typeof pathObject !== "object") {
+        throw new TypeError(`The "pathObject" argument must be of type Object. Received type ${typeof pathObject}`);
+    }
+    return _format1("/", pathObject);
+}
+function parse5(path) {
+    assertPath1(path);
+    const ret = {
+        root: "",
+        dir: "",
+        base: "",
+        ext: "",
+        name: ""
+    };
+    if (path.length === 0) return ret;
+    const isAbsolute = isPosixPathSeparator1(path.charCodeAt(0));
+    let start;
+    if (isAbsolute) {
+        ret.root = "/";
+        start = 1;
+    } else {
+        start = 0;
+    }
+    let startDot = -1;
+    let startPart = 0;
+    let end = -1;
+    let matchedSlash = true;
+    let i = path.length - 1;
+    let preDotState = 0;
+    for(; i >= start; --i){
+        const code = path.charCodeAt(i);
+        if (isPosixPathSeparator1(code)) {
+            if (!matchedSlash) {
+                startPart = i + 1;
+                break;
+            }
+            continue;
+        }
+        if (end === -1) {
+            matchedSlash = false;
+            end = i + 1;
+        }
+        if (code === 46) {
+            if (startDot === -1) startDot = i;
+            else if (preDotState !== 1) preDotState = 1;
+        } else if (startDot !== -1) {
+            preDotState = -1;
+        }
+    }
+    if (startDot === -1 || end === -1 || preDotState === 0 || preDotState === 1 && startDot === end - 1 && startDot === startPart + 1) {
+        if (end !== -1) {
+            if (startPart === 0 && isAbsolute) {
+                ret.base = ret.name = path.slice(1, end);
+            } else {
+                ret.base = ret.name = path.slice(startPart, end);
+            }
+        }
+        ret.base = ret.base || "/";
+    } else {
+        if (startPart === 0 && isAbsolute) {
+            ret.name = path.slice(1, startDot);
+            ret.base = path.slice(1, end);
+        } else {
+            ret.name = path.slice(startPart, startDot);
+            ret.base = path.slice(startPart, end);
+        }
+        ret.ext = path.slice(startDot, end);
+    }
+    if (startPart > 0) {
+        ret.dir = stripTrailingSeparators(path.slice(0, startPart - 1), isPosixPathSeparator1);
+    } else if (isAbsolute) ret.dir = "/";
+    return ret;
+}
+function fromFileUrl4(url) {
+    url = url instanceof URL ? url : new URL(url);
+    if (url.protocol != "file:") {
+        throw new TypeError("Must be a file URL.");
+    }
+    return decodeURIComponent(url.pathname.replace(/%(?![0-9A-Fa-f]{2})/g, "%25"));
+}
+function toFileUrl4(path) {
+    if (!isAbsolute4(path)) {
+        throw new TypeError("Must be an absolute path.");
+    }
+    const url = new URL("file:///");
+    url.pathname = encodeWhitespace1(path.replace(/%/g, "%25").replace(/\\/g, "%5C"));
+    return url;
+}
+const mod5 = {
+    sep: sep5,
+    delimiter: delimiter4,
+    resolve: resolve4,
+    normalize: normalize5,
+    isAbsolute: isAbsolute4,
+    join: join5,
+    relative: relative4,
+    toNamespacedPath: toNamespacedPath4,
+    dirname: dirname4,
+    basename: basename4,
+    extname: extname4,
+    format: format4,
+    parse: parse5,
+    fromFileUrl: fromFileUrl4,
+    toFileUrl: toFileUrl4
+};
+const path2 = isWindows1 ? mod4 : mod5;
+const { join: join6, normalize: normalize6 } = path2;
+const path3 = isWindows1 ? mod4 : mod5;
+const { basename: basename5, delimiter: delimiter5, dirname: dirname5, extname: extname5, format: format5, fromFileUrl: fromFileUrl5, isAbsolute: isAbsolute5, join: join7, normalize: normalize7, parse: parse6, relative: relative5, resolve: resolve5, toFileUrl: toFileUrl5, toNamespacedPath: toNamespacedPath5 } = path3;
+path3.sep;
 const LOG_FILE_PATH = "now.log";
 const NOW_FILE_SUFFIX = "now.md";
 const DATA_STR = {
@@ -6141,6 +7130,7 @@ const DATA_STR = {
     lineMarker: "- ",
     rootFocus: "Root Focus"
 };
+const INITIAL_FOCUS_CONTENT = `${DATA_STR.lineMarker}${DATA_STR.rootFocus} ${DATA_STR.currentItemMarker}\n`;
 function getItemsList(tree) {
     const items = [];
     function traverse(node, depth) {
@@ -6186,110 +7176,135 @@ function getCurrentItemBreadcrumb(tree) {
         currentItemName
     ].join(" / ");
 }
-function getCurrentItemDetails(tree) {
-    const breadcrumbPath = getCurrentItemBreadcrumb(tree);
-    let isLeaf = false;
-    let depth = 0;
-    let siblingCount = 0;
-    let descendantCount = 0;
-    let currentKey = "";
-    function traverse(node, currentDepth, path) {
+function countDescendants(node) {
+    let count = node.children.length;
+    for (const child of node.children){
+        count += countDescendants(child);
+    }
+    return count;
+}
+function buildCurrentNodeMetadata(node, depth, parent) {
+    const siblingCount = parent ? parent.children.length - 1 : 0;
+    return {
+        isLeaf: node.children.length === 0,
+        depth,
+        siblingCount,
+        descendantCount: countDescendants(node),
+        key: node.key
+    };
+}
+function findCurrentNodeInfo(tree) {
+    let result = null;
+    function traverse(node, currentDepth, parent) {
         if (node.isCurrent) {
-            isLeaf = node.children.length === 0;
-            depth = currentDepth;
-            siblingCount = path.length > 0 ? path[path.length - 1].children.length - 1 : 0;
-            descendantCount = countDescendants(node);
-            currentKey = node.key;
+            result = buildCurrentNodeMetadata(node, currentDepth, parent);
             return true;
         }
         for (const child of node.children){
-            if (traverse(child, currentDepth + 1, [
-                ...path,
-                node
-            ])) {
-                return true;
-            }
+            if (traverse(child, currentDepth + 1, node)) return true;
         }
         return false;
     }
-    function countDescendants(node) {
-        let count = node.children.length;
-        for (const child of node.children){
-            count += countDescendants(child);
-        }
-        return count;
+    traverse(tree, 0, null);
+    return result;
+}
+function splitBreadcrumbPath(breadcrumbPath) {
+    const parts = breadcrumbPath.split(" / ");
+    if (parts.length <= 1) {
+        return {
+            breadcrumbStr: "Focusing on",
+            focusStr: breadcrumbPath
+        };
     }
-    traverse(tree, 0, []);
-    if (breadcrumbPath.split(" / ").length > 1) {
-        const breadcrumbStr = breadcrumbPath.slice(0, breadcrumbPath.lastIndexOf(" / "));
-        const focusStr = breadcrumbPath.slice(breadcrumbPath.lastIndexOf(" / ") + 3);
+    const focusStr = parts[parts.length - 1];
+    const breadcrumbStr = parts.slice(0, -1).join(" / ");
+    return {
+        breadcrumbStr,
+        focusStr
+    };
+}
+function getCurrentItemDetails(tree) {
+    const breadcrumbPath = getCurrentItemBreadcrumb(tree);
+    const nodeInfo = findCurrentNodeInfo(tree);
+    const { breadcrumbStr, focusStr } = splitBreadcrumbPath(breadcrumbPath);
+    if (!nodeInfo) {
         return {
             breadcrumbStr,
             focusStr,
-            isRoot: depth === 0,
-            isLeaf,
-            depth,
-            siblingCount,
-            descendantCount,
-            key: currentKey
-        };
-    } else {
-        const focusStr = breadcrumbPath;
-        return {
-            breadcrumbStr: "Focusing on",
-            isRoot: depth === 0,
-            focusStr,
-            isLeaf,
-            depth,
-            siblingCount,
-            descendantCount,
-            key: currentKey
+            isRoot: true,
+            isLeaf: true,
+            depth: 0,
+            siblingCount: 0,
+            descendantCount: 0,
+            key: ""
         };
     }
+    return {
+        breadcrumbStr,
+        focusStr,
+        isRoot: nodeInfo.depth === 0,
+        isLeaf: nodeInfo.isLeaf,
+        depth: nodeInfo.depth,
+        siblingCount: nodeInfo.siblingCount,
+        descendantCount: nodeInfo.descendantCount,
+        key: nodeInfo.key
+    };
 }
 function isLeafNode(node) {
     return node.children.length === 0;
 }
+function findMaxKey(node) {
+    const key = parseInt(node.key, 10);
+    let max = key;
+    for (const child of node.children){
+        const childMax = findMaxKey(child);
+        if (childMax > max) max = childMax;
+    }
+    return max;
+}
+function findCurrentNodeContext(node, _container) {
+    for(let i = 0; i < node.children.length; i++){
+        if (node.children[i].isCurrent) return {
+            parent: node,
+            index: i
+        };
+        const found = findCurrentNodeContext(node.children[i], node);
+        if (found) return found;
+    }
+    return null;
+}
+function firstLeafOf(node) {
+    let n = node;
+    while(n.children.length > 0)n = n.children[0];
+    return n;
+}
+function lastLeafOf(node) {
+    let n = node;
+    while(n.children.length > 0)n = n.children[n.children.length - 1];
+    return n;
+}
+function selectNewCurrentAfterRemoval(parent, removedIndex) {
+    if (removedIndex > 0) return lastLeafOf(parent.children[removedIndex - 1]);
+    if (removedIndex < parent.children.length - 1) {
+        return firstLeafOf(parent.children[removedIndex + 1]);
+    }
+    return parent;
+}
+function removeCurrentAndAssignNext(ctx) {
+    const { parent, index } = ctx;
+    const current = parent.children[index];
+    current.isCurrent = false;
+    const newCurrent = isLeafNode(current) ? selectNewCurrentAfterRemoval(parent, index) : null;
+    if (newCurrent) newCurrent.isCurrent = true;
+    parent.children.splice(index, 1);
+}
 function completeCurrentItem(tree) {
-    function traverse(node, parent = null) {
-        for(let i = 0; i < node.children.length; i++){
-            const child = node.children[i];
-            if (child.isCurrent) {
-                child.isCurrent = false;
-                if (isLeafNode(child)) {
-                    let newCurrentItem = null;
-                    if (i > 0) {
-                        newCurrentItem = node.children[i - 1];
-                        while(!isLeafNode(newCurrentItem) && newCurrentItem.children.length > 0){
-                            newCurrentItem = newCurrentItem.children[0];
-                        }
-                    } else if (i < node.children.length - 1) {
-                        newCurrentItem = node.children[i + 1];
-                        while(!isLeafNode(newCurrentItem) && newCurrentItem.children.length > 0){
-                            newCurrentItem = newCurrentItem.children[0];
-                        }
-                    } else if (parent) {
-                        newCurrentItem = node;
-                    }
-                    if (newCurrentItem) {
-                        newCurrentItem.isCurrent = true;
-                    }
-                    node.children.splice(i, 1);
-                    return true;
-                } else {
-                    node.children.splice(i, 1);
-                    return true;
-                }
-            }
-            if (traverse(child, node)) {
-                return true;
-            }
-        }
-        return false;
+    const ctx = findCurrentNodeContext(tree, null);
+    if (!ctx) {
+        if (tree.children.length === 0) tree.isCurrent = true;
+        return tree;
     }
-    if (!traverse(tree) && tree.children.length === 0) {
-        tree.isCurrent = true;
-    }
+    removeCurrentAndAssignNext(ctx);
     return tree;
 }
 function diveIn(tree) {
@@ -6313,40 +7328,19 @@ function diveIn(tree) {
     traverse(tree);
     return tree;
 }
-function createNestedChildren(tree, items) {
-    const levels = items.split("/").map((level)=>level.trim());
-    let maxKey = 0;
-    function findMaxKey(node) {
-        const key = parseInt(node.key, 10);
-        if (key > maxKey) {
-            maxKey = key;
-        }
-        for (const child of node.children){
-            findMaxKey(child);
-        }
-    }
-    findMaxKey(tree);
-    let keyCounter = maxKey + 1;
+function addChildToCurrentItem(tree, newName) {
+    let keyCounter = 1;
     function traverseAndAdd(node) {
         if (node.isCurrent) {
             node.isCurrent = false;
-            let currentNode = node;
-            levels.forEach((level, levelIndex)=>{
-                const siblings = level.split(",").map((sibling)=>sibling.trim());
-                siblings.forEach((sibling, siblingIndex)=>{
-                    const newChild = {
-                        key: keyCounter.toString(),
-                        name: sibling,
-                        children: [],
-                        isCurrent: levelIndex === levels.length - 1 && siblingIndex === 0
-                    };
-                    keyCounter++;
-                    currentNode.children.push(newChild);
-                    if (siblingIndex === siblings.length - 1) {
-                        currentNode = newChild;
-                    }
-                });
-            });
+            const newChild = {
+                key: keyCounter.toString(),
+                name: newName,
+                children: [],
+                isCurrent: true
+            };
+            keyCounter++;
+            node.children.push(newChild);
             return true;
         }
         for (const child of node.children){
@@ -6359,51 +7353,79 @@ function createNestedChildren(tree, items) {
     traverseAndAdd(tree);
     return tree;
 }
-function addNextSiblingToCurrentItem(tree, newName) {
-    let maxKey = 0;
-    function findMaxKey(node) {
-        const key = parseInt(node.key, 10);
-        if (key > maxKey) {
-            maxKey = key;
-        }
-        for (const child of node.children){
-            findMaxKey(child);
+function addNestedLevelsUnder(startNode, levels, keyCounter) {
+    let currentNode = startNode;
+    for (const level of levels){
+        const siblings = level.split(",").map((s)=>s.trim());
+        for(let i = 0; i < siblings.length; i++){
+            const isLastLevel = levels.indexOf(level) === levels.length - 1;
+            const isFirstSibling = i === 0;
+            const newChild = {
+                key: keyCounter.value.toString(),
+                name: siblings[i],
+                children: [],
+                isCurrent: isLastLevel && isFirstSibling
+            };
+            keyCounter.value++;
+            currentNode.children.push(newChild);
+            if (i === siblings.length - 1) currentNode = newChild;
         }
     }
-    findMaxKey(tree);
-    let keyCounter = maxKey + 1;
+}
+function createNestedChildren(tree, items) {
+    const levels = items.split("/").map((level)=>level.trim());
+    const keyCounter = {
+        value: findMaxKey(tree) + 1
+    };
     function traverseAndAdd(node) {
-        if (node.isCurrent && node === tree) {
-            const newChild = {
-                key: keyCounter.toString(),
+        if (!node.isCurrent) {
+            for (const child of node.children){
+                if (traverseAndAdd(child)) return true;
+            }
+            return false;
+        }
+        node.isCurrent = false;
+        addNestedLevelsUnder(node, levels, keyCounter);
+        return true;
+    }
+    traverseAndAdd(tree);
+    return tree;
+}
+function addSiblingAfterCurrentAmongChildren(node, newName, keyCounter) {
+    for(let i = 0; i < node.children.length; i++){
+        if (node.children[i].isCurrent) {
+            const newSibling = {
+                key: keyCounter.value.toString(),
                 name: newName,
                 children: [],
                 isCurrent: false
             };
-            keyCounter++;
-            node.children.unshift(newChild);
+            keyCounter.value++;
+            node.children.splice(i + 1, 0, newSibling);
             return true;
         }
-        for(let i = 0; i < node.children.length; i++){
-            const child = node.children[i];
-            if (child.isCurrent) {
-                const newSibling = {
-                    key: keyCounter.toString(),
-                    name: newName,
-                    children: [],
-                    isCurrent: false
-                };
-                keyCounter++;
-                node.children.splice(i + 1, 0, newSibling);
-                return true;
-            }
-            if (traverseAndAdd(child)) {
-                return true;
-            }
+        if (addSiblingAfterCurrentAmongChildren(node.children[i], newName, keyCounter)) {
+            return true;
         }
-        return false;
     }
-    traverseAndAdd(tree);
+    return false;
+}
+function addNextSiblingToCurrentItem(tree, newName) {
+    const keyCounter = {
+        value: findMaxKey(tree) + 1
+    };
+    if (tree.isCurrent) {
+        const newChild = {
+            key: keyCounter.value.toString(),
+            name: newName,
+            children: [],
+            isCurrent: false
+        };
+        keyCounter.value++;
+        tree.children.unshift(newChild);
+        return tree;
+    }
+    addSiblingAfterCurrentAmongChildren(tree, newName, keyCounter);
     return tree;
 }
 function editCurrentItemName(tree, newName) {
@@ -6426,44 +7448,35 @@ function editCurrentItemName(tree, newName) {
     traverseAndEdit(tree);
     return tree;
 }
+function tryWrapCurrentChildHere(node, newParentName, keyCounter) {
+    for(let i = 0; i < node.children.length; i++){
+        if (node.children[i].isCurrent) {
+            const child = node.children[i];
+            const newParent = {
+                key: (keyCounter.value++).toString(),
+                name: newParentName,
+                isCurrent: false,
+                children: [
+                    child
+                ]
+            };
+            node.children[i] = newParent;
+            return true;
+        }
+        if (tryWrapCurrentChildHere(node.children[i], newParentName, keyCounter)) {
+            return true;
+        }
+    }
+    return false;
+}
 function wrapCurrentItemInNewParent(tree, newParentName) {
     if (tree.isCurrent) {
         throw new Error("Root node cannot be wrapped in a new parent");
     }
-    let maxKey = 0;
-    function findMaxKey(node) {
-        const key = parseInt(node.key, 10);
-        if (key > maxKey) {
-            maxKey = key;
-        }
-        for (const child of node.children){
-            findMaxKey(child);
-        }
-    }
-    findMaxKey(tree);
-    let keyCounter = maxKey + 1;
-    function traverseAndWrap(node) {
-        for(let i = 0; i < node.children.length; i++){
-            const child = node.children[i];
-            if (child.isCurrent) {
-                const newParent = {
-                    key: (keyCounter++).toString(),
-                    name: newParentName,
-                    isCurrent: false,
-                    children: [
-                        child
-                    ]
-                };
-                node.children[i] = newParent;
-                return true;
-            }
-            if (traverseAndWrap(child)) {
-                return true;
-            }
-        }
-        return false;
-    }
-    traverseAndWrap(tree);
+    const keyCounter = {
+        value: findMaxKey(tree) + 1
+    };
+    tryWrapCurrentChildHere(tree, newParentName, keyCounter);
     return tree;
 }
 function setCurrentItem(tree, key) {
@@ -6485,48 +7498,38 @@ function setCurrentItem(tree, key) {
     }
     return newTree;
 }
+function findNodeWithParent(node, key, parent) {
+    if (node.key === key) {
+        if (parent === null) return null;
+        return {
+            node,
+            parent
+        };
+    }
+    for (const child of node.children){
+        const found = findNodeWithParent(child, key, node);
+        if (found) return found;
+    }
+    return null;
+}
+function findNode(node, key) {
+    if (node.key === key) return node;
+    for (const child of node.children){
+        const found = findNode(child, key);
+        if (found) return found;
+    }
+    return null;
+}
 function moveNodeToNewParent(tree, nodeKey, newParentKey) {
     if (nodeKey === newParentKey) {
         throw new Error("The node to move cannot be the same as the new parent node.");
     }
-    let nodeToMove = null;
-    let parentOfNodeToMove = null;
-    function findNodeAndParent(node, parent) {
-        if (node.key === nodeKey) {
-            nodeToMove = node;
-            parentOfNodeToMove = parent;
-            return true;
-        }
-        for (const child of node.children){
-            if (findNodeAndParent(child, node)) {
-                return true;
-            }
-        }
-        return false;
-    }
-    function findNodeByKey(node, key) {
-        if (node.key === key) {
-            return node;
-        }
-        for (const child of node.children){
-            const result = findNodeByKey(child, key);
-            if (result) {
-                return result;
-            }
-        }
-        return null;
-    }
-    findNodeAndParent(tree, null);
-    if (!nodeToMove || !parentOfNodeToMove) {
-        return tree;
-    }
-    const newParentNode = findNodeByKey(tree, newParentKey);
-    if (!newParentNode) {
-        return tree;
-    }
-    if (parentOfNodeToMove && parentOfNodeToMove.children) {
-        parentOfNodeToMove.children = parentOfNodeToMove.children.filter((child)=>child.key !== nodeKey);
-    }
+    const moved = findNodeWithParent(tree, nodeKey, null);
+    if (!moved) return tree;
+    const newParentNode = findNode(tree, newParentKey);
+    if (!newParentNode) return tree;
+    const { node: nodeToMove, parent: parentOfNodeToMove } = moved;
+    parentOfNodeToMove.children = parentOfNodeToMove.children.filter((c)=>c.key !== nodeKey);
     newParentNode.children.push(nodeToMove);
     return tree;
 }
@@ -6602,7 +7605,7 @@ function focusFirstChild(tree) {
     traverse(tree);
     return tree;
 }
-const osType1 = (()=>{
+const osType2 = (()=>{
     const { Deno: Deno1 } = globalThis;
     if (typeof Deno1?.build?.os === "string") {
         return Deno1.build.os;
@@ -6613,22 +7616,22 @@ const osType1 = (()=>{
     }
     return "linux";
 })();
-const isWindows1 = osType1 === "windows";
-function assertPath1(path) {
+const isWindows2 = osType2 === "windows";
+function assertPath2(path) {
     if (typeof path !== "string") {
         throw new TypeError(`Path must be a string. Received ${JSON.stringify(path)}`);
     }
 }
-function isPosixPathSeparator1(code) {
-    return code === 47;
-}
 function isPosixPathSeparator2(code) {
     return code === 47;
 }
-function isPathSeparator1(code) {
+function isPosixPathSeparator3(code) {
+    return code === 47;
+}
+function isPathSeparator2(code) {
     return code === 47 || code === 92;
 }
-function isWindowsDeviceRoot1(code) {
+function isWindowsDeviceRoot2(code) {
     return code >= 97 && code <= 122 || code >= 65 && code <= 90;
 }
 function assertArg(url) {
@@ -6638,11 +7641,11 @@ function assertArg(url) {
     }
     return url;
 }
-function fromFileUrl3(url) {
+function fromFileUrl6(url) {
     url = assertArg(url);
     return decodeURIComponent(url.pathname.replace(/%(?![0-9A-Fa-f]{2})/g, "%25"));
 }
-function fromFileUrl4(url) {
+function fromFileUrl7(url) {
     url = assertArg(url);
     let path = decodeURIComponent(url.pathname.replace(/\//g, "\\").replace(/%(?![0-9A-Fa-f]{2})/g, "%25")).replace(/^\\*([A-Za-z]:)(\\|$)/, "$1\\");
     if (url.hostname !== "") {
@@ -6650,11 +7653,11 @@ function fromFileUrl4(url) {
     }
     return path;
 }
-function fromFileUrl5(url) {
-    return isWindows1 ? fromFileUrl4(url) : fromFileUrl3(url);
+function fromFileUrl8(url) {
+    return isWindows2 ? fromFileUrl7(url) : fromFileUrl6(url);
 }
 function toPathString(pathUrl) {
-    return pathUrl instanceof URL ? fromFileUrl5(pathUrl) : pathUrl;
+    return pathUrl instanceof URL ? fromFileUrl8(pathUrl) : pathUrl;
 }
 function getFileInfoType(fileInfo) {
     return fileInfo.isFile ? "file" : fileInfo.isDirectory ? "dir" : fileInfo.isSymlink ? "symlink" : undefined;
@@ -6686,10 +7689,10 @@ async function ensureDir(dir) {
     }
 }
 function assertArg1(path) {
-    assertPath1(path);
+    assertPath2(path);
     if (path.length === 0) return ".";
 }
-function stripTrailingSeparators(segment, isSep) {
+function stripTrailingSeparators1(segment, isSep) {
     if (segment.length <= 1) {
         return segment;
     }
@@ -6703,12 +7706,12 @@ function stripTrailingSeparators(segment, isSep) {
     }
     return segment.slice(0, end);
 }
-function dirname3(path) {
+function dirname6(path) {
     assertArg1(path);
     let end = -1;
     let matchedNonSeparator = false;
     for(let i = path.length - 1; i >= 1; --i){
-        if (isPosixPathSeparator1(path.charCodeAt(i))) {
+        if (isPosixPathSeparator2(path.charCodeAt(i))) {
             if (matchedNonSeparator) {
                 end = i;
                 break;
@@ -6718,11 +7721,11 @@ function dirname3(path) {
         }
     }
     if (end === -1) {
-        return isPosixPathSeparator1(path.charCodeAt(0)) ? "/" : ".";
+        return isPosixPathSeparator2(path.charCodeAt(0)) ? "/" : ".";
     }
-    return stripTrailingSeparators(path.slice(0, end), isPosixPathSeparator1);
+    return stripTrailingSeparators1(path.slice(0, end), isPosixPathSeparator2);
 }
-function dirname4(path) {
+function dirname7(path) {
     assertArg1(path);
     const len = path.length;
     let rootEnd = -1;
@@ -6731,23 +7734,23 @@ function dirname4(path) {
     let offset = 0;
     const code = path.charCodeAt(0);
     if (len > 1) {
-        if (isPathSeparator1(code)) {
+        if (isPathSeparator2(code)) {
             rootEnd = offset = 1;
-            if (isPathSeparator1(path.charCodeAt(1))) {
+            if (isPathSeparator2(path.charCodeAt(1))) {
                 let j = 2;
                 let last = j;
                 for(; j < len; ++j){
-                    if (isPathSeparator1(path.charCodeAt(j))) break;
+                    if (isPathSeparator2(path.charCodeAt(j))) break;
                 }
                 if (j < len && j !== last) {
                     last = j;
                     for(; j < len; ++j){
-                        if (!isPathSeparator1(path.charCodeAt(j))) break;
+                        if (!isPathSeparator2(path.charCodeAt(j))) break;
                     }
                     if (j < len && j !== last) {
                         last = j;
                         for(; j < len; ++j){
-                            if (isPathSeparator1(path.charCodeAt(j))) break;
+                            if (isPathSeparator2(path.charCodeAt(j))) break;
                         }
                         if (j === len) {
                             return path;
@@ -6758,19 +7761,19 @@ function dirname4(path) {
                     }
                 }
             }
-        } else if (isWindowsDeviceRoot1(code)) {
+        } else if (isWindowsDeviceRoot2(code)) {
             if (path.charCodeAt(1) === 58) {
                 rootEnd = offset = 2;
                 if (len > 2) {
-                    if (isPathSeparator1(path.charCodeAt(2))) rootEnd = offset = 3;
+                    if (isPathSeparator2(path.charCodeAt(2))) rootEnd = offset = 3;
                 }
             }
         }
-    } else if (isPathSeparator1(code)) {
+    } else if (isPathSeparator2(code)) {
         return path;
     }
     for(let i = len - 1; i >= offset; --i){
-        if (isPathSeparator1(path.charCodeAt(i))) {
+        if (isPathSeparator2(path.charCodeAt(i))) {
             if (!matchedSlash) {
                 end = i;
                 break;
@@ -6783,10 +7786,10 @@ function dirname4(path) {
         if (rootEnd === -1) return ".";
         else end = rootEnd;
     }
-    return stripTrailingSeparators(path.slice(0, end), isPosixPathSeparator2);
+    return stripTrailingSeparators1(path.slice(0, end), isPosixPathSeparator3);
 }
-function dirname5(path) {
-    return isWindows1 ? dirname4(path) : dirname3(path);
+function dirname8(path) {
+    return isWindows2 ? dirname7(path) : dirname6(path);
 }
 async function ensureFile(filePath) {
     try {
@@ -6796,7 +7799,7 @@ async function ensureFile(filePath) {
         }
     } catch (err) {
         if (err instanceof Deno.errors.NotFound) {
-            await ensureDir(dirname5(toPathString(filePath)));
+            await ensureDir(dirname8(toPathString(filePath)));
             await Deno.writeFile(filePath, new Uint8Array());
             return;
         }
@@ -6810,21 +7813,17 @@ Deno.build.os === "windows";
 const LF = "\n";
 const CRLF = "\r\n";
 Deno?.build.os === "windows" ? CRLF : LF;
-async function readMarkdownFile(path) {
-    if (!path) {
-        throw new Error("Path is required");
-    }
+async function readFileOrEmpty(path) {
     try {
         return await Deno.readTextFile(path);
     } catch (error) {
-        if (error instanceof Deno.errors.NotFound) {
-            console.log("File not found.");
-            return "";
-        } else {
-            console.error("Error reading file:", error);
-            return "";
-        }
+        if (error instanceof Deno.errors.NotFound) return "";
+        throw error;
     }
+}
+async function readMarkdownFile(path) {
+    if (!path) throw new Error("Path is required");
+    return readFileOrEmpty(path);
 }
 async function writeMarkdownFile(content, path) {
     try {
@@ -6832,6 +7831,18 @@ async function writeMarkdownFile(content, path) {
     } catch (error) {
         console.error("Error writing file:", error);
     }
+}
+async function ensureFocusFile(path) {
+    try {
+        await Deno.readTextFile(path);
+        return;
+    } catch (error) {
+        if (!(error instanceof Deno.errors.NotFound)) throw error;
+    }
+    await Deno.mkdir(dirname5(path), {
+        recursive: true
+    });
+    await Deno.writeTextFile(path, INITIAL_FOCUS_CONTENT);
 }
 async function logAction(action, details) {
     const timestamp = new Date().toISOString();
@@ -6841,68 +7852,94 @@ async function logAction(action, details) {
         append: true
     });
 }
+function parseLine(line) {
+    const spaces = line.search(/\S/);
+    const indent = Math.ceil(spaces / DATA_STR.indent.length);
+    const isMarkedCurrent = line.endsWith(" " + DATA_STR.currentItemMarker);
+    const name = line.trimStart().slice(DATA_STR.lineMarker.length).replace(" " + DATA_STR.currentItemMarker, "");
+    return {
+        spaces,
+        indent,
+        name,
+        isMarkedCurrent
+    };
+}
+function checkCurrentMarker(isMarkedCurrent, hasFoundCurrent, line) {
+    if (isMarkedCurrent) {
+        if (hasFoundCurrent) {
+            throw new Error(`Multiple items marked as current at line: "${line}"`);
+        }
+        return true;
+    }
+    return hasFoundCurrent;
+}
+function setRoot(root, newNode, line) {
+    if (!root) return newNode;
+    throw new Error(`Multiple root nodes found at line: "${line}"`);
+}
+function effectiveIndent(prevSpaces, prevIndent, spaces, indent) {
+    if (spaces > prevSpaces || indent > prevIndent + 1) return prevIndent + 1;
+    return indent;
+}
+function popStackToParent(stack, indent) {
+    while(stack.length && stack[stack.length - 1].indent >= indent){
+        stack.pop();
+    }
+}
+function attachChild(newNode, stack, indent, prevIndent, prevSpaces, spaces, line) {
+    const resolved = effectiveIndent(prevSpaces, prevIndent, spaces, indent);
+    popStackToParent(stack, resolved);
+    if (stack.length === 0) {
+        throw new Error(`Invalid indentation at line: "${line}"`);
+    }
+    stack[stack.length - 1].node.children.push(newNode);
+    return resolved;
+}
+function processLine(state, line) {
+    const { spaces, indent, name, isMarkedCurrent } = parseLine(line);
+    const newNode = {
+        key: (state.keyCounter++).toString(),
+        name,
+        children: [],
+        isCurrent: state.hasFoundCurrent ? false : isMarkedCurrent
+    };
+    state.hasFoundCurrent = checkCurrentMarker(isMarkedCurrent, state.hasFoundCurrent, line);
+    if (indent === 0) {
+        state.root = setRoot(state.root, newNode, line);
+        state.stack.push({
+            node: newNode,
+            indent
+        });
+    } else {
+        const prevIndent = state.stack[state.stack.length - 1].indent;
+        const usedIndent = attachChild(newNode, state.stack, indent, prevIndent, state.prevSpaces, spaces, line);
+        state.stack.push({
+            node: newNode,
+            indent: usedIndent
+        });
+    }
+    state.prevSpaces = spaces;
+}
 function deserialize(input) {
     const lines = input.split(DATA_STR.lineSeparator);
-    const stack = [];
-    let keyCounter = 0;
-    let root = null;
-    let hasFoundCurrent = false;
-    let prevSpaces = 0;
+    const state = {
+        stack: [],
+        keyCounter: 0,
+        root: null,
+        hasFoundCurrent: false,
+        prevSpaces: 0
+    };
     for (const line of lines){
         if (!line.trim()) continue;
-        const spaces = line.search(/\S/);
-        let indent = Math.ceil(spaces / DATA_STR.indent.length);
-        const isMarkedCurrent = line.endsWith(" " + DATA_STR.currentItemMarker);
-        const name = line.trimStart().slice(DATA_STR.lineMarker.length).replace(" " + DATA_STR.currentItemMarker, "");
-        const newNode = {
-            key: keyCounter.toString(),
-            name,
-            children: [],
-            isCurrent: hasFoundCurrent ? false : isMarkedCurrent
-        };
-        if (isMarkedCurrent) {
-            if (hasFoundCurrent) {
-                throw new Error(`Multiple items marked as current at line: "${line}"`);
-            }
-            hasFoundCurrent = true;
-        }
-        keyCounter++;
-        if (indent === 0) {
-            if (!root) {
-                root = newNode;
-            } else {
-                throw new Error(`Multiple root nodes found at line: "${line}"`);
-            }
-            stack.push({
-                node: newNode,
-                indent
-            });
-        } else {
-            const prevIndent = stack[stack.length - 1].indent;
-            if (spaces > prevSpaces || indent > prevIndent + 1) {
-                indent = prevIndent + 1;
-            }
-            while(stack.length && stack[stack.length - 1].indent >= indent){
-                stack.pop();
-            }
-            if (stack.length === 0) {
-                throw new Error(`Invalid indentation at line: "${line}"`);
-            }
-            stack[stack.length - 1].node.children.push(newNode);
-            stack.push({
-                node: newNode,
-                indent
-            });
-        }
-        prevSpaces = spaces;
+        processLine(state, line);
     }
-    if (!root) {
+    if (!state.root) {
         throw new Error("Root node not found in the input content.");
     }
-    if (!hasFoundCurrent) {
-        root.isCurrent = true;
+    if (!state.hasFoundCurrent) {
+        state.root.isCurrent = true;
     }
-    return root;
+    return state.root;
 }
 function serialize(tree) {
     let result = "";
@@ -6919,7 +7956,16 @@ function serialize(tree) {
 }
 const getTree = async (path)=>{
     const content = await readMarkdownFile(path);
-    const tree = deserialize(content);
+    if (!content.trim()) {
+        throw new Error(`Could not read focus file at ${path} (missing or empty). Create it with: NOW_FILE=${path} now init`);
+    }
+    let tree;
+    try {
+        tree = deserialize(content);
+    } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        throw new Error(`Could not read focus file at ${path}: ${detail}. Fix the file format or run NOW_FILE=${path} now init to recreate.`);
+    }
     false && validateTree(tree, "getTree");
     return tree;
 };
@@ -6929,6 +7975,21 @@ const writeTree = async (tree, path)=>{
     await writeMarkdownFile(serialized, path);
     return;
 };
+async function mutateTree(path, op, caller) {
+    const tree = await getTree(path);
+    const newTree = op(tree);
+    false && validateTree(newTree, caller);
+    await writeTree(newTree, path);
+    return newTree;
+}
+function mutationEffectVoid(name, op) {
+    return async (path, ...args)=>{
+        await mutateTree(path, (t)=>op(t, ...args), name);
+    };
+}
+function focusEffect(name, op) {
+    return (path)=>mutateTree(path, op, name);
+}
 function validateTree(tree, caller = "validateTree") {
     let currentCount = 0;
     function traverse(node) {
@@ -6947,97 +8008,28 @@ function validateTree(tree, caller = "validateTree") {
         console.error(`(${caller}) No node is marked as current`);
     }
 }
-async function getItemsListEffect(path) {
-    const tree = await getTree(path);
-    false && validateTree(tree, "getItemsListEffect");
-    return getItemsList(tree);
-}
-async function createNestedChildrenEffect(items, path) {
-    const tree = await getTree(path);
-    const newTree = createNestedChildren(tree, items);
-    false && validateTree(newTree, "createNestedChildrenEffect");
-    await writeTree(newTree, path);
-    return;
-}
-async function addNextSiblingToCurrentItemEffect(newText, path) {
-    const tree = await getTree(path);
-    const newTree = addNextSiblingToCurrentItem(tree, newText);
-    false && validateTree(newTree, "addNextSiblingToCurrentItemEffect");
-    await writeTree(newTree, path);
-    return;
-}
+mutationEffectVoid("addChildToCurrentItemEffect", addChildToCurrentItem);
+const createNestedChildrenEffect = mutationEffectVoid("createNestedChildrenEffect", createNestedChildren);
+const addNextSiblingToCurrentItemEffect = mutationEffectVoid("addNextSiblingToCurrentItemEffect", addNextSiblingToCurrentItem);
 async function completeCurrentItemEffect(path) {
     const tree = await getTree(path);
     const item = getCurrentItemBreadcrumb(tree);
-    const newTree = completeCurrentItem(tree);
-    false && validateTree(newTree, "completeCurrentItemEffect");
-    await writeTree(newTree, path);
+    await mutateTree(path, completeCurrentItem, "completeCurrentItemEffect");
     await logAction("Complete", item);
-    return;
 }
-async function setCurrentItemEffect(key, path) {
-    const tree = await getTree(path);
-    const newTree = setCurrentItem(tree, key);
-    false && validateTree(newTree, "setCurrentItemEffect");
-    await writeTree(newTree, path);
-    return;
-}
-async function editCurrentItemNameEffect(newName, path) {
-    const tree = await getTree(path);
-    const newTree = editCurrentItemName(tree, newName);
-    false && validateTree(tree, "editCurrentItemNameEffect");
-    await writeTree(newTree, path);
-    return;
-}
-async function diveInEffect(path) {
-    const tree = await getTree(path);
-    const newTree = diveIn(tree);
-    false && validateTree(newTree, "diveInEffect");
-    await writeTree(newTree, path);
-    return newTree;
-}
-async function focusNextSiblingEffect(path) {
-    const tree = await getTree(path);
-    const newTree = focusNextSibling(tree);
-    false && validateTree(newTree, "focusNextSiblingEffect");
-    await writeTree(newTree, path);
-    return newTree;
-}
-async function focusPreviousSiblingEffect(path) {
-    const tree = await getTree(path);
-    const newTree = focusPreviousSibling(tree);
-    false && validateTree(newTree, "focusPreviousSiblingEffect");
-    await writeTree(newTree, path);
-    return newTree;
-}
+const setCurrentItemEffect = mutationEffectVoid("setCurrentItemEffect", setCurrentItem);
+const editCurrentItemNameEffect = mutationEffectVoid("editCurrentItemNameEffect", editCurrentItemName);
+const diveInEffect = focusEffect("diveInEffect", diveIn);
+const focusNextSiblingEffect = focusEffect("focusNextSiblingEffect", focusNextSibling);
+const focusPreviousSiblingEffect = focusEffect("focusPreviousSiblingEffect", focusPreviousSibling);
 async function wrapCurrentItemInNewParentEffect(newParentName, path) {
-    const tree = await getTree(path);
-    const newTree = wrapCurrentItemInNewParent(tree, newParentName);
-    false && validateTree(newTree, "wrapCurrentItemInNewParentEffect");
-    await writeTree(newTree, path);
-    return newTree;
+    return mutateTree(path, (t)=>wrapCurrentItemInNewParent(t, newParentName), "wrapCurrentItemInNewParentEffect");
 }
 async function moveNodeToNewParentEffect(nodeKey, newParentKey, path) {
-    const tree = await getTree(path);
-    const newTree = moveNodeToNewParent(tree, nodeKey, newParentKey);
-    false && validateTree(newTree, "moveNodeToNewParentEffect");
-    await writeTree(newTree, path);
-    return newTree;
+    return mutateTree(path, (t)=>moveNodeToNewParent(t, nodeKey, newParentKey), "moveNodeToNewParentEffect");
 }
-async function focusParentEffect(path) {
-    const tree = await getTree(path);
-    const newTree = focusParent(tree);
-    false && validateTree(newTree, "focusParentEffect");
-    await writeTree(newTree, path);
-    return newTree;
-}
-async function focusFirstChildEffect(path) {
-    const tree = await getTree(path);
-    const newTree = focusFirstChild(tree);
-    false && validateTree(newTree, "focusFirstChildEffect");
-    await writeTree(newTree, path);
-    return newTree;
-}
+const focusParentEffect = focusEffect("focusParentEffect", focusParent);
+const focusFirstChildEffect = focusEffect("focusFirstChildEffect", focusFirstChild);
 const FOCUS_ARROW = "▶︎";
 const promptOptions = {
     prefix: "",
@@ -7056,43 +8048,34 @@ const STYLE = {
     menuItemDisabled: colors.dim.strikethrough,
     menuItemPrimary: colors.bold.white
 };
-const SYNTAX_HINT = STYLE.hint("Syntax: Item 1, Item 2 / Item 2.1");
-const styleOptions = (options)=>{
-    return options.map((option)=>{
-        if (!option.name) return option;
-        if (option.disabled) {
-            return {
-                ...option,
-                name: STYLE.menuItemDisabled(option.name)
-            };
-        }
-        if (option.primary) {
-            return {
-                ...option,
-                name: STYLE.menuItemPrimary(option.name)
-            };
-        } else {
-            return {
-                ...option,
-                name: STYLE.menuItem(option.name)
-            };
-        }
-    });
-};
+STYLE.hint("Syntax: Item 1, Item 2 / Item 2.1");
 const showHint = (text)=>{
     console.log(STYLE.hint(text));
 };
-async function findOrCreateFocusFile() {
-    const folderName = Deno.cwd().split("/").pop();
-    const fileName = `.${folderName}.${NOW_FILE_SUFFIX}`;
+function findFocusFileInCwd() {
     const files = [
         ...Deno.readDirSync(".")
     ].filter((file)=>file.isFile && file.name.endsWith(NOW_FILE_SUFFIX));
-    if (files.length > 0) {
-        return files[0].name;
-    } else {
-        return await createFocusFile(fileName);
+    return files.length > 0 ? files[0].name : null;
+}
+async function findOrCreateFocusFile() {
+    const found = findFocusFileInCwd();
+    if (found) return found;
+    const folderName = Deno.cwd().split("/").pop();
+    const fileName = `.${folderName}.${NOW_FILE_SUFFIX}`;
+    return await createFocusFile(fileName);
+}
+async function resolveFocusFilePath(options = {}) {
+    const { interactive = true } = options;
+    const fromEnv = Deno.env.get("NOW_FILE");
+    if (fromEnv) return resolve5(Deno.cwd(), fromEnv);
+    const inCwd = findFocusFileInCwd();
+    if (inCwd) return resolve5(Deno.cwd(), inCwd);
+    if (interactive) {
+        const path = await findOrCreateFocusFile();
+        return resolve5(Deno.cwd(), path);
     }
+    throw new Error("No focus file found and NOW_FILE not set. Set NOW_FILE to your focus file path (e.g. export NOW_FILE=$HOME/.now/focus.now.md) or run from a directory with a .now.md file. To create a file: NOW_FILE=/path/to/file.now.md now init");
 }
 async function createFocusFile(fileName) {
     showHint("Files are stored in the current directory.");
@@ -7101,7 +8084,7 @@ async function createFocusFile(fileName) {
         message: `No focus file found. Create ${fileName}?`
     });
     if (createFile) {
-        await Deno.writeTextFile(fileName, `#${DATA_STR.lineMarker}${DATA_STR.rootFocus} ${DATA_STR.currentItemMarker}\n`);
+        await Deno.writeTextFile(fileName, INITIAL_FOCUS_CONTENT);
         return fileName;
     } else {
         console.log("No focus file created. Exiting...");
@@ -7122,302 +8105,146 @@ async function displayCurrentFocusEffect(path) {
     const tree = await getTree(path);
     displayCurrentFocus(tree);
 }
-async function interactiveTUI() {
-    false || console.clear();
-    const focusFilePath = await findOrCreateFocusFile();
-    console.log(focusFilePath);
-    if (!focusFilePath) {
-        await createFocusFile(focusFilePath);
-    }
-    let tree = await getTree(focusFilePath);
-    displayCurrentFocus(tree);
-    while(true){
-        const action = await promptMainAction(tree);
-        tree = await handleMainAction(action, focusFilePath);
-        displayCurrentFocus(tree);
-    }
-}
-async function promptMainAction(tree) {
-    false || console.clear();
-    displayCurrentFocus(tree);
-    const { isLeaf, isRoot, siblingCount } = getCurrentItemDetails(tree);
-    const availableOptions = [
-        !isLeaf && {
-            name: "Dive in",
-            value: "diveIn",
-            primary: true
-        },
-        {
-            name: "Narrow focus",
-            value: "add",
-            primary: true
-        },
-        {
-            name: "Finish this",
-            value: "complete",
-            primary: true
-        },
-        {
-            name: "Add followup",
-            value: "later",
-            primary: true
-        },
-        {
-            name: "Switch",
-            value: "switch"
-        },
-        {
-            name: "Edit",
-            value: "edit"
-        },
-        {
-            name: "Wrap",
-            value: "wrap"
-        },
-        {
-            name: "Move",
-            value: "move"
-        },
-        siblingCount > 0 && {
-            name: "Next",
-            value: "focusNnextSibling"
-        },
-        siblingCount > 0 && {
-            name: "Previous",
-            value: "focusPreviousSibling"
-        },
-        !isLeaf && {
-            name: "Down",
-            value: "focusChild"
-        },
-        !isRoot && {
-            name: "Up",
-            value: "focusParent"
-        }
-    ].filter((option)=>!!option);
-    const options = styleOptions(availableOptions);
-    return await Select.prompt({
-        ...promptOptions,
-        maxRows: 6,
-        message: colors.dim("Actions"),
-        options
-    });
-}
-async function handleMainAction(action, path) {
-    switch(action){
-        case "complete":
-            return await handleCompleteAction(path);
-        case "add":
-            return await handleAddNestedAction(path);
-        case "later":
-            return await handleAddLater(path);
-        case "switch":
-            return await handleSwitchAction(path);
-        case "diveIn":
-            return await handleDiveInAction(path);
-        case "edit":
-            return await handleEditAction(path);
-        case "wrap":
-            return await handleWrapAction(path);
-        case "move":
-            return await handleMoveAction(path);
-        case "focusNextSibling":
-            return await handleNextSiblingAction(path);
-        case "focusPreviousSibling":
-            return await handlePreviousSiblingAction(path);
-        case "focusChild":
-            return await handleFocusChildAction(path);
-        case "focusParent":
-            return await handleFocusParentAction(path);
-        case "quit":
-            console.log("Exiting...");
-            Deno.exit();
-            break;
-        default:
-            return await getTree(path);
-    }
-}
-async function handleDiveInAction(path) {
-    await diveInEffect(path);
-    return await getTree(path);
-}
-async function handleCompleteAction(path) {
-    await completeCurrentItemEffect(path);
-    console.log("All focuses completed. Time for a break?");
-    return await getTree(path);
-}
-async function handleAddNestedAction(path) {
-    false || console.clear();
-    const tree = await getTree(path);
-    displayCurrentFocus(tree);
-    showHint(SYNTAX_HINT);
-    const newItems = await Input.prompt({
-        ...promptOptions,
-        message: "Focus on:"
-    });
-    await createNestedChildrenEffect(newItems, path);
-    return await getTree(path);
-}
-async function handleAddLater(path) {
-    false || console.clear();
-    const tree = await getTree(path);
-    displayCurrentFocus(tree);
-    showHint(SYNTAX_HINT);
-    const newItems = await Input.prompt({
-        ...promptOptions,
-        message: "Add for later:"
-    });
-    await addNextSiblingToCurrentItemEffect(newItems, path);
-    return await getTree(path);
-}
-async function handleNextSiblingAction(path) {
-    await focusNextSiblingEffect(path);
-    return await getTree(path);
-}
-async function handlePreviousSiblingAction(path) {
-    await focusPreviousSiblingEffect(path);
-    return await getTree(path);
-}
-async function handleFocusParentAction(path) {
-    await focusParentEffect(path);
-    return await getTree(path);
-}
-async function handleFocusChildAction(path) {
-    await focusFirstChildEffect(path);
-    return await getTree(path);
-}
-async function handleEditAction(path) {
-    const tree = await getTree(path);
-    const { focusStr } = getCurrentItemDetails(tree);
-    false || console.clear();
-    displayCurrentFocus(tree);
-    const newText = await Input.prompt({
-        ...promptOptions,
-        minLength: 1,
-        default: focusStr,
-        message: "New name:"
-    });
-    await editCurrentItemNameEffect(newText, path);
-    return await getTree(path);
-}
-async function handleSwitchAction(path) {
-    false || console.clear();
-    const tree = await getTree(path);
-    displayCurrentFocus(tree);
-    const items = await getItemsListEffect(path);
-    const switchToKey = await Select.prompt({
-        ...promptOptions,
-        message: "Select a focus to switch to:",
-        options: [
-            ...items.map(([name, key])=>({
-                    name: name,
-                    value: key
-                })),
-            Select.separator(),
-            {
-                name: "Go Back",
-                value: "back"
-            }
-        ]
-    });
-    if (switchToKey !== "back") {
-        console.log("Switching to " + switchToKey);
-        await setCurrentItemEffect(switchToKey, path);
-    }
-    return await getTree(path);
-}
-async function handleWrapAction(path) {
-    false || console.clear();
-    const tree = await getTree(path);
-    displayCurrentFocus(tree);
-    const newParentName = await Input.prompt({
-        ...promptOptions,
-        message: "New parent name:"
-    });
-    await wrapCurrentItemInNewParentEffect(newParentName, path);
-    return await getTree(path);
-}
-async function handleMoveAction(path) {
-    false || console.clear();
-    const tree = await getTree(path);
-    const items = getItemsList(tree);
-    const { key: currentKey } = getCurrentItemDetails(tree);
-    const moveToKey = await Select.prompt({
-        ...promptOptions,
-        message: "Select a new parent for the current item:",
-        options: [
-            ...items.filter(([_, key])=>key !== currentKey).map(([name, key])=>({
-                    name: name,
-                    value: key
-                })),
-            Select.separator(),
-            {
-                name: "Go Back",
-                value: "back"
-            }
-        ]
-    });
-    if (moveToKey !== "back") {
-        await moveNodeToNewParentEffect(currentKey, moveToKey, path);
-    }
-    return await getTree(path);
-}
 async function unixCLI(command, ...args) {
-    const focusFilePath = await findOrCreateFocusFile();
-    if (!focusFilePath) {
-        await createFocusFile(focusFilePath);
+    let focusFilePath;
+    try {
+        focusFilePath = await resolveFocusFilePath({
+            interactive: false
+        });
+    } catch (err) {
+        console.error(err instanceof Error ? err.message : err);
+        Deno.exit(1);
     }
-    console.log(`Executing command: ${command} with path: ${focusFilePath}`);
     switch(command){
         case "status":
-            console.log("Calling displayCurrentFocusEffect");
             await displayCurrentFocusEffect(focusFilePath);
             break;
         case "complete":
-            console.log("Calling completeCurrentItemEffect");
             await completeCurrentItemEffect(focusFilePath);
             break;
         case "add":
-            console.log("Calling createNestedChildrenEffect");
-            await createNestedChildrenEffect(args[0], focusFilePath);
+            await createNestedChildrenEffect(focusFilePath, args[0]);
             break;
         case "later":
-            console.log("Calling addNextSiblingToCurrentItemEffect");
-            await addNextSiblingToCurrentItemEffect(args[0], focusFilePath);
+            await addNextSiblingToCurrentItemEffect(focusFilePath, args[0]);
             break;
         case "edit":
-            console.log("Calling editCurrentItemNameEffect");
-            await editCurrentItemNameEffect(args[0], focusFilePath);
+            await editCurrentItemNameEffect(focusFilePath, args[0]);
             break;
         case "switch":
+            await setCurrentItemEffect(focusFilePath, args[0]);
+            break;
+        case "wrap":
+            await wrapCurrentItemInNewParentEffect(args[0], focusFilePath);
+            break;
+        case "move":
             {
-                const items = await getItemsListEffect(focusFilePath);
-                const index = parseInt(args[0], 10);
-                if (index >= 0 && index < items.length) {
-                    console.log("Calling setCurrentItemEffect");
-                    await setCurrentItemEffect(index.toString(), focusFilePath);
-                } else {
-                    console.log("Invalid index");
-                }
+                const tree = await getTree(focusFilePath);
+                const { key: currentKey } = getCurrentItemDetails(tree);
+                await moveNodeToNewParentEffect(currentKey, args[0], focusFilePath);
                 break;
             }
+        case "dive-in":
+            await diveInEffect(focusFilePath);
+            break;
+        case "next":
+            await focusNextSiblingEffect(focusFilePath);
+            break;
+        case "previous":
+            await focusPreviousSiblingEffect(focusFilePath);
+            break;
+        case "down":
+            await focusFirstChildEffect(focusFilePath);
+            break;
+        case "up":
+            await focusParentEffect(focusFilePath);
+            break;
         default:
-            console.log("Unknown command");
+            break;
     }
 }
-false || console.clear();
-await new Command().name("focus").version("0.1.0").description("Stay on target while yak-shaving").command("tui", "Start the TUI").action(()=>{
-    interactiveTUI();
-}).command("status", "Display the current status").action(()=>{
-    unixCLI("status");
-}).command("complete", "Complete the current focus").action(()=>{
-    unixCLI("complete");
-}).command("add <items:string>", "Add nested foci").arguments("<items:string>").action((_options, items)=>{
-    unixCLI("add", items);
-}).command("later <items:string>", "Add follow-up foci").arguments("<items:string>").action((_options, items)=>{
-    unixCLI("later", items);
-}).command("edit <newName:string>", "Edit the current focus' description").arguments("<newName:string>").action((_options, newName)=>{
-    unixCLI("edit", newName);
-}).command("switch <index:string>", "Focus on something else").arguments("<index:string>").action((_options, index)=>{
-    unixCLI("switch", index);
+async function runInit() {
+    const fromEnv = Deno.env.get("NOW_FILE");
+    if (!fromEnv?.trim()) {
+        console.error("NOW_FILE is required for init.");
+        Deno.exit(1);
+    }
+    const path = resolve5(Deno.cwd(), fromEnv);
+    await ensureFocusFile(path);
+}
+async function runJsonFocus() {
+    try {
+        const path = await resolveFocusFilePath({
+            interactive: false
+        });
+        const tree = await getTree(path);
+        const d = getCurrentItemDetails(tree);
+        console.log(JSON.stringify({
+            focus: d.focusStr,
+            breadcrumb: d.breadcrumbStr,
+            key: d.key,
+            isLeaf: d.isLeaf,
+            isRoot: d.isRoot,
+            siblingCount: d.siblingCount
+        }));
+    } catch (err) {
+        console.error(err instanceof Error ? err.message : err);
+        Deno.exit(1);
+    }
+}
+async function runJsonItems() {
+    try {
+        const path = await resolveFocusFilePath({
+            interactive: false
+        });
+        const tree = await getTree(path);
+        const items = getItemsList(tree);
+        console.log(JSON.stringify(items.map(([display, key])=>({
+                display,
+                key
+            }))));
+    } catch (err) {
+        console.error(err instanceof Error ? err.message : err);
+        Deno.exit(1);
+    }
+}
+const jsonCmd = new Command().description("JSON output for integrations").command("focus", "Output current focus as JSON").action(async ()=>{
+    await runJsonFocus();
+}).reset().command("items", "Output focusable items as JSON").action(async ()=>{
+    await runJsonItems();
+});
+if (Deno.args[0] !== "json") {
+    false || console.clear();
+}
+await new Command().name("focus").version("0.1.0").description("Stay on target while yak-shaving").command("tui", "Start the TUI").action(async ()=>{
+    const { interactiveTUI } = await import("./ui/interactiveTUI.ts");
+    await interactiveTUI();
+}).command("json", jsonCmd).command("init", "Create focus file at NOW_FILE if missing").action(async ()=>{
+    await runInit();
+}).command("status", "Display the current status").action(async ()=>{
+    await unixCLI("status");
+}).command("complete", "Complete the current focus").action(async ()=>{
+    await unixCLI("complete");
+}).command("add <items:string>", "Add nested foci").arguments("<items:string>").action(async (_options, items)=>{
+    await unixCLI("add", items);
+}).command("later <items:string>", "Add follow-up foci").arguments("<items:string>").action(async (_options, items)=>{
+    await unixCLI("later", items);
+}).command("edit <newName:string>", "Edit the current focus description").arguments("<newName:string>").action(async (_options, newName)=>{
+    await unixCLI("edit", newName);
+}).command("switch <key:string>", "Focus on something else").arguments("<key:string>").action(async (_options, key)=>{
+    await unixCLI("switch", key);
+}).command("wrap <parentName:string>", "Wrap current item in a new parent").arguments("<parentName:string>").action(async (_options, parentName)=>{
+    await unixCLI("wrap", parentName);
+}).command("move <targetKey:string>", "Move current item to a new parent").arguments("<targetKey:string>").action(async (_options, targetKey)=>{
+    await unixCLI("move", targetKey);
+}).command("dive-in", "Dive into current item (focus first child)").action(async ()=>{
+    await unixCLI("dive-in");
+}).command("next", "Focus next sibling").action(async ()=>{
+    await unixCLI("next");
+}).command("previous", "Focus previous sibling").action(async ()=>{
+    await unixCLI("previous");
+}).command("down", "Focus first child").action(async ()=>{
+    await unixCLI("down");
+}).command("up", "Focus parent").action(async ()=>{
+    await unixCLI("up");
 }).default("status").parse(Deno.args);
