@@ -7,11 +7,17 @@ const DATA_STR = {
     focusPrevious: "▷",
     placeholder: "______"
 };
+`${DATA_STR.focus} `;
+`${DATA_STR.focusPrevious} `;
 const DATA_STR1 = {
     ...DATA_STR,
     rootFocus: "Root Focus"
 };
-`${DATA_STR1.lineMarker}${DATA_STR1.rootFocus} ${DATA_STR1.currentItemMarker}\n`;
+function getInitialFocusContent(rootName) {
+    const name = (rootName == null ? "" : rootName.replace(/\n/g, " ").trim()) || DATA_STR1.rootFocus;
+    return `${DATA_STR1.lineMarker}${name} ${DATA_STR1.currentItemMarker}\n`;
+}
+getInitialFocusContent();
 const args = Deno.args;
 const cmd = args[0] ?? "status";
 if (cmd !== "json") {
@@ -23,21 +29,45 @@ if (cmd === "tui") {
     Deno.exit(0);
 }
 if (cmd === "json") {
-    const { runJsonFocus, runJsonItems } = await import("./ui/jsonCLI.ts");
+    const { runJsonFocus, runJsonItems, runJsonPreview } = await import("./ui/jsonCLI.ts");
     const sub = args[1];
     if (sub === "focus") {
         await runJsonFocus();
     } else if (sub === "items") {
         await runJsonItems();
+    } else if (sub === "preview") {
+        let selectedKey;
+        let action;
+        let moveTargetKey;
+        for(let i = 2; i < args.length; i++){
+            const arg = args[i];
+            if (arg === "--selected-key" && args[i + 1] !== undefined) {
+                selectedKey = args[i + 1];
+                i++;
+            } else if (arg === "--action" && args[i + 1] !== undefined) {
+                action = args[i + 1];
+                i++;
+            } else if (arg === "--move-target" && args[i + 1] !== undefined) {
+                moveTargetKey = args[i + 1];
+                i++;
+            } else if (arg.startsWith("--selected-key=")) {
+                selectedKey = arg.slice("--selected-key=".length);
+            } else if (arg.startsWith("--action=")) {
+                action = arg.slice("--action=".length);
+            } else if (arg.startsWith("--move-target=")) {
+                moveTargetKey = arg.slice("--move-target=".length);
+            }
+        }
+        await runJsonPreview(selectedKey, action, moveTargetKey);
     } else {
-        console.error("json requires 'focus' or 'items'");
+        console.error("json requires 'focus', 'items', or 'preview'");
         Deno.exit(1);
     }
     Deno.exit(0);
 }
 if (cmd === "init") {
     const { runInit } = await import("./ui/jsonCLI.ts");
-    await runInit();
+    await runInit(args[1]);
     Deno.exit(0);
 }
 const { unixCLI } = await import("./ui/unixCLI.ts");

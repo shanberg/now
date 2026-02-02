@@ -375,7 +375,7 @@ export function getPlaceholderNarrow(currentIndent: string): string {
 
 /** Placeholder line for "add followup" (add sibling): insert after current line. */
 export function getPlaceholderLater(currentIndent: string): string {
-  return `${currentIndent}${DATA_STR.placeholder}`;
+  return `${currentIndent}✎ ${DATA_STR.placeholder}`;
 }
 
 /** Placeholder for "wrap": new parent line and current line indented one level. */
@@ -389,6 +389,123 @@ export function getPlaceholderWrap(
     `${DATA_STR.indent}$1$2`,
   );
   return { wrapParentLine, indentedCurrentLine };
+}
+
+/** Valid values for selectedAction in buildPreviewMarkdown. Single source of truth for CLI and extensions. */
+export const PREVIEW_ACTION_VALUES = [
+  "complete",
+  "add",
+  "later",
+  "wrap",
+  "edit",
+] as const;
+
+export type PreviewAction = (typeof PREVIEW_ACTION_VALUES)[number] | null;
+
+/**
+ * Truncates a string from the center when it exceeds maxLength.
+ * Uses a single "…" in the middle. If maxLength <= 0 or text.length <= maxLength, returns text unchanged.
+ */
+export function truncateBreadcrumb(text: string, maxLength: number): string {
+  if (maxLength <= 0 || text.length <= maxLength) return text;
+  const ellipsis = "…";
+  const take = maxLength - ellipsis.length;
+  const left = Math.floor(take / 2);
+  const right = take - left;
+  return text.slice(0, left) + ellipsis + text.slice(-right);
+}
+
+const FOCUS_PREFIX = `${DATA_STR.focus} `;
+const PREVIOUS_FOCUS_PREFIX = `${DATA_STR.focusPrevious} `;
+
+/**
+ * Builds markdown showing all items with indentation, current focus and selected item (▶),
+ * and command-specific placeholders/indicators. Used by CLI `now json preview` and extensions.
+ * When breadcrumbMaxLength is set and > 0, the breadcrumb line is center-truncated via truncateBreadcrumb.
+ */
+export function buildPreviewMarkdown(
+  items: JsonItem[],
+  currentKey: string,
+  breadcrumb: string,
+  currentItemName: string,
+  selectedKey: string | null,
+  selectedAction: PreviewAction,
+  breadcrumbMaxLength?: number,
+): string {
+  const currentIndex = items.findIndex((i) => i.key === currentKey);
+  const currentIndent =
+    currentIndex >= 0 ? getIndentFromDisplay(items[currentIndex].display) : "";
+  const nextFocusIndex =
+    selectedAction === "complete" && currentIndex >= 0
+      ? getNextFocusIndex(items, currentIndex)
+      : null;
+
+  let lines = items.map((item, index) => {
+    const raw = item.display.replace(/\s+@\s*$/, "").trimEnd();
+    const isCurrent = item.key === currentKey;
+    const isSelected = selectedKey !== null && item.key === selectedKey;
+    const isNextFocus = nextFocusIndex !== null && index === nextFocusIndex;
+    let line = raw;
+    if (isCurrent) {
+      if (selectedAction === "add") {
+        line = raw.replace(/^(\s*)(.*)$/, `$1${PREVIOUS_FOCUS_PREFIX}$2`);
+      } else if (selectedKey !== null && selectedKey !== currentKey) {
+        line = raw.replace(/^(\s*)(.*)$/, `$1${PREVIOUS_FOCUS_PREFIX}$2`);
+      } else {
+        line = raw.replace(/^(\s*)(.*)$/, `$1${FOCUS_PREFIX}$2`);
+        if (selectedAction === "complete") {
+          line = line.replace(FOCUS_PREFIX, "✓ ");
+        } else if (selectedAction === "edit") {
+          line = line.replace(FOCUS_PREFIX, "✎ ");
+        }
+      }
+    } else if (isNextFocus && selectedAction === "complete") {
+      line = raw.replace(/^(\s*)(.*)$/, `$1${FOCUS_PREFIX}$2`);
+    } else if (isSelected) {
+      line = raw.replace(/^(\s*)(.*)$/, `$1${FOCUS_PREFIX}$2`);
+    }
+    return line;
+  });
+
+  if (selectedAction === "add" && currentIndex >= 0) {
+    const placeholder = getPlaceholderNarrow(currentIndent);
+    lines = [
+      ...lines.slice(0, currentIndex + 1),
+      placeholder,
+      ...lines.slice(currentIndex + 1),
+    ];
+  }
+
+  if (selectedAction === "later" && currentIndex >= 0) {
+    const placeholder = getPlaceholderLater(currentIndent);
+    lines = [
+      ...lines.slice(0, currentIndex + 1),
+      placeholder,
+      ...lines.slice(currentIndex + 1),
+    ];
+  }
+
+  if (selectedAction === "wrap" && currentIndex >= 0) {
+    const { wrapParentLine, indentedCurrentLine } = getPlaceholderWrap(
+      currentIndent,
+      lines[currentIndex],
+    );
+    lines = [
+      ...lines.slice(0, currentIndex),
+      wrapParentLine,
+      indentedCurrentLine,
+      ...lines.slice(currentIndex + 1),
+    ];
+  }
+
+  const rawBreadcrumb = breadcrumb || "";
+  const line1 =
+    breadcrumbMaxLength != null && breadcrumbMaxLength > 0
+      ? truncateBreadcrumb(rawBreadcrumb, breadcrumbMaxLength)
+      : rawBreadcrumb;
+  const line2 = `${DATA_STR.focus} **${currentItemName || "—"}**`;
+  const header = (line1 ? line1 + "\n\n" : "") + line2 + "\n\n";
+  return header + "```\n" + lines.join("\n") + "\n```";
 }
 
 /**

@@ -39,7 +39,7 @@ export const getTree = async (path: string): Promise<TreeNode> => {
   const content = await readMarkdownFile(path);
   if (!content.trim()) {
     throw new Error(
-      `Could not read focus file at ${path} (missing or empty). Create it with: NOW_FILE=${path} now init`,
+      `Could not read focus file at ${path} (missing or empty). Create it with: NOW_FILE=${path} now init [root-name]`,
     );
   }
   let tree: TreeNode;
@@ -48,7 +48,7 @@ export const getTree = async (path: string): Promise<TreeNode> => {
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
     throw new Error(
-      `Could not read focus file at ${path}: ${detail}. Fix the file format or run NOW_FILE=${path} now init to recreate.`,
+      `Could not read focus file at ${path}: ${detail}. Fix the file format or run NOW_FILE=${path} now init [root-name] to recreate.`,
     );
   }
   D && validateTree(tree, "getTree");
@@ -110,17 +110,17 @@ async function mutateTreeWithTree(
 }
 
 /**
- * Builds an effect that mutates the tree and returns void.
+ * Builds an effect that mutates the tree and returns the new tree.
  * @param {string} name - Caller name for validation.
  * @param { (tree: TreeNode, ...args: T) => TreeNode } op - Pure op (tree, ...args) => newTree.
- * @returns { (path: string, ...args: T) => Promise<void> } Async (path, ...args) => Promise<void>.
+ * @returns { (path: string, ...args: T) => Promise<TreeNode> } Async (path, ...args) => Promise<TreeNode>.
  */
-function mutationEffectVoid<T extends unknown[]>(
+function mutationEffectReturnTree<T extends unknown[]>(
   name: string,
   op: (tree: TreeNode, ...args: T) => TreeNode,
-): (path: string, ...args: T) => Promise<void> {
+): (path: string, ...args: T) => Promise<TreeNode> {
   return async (path: string, ...args: T) => {
-    await mutateTree(path, (t) => op(t, ...args), name);
+    return await mutateTree(path, (t) => op(t, ...args), name);
   };
 }
 
@@ -201,9 +201,9 @@ export async function getNodesListEffect(path: string): Promise<TreeNode[]> {
  * Adds a new child item to the current item in the tree structure.
  * @param {string} newText - The name of the new child item.
  * @param {string} path - The path to the markdown file.
- * @returns {Promise<void>}
+ * @returns {Promise<TreeNode>}
  */
-export const addChildToCurrentItemEffect = mutationEffectVoid(
+export const addChildToCurrentItemEffect = mutationEffectReturnTree(
   "addChildToCurrentItemEffect",
   addChildToCurrentItem,
 );
@@ -213,9 +213,9 @@ export const addChildToCurrentItemEffect = mutationEffectVoid(
  * The last item in the list will be the new current item.
  * @param {string} items - The comma-separated list of items to add.
  * @param {string} path - The path to the markdown file.
- * @returns {Promise<void>}
+ * @returns {Promise<TreeNode>}
  */
-export const createNestedChildrenEffect = mutationEffectVoid(
+export const createNestedChildrenEffect = mutationEffectReturnTree(
   "createNestedChildrenEffect",
   createNestedChildren,
 );
@@ -224,9 +224,9 @@ export const createNestedChildrenEffect = mutationEffectVoid(
  * Adds a new sibling item after the current item in the tree structure.
  * @param {string} newText - The name of the new sibling item.
  * @param {string} path - The path to the markdown file.
- * @returns {Promise<void>}
+ * @returns {Promise<TreeNode>}
  */
-export const addNextSiblingToCurrentItemEffect = mutationEffectVoid(
+export const addNextSiblingToCurrentItemEffect = mutationEffectReturnTree(
   "addNextSiblingToCurrentItemEffect",
   addNextSiblingToCurrentItem,
 );
@@ -234,21 +234,28 @@ export const addNextSiblingToCurrentItemEffect = mutationEffectVoid(
 /**
  * Completes the current item in the tree structure.
  * @param {string} path - The path to the markdown file.
+ * @returns {Promise<TreeNode>} The updated tree.
  */
-export async function completeCurrentItemEffect(path: string): Promise<void> {
+export async function completeCurrentItemEffect(path: string): Promise<TreeNode> {
   const tree = await getTree(path);
   const item = getCurrentItemBreadcrumb(tree);
-  await mutateTreeWithTree(path, tree, completeCurrentItem, "completeCurrentItemEffect");
+  const newTree = await mutateTreeWithTree(
+    path,
+    tree,
+    completeCurrentItem,
+    "completeCurrentItemEffect",
+  );
   await logAction("Complete", item);
+  return newTree;
 }
 
 /**
  * Sets the current item in the tree structure based on the provided key.
  * @param {string} key - The key of the item to set as current.
  * @param {string} path - The path to the markdown file.
- * @returns {Promise<void>}
+ * @returns {Promise<TreeNode>}
  */
-export const setCurrentItemEffect = mutationEffectVoid(
+export const setCurrentItemEffect = mutationEffectReturnTree(
   "setCurrentItemEffect",
   setCurrentItem,
 );
@@ -257,9 +264,9 @@ export const setCurrentItemEffect = mutationEffectVoid(
  * Edits the name of the current item in the tree structure.
  * @param {string} newName - The new name for the current item.
  * @param {string} path - The path to the markdown file.
- * @returns {Promise<void>}
+ * @returns {Promise<TreeNode>}
  */
-export const editCurrentItemNameEffect = mutationEffectVoid(
+export const editCurrentItemNameEffect = mutationEffectReturnTree(
   "editCurrentItemNameEffect",
   editCurrentItemName,
 );

@@ -49,9 +49,11 @@ curl -fsSL https://raw.githubusercontent.com/shanberg/now/main/dist/install.sh |
 Non-TUI commands (`status`, `complete`, `add`, `later`, `edit`, `switch`) and the JSON commands use the focus file in the current directory, or the path in `NOW_FILE` when set. They do not prompt to create a file; use `now tui` for interactive creation.
 
 - **`NOW_FILE`** — When set, all commands use this path as the focus file (absolute or relative to cwd). Use `$HOME/.now/focus.now.md` or an absolute path; `~` is not expanded.
-- **`now init`** — Creates the focus file at `NOW_FILE` with initial content if it does not exist. Requires `NOW_FILE`. Used by the Raycast extension for “Create Focus File”.
+- **`now init [root-name]`** — Creates the focus file at `NOW_FILE` with initial content if it does not exist. Requires `NOW_FILE`. Optional `root-name` sets the root focus label (e.g. app or document name); omitted or empty → “Root Focus”. Used by the Raycast extension for “Create Focus File”.
 - **`now json focus`** — Writes one JSON object to stdout: `focus`, `breadcrumb`, `key`, `isLeaf`, `isRoot`. Use from Raycast, One Thing, or other tools.
 - **`now json items`** — Writes a JSON array of `{ display, key }` for each focusable item.
+- **`now json preview`** — Writes markdown to stdout: breadcrumb, focus line, and a code block of all items with focus/selected markers. Optional `--selected-key KEY` and `--action complete|add|later|wrap|edit` for action-specific placeholders. Used by the Raycast list detail view and other consumers.
+- **`--emit-json`** — For mutation commands (`complete`, `add`, `later`, `edit`, `switch`, `wrap`, `move`), pass `--emit-json` as the last argument to print one line of JSON `{ "focus": { ... }, "items": [ ... ] }` to stdout after the mutation. Used by the Raycast extension so it can update in place without re-reading the file.
 
 Example for Raycast or One Thing:
 
@@ -61,7 +63,7 @@ NOW_FILE=$HOME/.now/focus.now.md now json focus
 
 Parse stdout to get the current focus string and e.g. open `one-thing:?text=<focus>`.
 
-A **Raycast extension** in this repo (`extensions/raycast/`) adds a menu bar command and a list command that use the JSON API. See `extensions/raycast/README.md` for setup.
+A **Raycast extension** in this repo (`extensions/raycast/`) adds a menu bar command and a list command that use the JSON API. See `extensions/raycast/README.md` for setup. The extension can tie the frontmost app’s document to a Now file and suggest the same file when you rename or move the document (resolution by filename, then path).
 
 ## Development
 

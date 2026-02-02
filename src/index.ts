@@ -3,7 +3,12 @@ import { D } from "./consts.ts";
 const args = Deno.args;
 const cmd = args[0] ?? "status";
 
-if (cmd !== "json") {
+const isEmitJsonMutation =
+  args[args.length - 1] === "--emit-json" &&
+  ["complete", "add", "later", "edit", "switch", "wrap", "move"].includes(
+    cmd,
+  );
+if (cmd !== "json" && !isEmitJsonMutation) {
   D || console.clear();
 }
 
@@ -14,14 +19,40 @@ if (cmd === "tui") {
 }
 
 if (cmd === "json") {
-  const { runJsonFocus, runJsonItems } = await import("./ui/jsonCLI.ts");
+  const { runJsonFocus, runJsonItems, runJsonPreview } = await import(
+    "./ui/jsonCLI.ts"
+  );
   const sub = args[1];
   if (sub === "focus") {
     await runJsonFocus();
   } else if (sub === "items") {
     await runJsonItems();
+  } else if (sub === "preview") {
+    let selectedKey: string | undefined;
+    let action: string | undefined;
+    let moveTargetKey: string | undefined;
+    for (let i = 2; i < args.length; i++) {
+      const arg = args[i];
+      if (arg === "--selected-key" && args[i + 1] !== undefined) {
+        selectedKey = args[i + 1];
+        i++;
+      } else if (arg === "--action" && args[i + 1] !== undefined) {
+        action = args[i + 1];
+        i++;
+      } else if (arg === "--move-target" && args[i + 1] !== undefined) {
+        moveTargetKey = args[i + 1];
+        i++;
+      } else if (arg.startsWith("--selected-key=")) {
+        selectedKey = arg.slice("--selected-key=".length);
+      } else if (arg.startsWith("--action=")) {
+        action = arg.slice("--action=".length);
+      } else if (arg.startsWith("--move-target=")) {
+        moveTargetKey = arg.slice("--move-target=".length);
+      }
+    }
+    await runJsonPreview(selectedKey, action, moveTargetKey);
   } else {
-    console.error("json requires 'focus' or 'items'");
+    console.error("json requires 'focus', 'items', or 'preview'");
     Deno.exit(1);
   }
   Deno.exit(0);
@@ -29,7 +60,7 @@ if (cmd === "json") {
 
 if (cmd === "init") {
   const { runInit } = await import("./ui/jsonCLI.ts");
-  await runInit();
+  await runInit(args[1]);
   Deno.exit(0);
 }
 
@@ -51,29 +82,44 @@ const cliCommands = [
   "up",
 ] as const;
 
+const mutationCommandsWithEmitJson = [
+  "complete",
+  "add",
+  "later",
+  "edit",
+  "switch",
+  "wrap",
+  "move",
+] as const;
+
 if (cliCommands.includes(cmd as (typeof cliCommands)[number])) {
   const c = cmd as (typeof cliCommands)[number];
+  const emitJson =
+    mutationCommandsWithEmitJson.includes(
+      c as (typeof mutationCommandsWithEmitJson)[number],
+    ) && args[args.length - 1] === "--emit-json";
+  const positionals = emitJson ? args.slice(1, -1) : args.slice(1);
+  const options = emitJson ? { emitJson: true } : undefined;
+
   if (c === "add" || c === "later") {
-    const items = args[1];
-    if (items === undefined) {
+    if (positionals[0] === undefined) {
       console.error(`${c} requires an argument`);
       Deno.exit(1);
     }
-    await unixCLI(c, items);
+    await unixCLI(c, options, ...positionals);
   } else if (
     c === "edit" ||
     c === "switch" ||
     c === "wrap" ||
     c === "move"
   ) {
-    const arg = args[1];
-    if (arg === undefined) {
+    if (positionals[0] === undefined) {
       console.error(`${c} requires an argument`);
       Deno.exit(1);
     }
-    await unixCLI(c, arg);
+    await unixCLI(c, options, ...positionals);
   } else {
-    await unixCLI(c);
+    await unixCLI(c, options, ...positionals);
   }
   Deno.exit(0);
 }

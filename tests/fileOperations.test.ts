@@ -5,7 +5,10 @@ import {
   assertRejects,
   assertEquals,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { INITIAL_FOCUS_CONTENT } from "../src/consts.ts";
+import {
+  getInitialFocusContent,
+  INITIAL_FOCUS_CONTENT,
+} from "../src/consts.ts";
 import {
   ensureFocusFile,
   readMarkdownFile,
@@ -62,4 +65,16 @@ Deno.test("ensureFocusFile - no-op when file exists", async () => {
   const content = await readMarkdownFile(path);
   assertEquals(content, existing);
   await Deno.remove(path);
+});
+
+Deno.test("ensureFocusFile - creates file with custom root name when provided", async () => {
+  const dir = await Deno.makeTempDir();
+  const path = `${dir}/app.now.md`;
+
+  await ensureFocusFile(path, "MyApp");
+
+  const content = await readMarkdownFile(path);
+  assertEquals(content, getInitialFocusContent("MyApp"));
+  await Deno.remove(path);
+  await Deno.remove(dir);
 });

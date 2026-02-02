@@ -14,7 +14,7 @@ export function findFocusFileInCwd(): string | null {
 }
 
 const NO_FOCUS_FILE_MESSAGE =
-  "No focus file found and NOW_FILE not set. Set NOW_FILE to your focus file path (e.g. export NOW_FILE=$HOME/.now/focus.now.md) or run from a directory with a .now.md file. To create a file: NOW_FILE=/path/to/file.now.md now init";
+  "No focus file found and NOW_FILE not set. Set NOW_FILE to your focus file path (e.g. export NOW_FILE=$HOME/.now/focus.now.md) or run from a directory with a .now.md file. To create a file: NOW_FILE=/path/to/file.now.md now init [root-name]";
 
 /**
  * Resolves the focus file path: NOW_FILE env, or file in cwd, or (if interactive) prompt.

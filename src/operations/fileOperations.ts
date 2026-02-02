@@ -1,6 +1,6 @@
 import { ensureFile } from "https://deno.land/std@0.224.0/fs/mod.ts";
 import { dirname } from "std/path/mod.ts";
-import { INITIAL_FOCUS_CONTENT, LOG_FILE_PATH } from "../consts.ts";
+import { getInitialFocusContent, LOG_FILE_PATH } from "../consts.ts";
 
 /** Reads file at path; returns "" if not found, otherwise throws. */
 async function readFileOrEmpty(path: string): Promise<string> {
@@ -42,8 +42,12 @@ export async function writeMarkdownFile(
  * Creates the focus file at path with initial content if it does not exist.
  * Ensures parent directory exists. Idempotent when file already exists.
  * @param {string} path - Absolute path to the focus file.
+ * @param {string} [rootName] - Optional root focus label (app/document name); empty/whitespace → "Root Focus".
  */
-export async function ensureFocusFile(path: string): Promise<void> {
+export async function ensureFocusFile(
+  path: string,
+  rootName?: string,
+): Promise<void> {
   try {
     await Deno.readTextFile(path);
     return;
@@ -51,7 +55,7 @@ export async function ensureFocusFile(path: string): Promise<void> {
     if (!(error instanceof Deno.errors.NotFound)) throw error;
   }
   await Deno.mkdir(dirname(path), { recursive: true });
-  await Deno.writeTextFile(path, INITIAL_FOCUS_CONTENT);
+  await Deno.writeTextFile(path, getInitialFocusContent(rootName));
 }
 
 /**

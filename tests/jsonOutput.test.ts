@@ -96,3 +96,80 @@ Deno.test("json focus - exits 1 when no file and no NOW_FILE", async () => {
     await Deno.remove(tmpDir).catch(() => { });
   }
 });
+
+Deno.test("json preview - stdout is non-empty markdown with header and code block", async () => {
+  const tmp = await Deno.makeTempFile({ suffix: ".now.md" });
+  await Deno.writeTextFile(tmp, FIXTURE);
+  const orig = Deno.env.get("NOW_FILE");
+  try {
+    Deno.env.set("NOW_FILE", tmp);
+    const p = await new Deno.Command(CLI[0], {
+      args: [...CLI.slice(1), "json", "preview"],
+      cwd: Deno.cwd(),
+      env: { NOW_FILE: tmp, ...Deno.env.toObject() },
+      stdout: "piped",
+      stderr: "piped",
+    }).output();
+    assertEquals(p.code, 0);
+    const out = new TextDecoder().decode(p.stdout).trim();
+    assertEquals(out.includes("▶ **Beta**"), true);
+    assertEquals(out.includes("```"), true);
+    assertEquals(out.includes("Root"), true);
+    assertEquals(out.includes("Alpha"), true);
+    assertEquals(out.includes("Gamma"), true);
+  } finally {
+    if (orig !== undefined) Deno.env.set("NOW_FILE", orig);
+    else Deno.env.delete("NOW_FILE");
+    await Deno.remove(tmp).catch(() => { });
+  }
+});
+
+Deno.test("json preview - with --action complete shows next focus", async () => {
+  const tmp = await Deno.makeTempFile({ suffix: ".now.md" });
+  await Deno.writeTextFile(tmp, FIXTURE);
+  const orig = Deno.env.get("NOW_FILE");
+  try {
+    Deno.env.set("NOW_FILE", tmp);
+    const p = await new Deno.Command(CLI[0], {
+      args: [...CLI.slice(1), "json", "preview", "--action", "complete"],
+      cwd: Deno.cwd(),
+      env: { NOW_FILE: tmp, ...Deno.env.toObject() },
+      stdout: "piped",
+      stderr: "piped",
+    }).output();
+    assertEquals(p.code, 0);
+    const out = new TextDecoder().decode(p.stdout).trim();
+    assertEquals(out.includes("✓ "), true);
+    assertEquals(out.includes("▶ Alpha"), true);
+  } finally {
+    if (orig !== undefined) Deno.env.set("NOW_FILE", orig);
+    else Deno.env.delete("NOW_FILE");
+    await Deno.remove(tmp).catch(() => { });
+  }
+});
+
+Deno.test("json preview - with --move-target shows tree after move", async () => {
+  const tmp = await Deno.makeTempFile({ suffix: ".now.md" });
+  await Deno.writeTextFile(tmp, FIXTURE);
+  const orig = Deno.env.get("NOW_FILE");
+  try {
+    Deno.env.set("NOW_FILE", tmp);
+    const p = await new Deno.Command(CLI[0], {
+      args: [...CLI.slice(1), "json", "preview", "--move-target", "0"],
+      cwd: Deno.cwd(),
+      env: { NOW_FILE: tmp, ...Deno.env.toObject() },
+      stdout: "piped",
+      stderr: "piped",
+    }).output();
+    assertEquals(p.code, 0);
+    const out = new TextDecoder().decode(p.stdout).trim();
+    assertEquals(out.includes("▶ **Beta**"), true);
+    assertEquals(out.includes("▶ Beta"), true);
+    assertEquals(out.includes("Alpha"), true);
+    assertEquals(out.includes("Gamma"), true);
+  } finally {
+    if (orig !== undefined) Deno.env.set("NOW_FILE", orig);
+    else Deno.env.delete("NOW_FILE");
+    await Deno.remove(tmp).catch(() => { });
+  }
+});
