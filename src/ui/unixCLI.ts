@@ -49,8 +49,8 @@ async function unixCLI(
 ) {
   const options =
     optionsOrFirstArg != null &&
-    typeof optionsOrFirstArg === "object" &&
-    "emitJson" in optionsOrFirstArg
+      typeof optionsOrFirstArg === "object" &&
+      "emitJson" in optionsOrFirstArg
       ? optionsOrFirstArg
       : undefined;
   const positionalArgs = options

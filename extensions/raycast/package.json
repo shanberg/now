@@ -59,29 +59,71 @@
       "name": "menubarTruncateLength",
       "title": "Menubar truncate length",
       "description": "Truncate the focus text in the menu bar to this many characters (0 = no truncation).",
-      "type": "textfield",
+      "type": "dropdown",
       "required": false,
-      "placeholder": "0"
+      "default": "0",
+      "data": [
+        {
+          "title": "No truncation",
+          "value": "0"
+        },
+        {
+          "title": "20 characters",
+          "value": "20"
+        },
+        {
+          "title": "40 characters",
+          "value": "40"
+        },
+        {
+          "title": "60 characters",
+          "value": "60"
+        },
+        {
+          "title": "80 characters",
+          "value": "80"
+        }
+      ]
     },
     {
       "name": "breadcrumbMaxLength",
       "title": "Breadcrumb max length",
       "description": "Max characters for breadcrumb; truncation is from the center. 0 = no limit.",
-      "type": "textfield",
+      "type": "dropdown",
       "required": false,
-      "placeholder": "64",
-      "default": "64"
+      "default": "64",
+      "data": [
+        {
+          "title": "No limit",
+          "value": "0"
+        },
+        {
+          "title": "32 characters",
+          "value": "32"
+        },
+        {
+          "title": "64 characters",
+          "value": "64"
+        },
+        {
+          "title": "128 characters",
+          "value": "128"
+        }
+      ]
     }
   ],
   "dependencies": {
     "@raycast/api": "^1.69.0",
+    "@raycast/utils": "^1.19.0",
     "now-format": "file:../../packages/now-format"
   },
   "devDependencies": {
     "@raycast/eslint-config": "^2.0.0",
+    "@testing-library/react": "^16.0.0",
     "@types/node": "^20.0.0",
     "@types/react": "^19.0.0",
     "eslint": "^9.0.0",
+    "jsdom": "^28.0.0",
     "prettier": "^3.0.0",
     "typescript": "^5.0.0",
     "vitest": "^2.0.0"

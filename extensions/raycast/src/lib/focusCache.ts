@@ -1,7 +1,10 @@
-import { LocalStorage } from "@raycast/api";
+import { Cache } from "@raycast/api";
 import type { JsonItem } from "now-format";
 
 const NOW_FOCUS_CACHE_KEY = "nowFocusCache";
+
+/** Shared cache instance; disk-based with LRU. Shared between list and menu bar commands. */
+const focusCache = new Cache({ namespace: "now-focus" });
 
 export type FocusCacheEntry = {
   focus: string;
@@ -12,9 +15,9 @@ export type FocusCacheEntry = {
 
 type CacheMap = Record<string, FocusCacheEntry>;
 
-async function getCacheMap(): Promise<CacheMap> {
-  const raw = await LocalStorage.getItem<string>(NOW_FOCUS_CACHE_KEY);
-  if (!raw?.trim()) return {};
+function getCacheMap(): CacheMap {
+  const raw = focusCache.get(NOW_FOCUS_CACHE_KEY);
+  if (typeof raw !== "string" || !raw.trim() || raw.trim()[0] !== "{") return {};
   try {
     const map = JSON.parse(raw) as CacheMap;
     return map != null && typeof map === "object" ? map : {};
@@ -23,40 +26,29 @@ async function getCacheMap(): Promise<CacheMap> {
   }
 }
 
-async function setCacheMap(map: CacheMap): Promise<void> {
-  await LocalStorage.setItem(NOW_FOCUS_CACHE_KEY, JSON.stringify(map));
+function setCacheMap(map: CacheMap): void {
+  focusCache.set(NOW_FOCUS_CACHE_KEY, JSON.stringify(map));
 }
 
 /**
  * Shared focus state between list and menubar. List writes after every
  * refresh/mutation; menubar reads when opened so it shows the same state.
+ * Uses Raycast Cache API (disk-based, LRU) for recommended menu bar behavior.
  */
-export async function getFocusCache(path: string): Promise<FocusCacheEntry | null> {
-  const map = await getCacheMap();
+export function getFocusCache(path: string): Promise<FocusCacheEntry | null> {
+  const map = getCacheMap();
   const entry = map[path];
-  return entry != null ? entry : null;
+  return Promise.resolve(entry != null ? entry : null);
 }
 
-export async function setFocusCache(
+export function setFocusCache(
   path: string,
   focus: string,
   breadcrumb: string,
   items?: JsonItem[],
 ): Promise<void> {
-  // #region agent log
-  fetch("http://127.0.0.1:7253/ingest/fbc7b931-fa3f-4555-b420-453391a24b98", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      location: "focusCache.ts:setFocusCache",
-      message: "setFocusCache write",
-      data: { path, focusSnippet: focus.slice(0, 60), hypothesisId: "A,B" },
-      timestamp: Date.now(),
-      sessionId: "debug-session",
-    }),
-  }).catch(() => {});
-  // #endregion
-  const map = await getCacheMap();
+  const map = getCacheMap();
   map[path] = { focus, breadcrumb, updatedAt: Date.now(), ...(items != null && { items }) };
-  await setCacheMap(map);
+  setCacheMap(map);
+  return Promise.resolve();
 }

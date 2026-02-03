@@ -15,9 +15,9 @@ type ExtensionPreferences = {
   /** App-specific Now files - Optional JSON mapping from app bundle ID or name to Now file path. When set, the menubar (and list when opened) uses the path for the frontmost app. Example: {"com.apple.Terminal": "~/.now/term.now.md"}. */
   "appSpecificNowFiles"?: string,
   /** Menubar truncate length - Truncate the focus text in the menu bar to this many characters (0 = no truncation). */
-  "menubarTruncateLength"?: string,
+  "menubarTruncateLength": "0" | "20" | "40" | "60" | "80",
   /** Breadcrumb max length - Max characters for breadcrumb; truncation is from the center. 0 = no limit. */
-  "breadcrumbMaxLength": string
+  "breadcrumbMaxLength": "0" | "32" | "64" | "128"
 }
 
 /** Preferences accessible in all the extension's commands */

@@ -90,9 +90,11 @@ export const NOW_DOCUMENT_PATHS_KEY = "nowDocumentPaths";
 export const NOW_LAST_RESOLVED_PATH_KEY = "nowLastResolvedPath";
 
 export function parseJsonToRecord(json: string | undefined): Record<string, string> {
-  if (!json?.trim()) return {};
+  if (json == null || typeof json !== "string") return {};
+  const trimmed = json.trim();
+  if (!trimmed || (trimmed[0] !== "{" && trimmed[0] !== "[")) return {};
   try {
-    const map = JSON.parse(json) as Record<string, string>;
+    const map = JSON.parse(trimmed) as Record<string, string>;
     return map != null && typeof map === "object" ? map : {};
   } catch {
     return {};
@@ -150,8 +152,8 @@ export function mergeAppPathsJson(
   prefsJson: string | undefined,
   localJson: string | undefined,
 ): string {
-  const prefs = parseJsonToRecord(prefsJson?.trim() || undefined);
-  const local = parseJsonToRecord(localJson ?? undefined);
+  const prefs = parseJsonToRecord(prefsJson);
+  const local = parseJsonToRecord(localJson);
   return JSON.stringify({ ...prefs, ...local });
 }
 
@@ -418,10 +420,12 @@ export function resolveNowFilePathForApp(
   mappingJson: string | undefined,
   app: { bundleId?: string; name: string },
 ): string {
-  if (!mappingJson?.trim()) return resolveNowFilePath(defaultPath);
+  if (!mappingJson || typeof mappingJson !== "string") return resolveNowFilePath(defaultPath);
+  const trimmed = mappingJson.trim();
+  if (!trimmed || trimmed[0] !== "{") return resolveNowFilePath(defaultPath);
   let map: Record<string, string>;
   try {
-    map = JSON.parse(mappingJson) as Record<string, string>;
+    map = JSON.parse(trimmed) as Record<string, string>;
   } catch {
     return resolveNowFilePath(defaultPath);
   }

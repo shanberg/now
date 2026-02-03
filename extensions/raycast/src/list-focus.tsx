@@ -6,18 +6,17 @@ import {
   Icon,
   List,
   open,
-  openExtensionPreferences,
+  openCommandPreferences,
   showToast,
   Toast,
   useNavigation,
+  type LaunchProps,
 } from "@raycast/api";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, memo, useMemo, useRef, useState, type ReactNode } from "react";
+
 import {
   createFocusFile,
   focusFileExists,
-  getJsonFocus,
-  getJsonItems,
-  isNowOnPath,
   JsonFocus,
   JsonItem,
   type MutationResult,
@@ -39,16 +38,12 @@ import {
   runSwitch,
   runWrap,
 } from "./lib/now";
-import {
-  addAppPathMapping,
-  addDocumentPathMapping,
-  setLastResolvedPath,
-  setUseGlobal,
-} from "./lib/nowStorage";
-import { setFocusCache } from "./lib/focusCache";
+import { useCliMissing } from "./lib/useCliMissing";
+import { fetchFocusData, useFocusData, type FocusDataResult } from "./lib/useFocusData";
 import { useNowPathFromStorage } from "./lib/useNowPath";
 import {
   buildPreviewMarkdown,
+  getBreadcrumbAndNameForKey,
   PREVIEW_ACTION_VALUES,
   type PreviewAction,
 } from "now-format";
@@ -63,6 +58,71 @@ interface Preferences {
   breadcrumbMaxLength?: string;
 }
 
+/** Shared props for path switch/create actions (empty state and context section). */
+interface PathSwitchCreateActionsProps {
+  effectivePath: string | null;
+  defaultPath: string;
+  docPathForCurrent: string | null;
+  appPathForCurrent: string | null;
+  currentApp: { name: string; bundleId?: string } | null;
+  currentDocumentPath: string | null;
+  switchToGlobal: () => Promise<void>;
+  switchToDocument: () => Promise<void>;
+  switchToApp: () => Promise<void>;
+  createForDocument: () => Promise<void>;
+  createForApp: () => Promise<void>;
+}
+
+function PathSwitchCreateActions({
+  effectivePath,
+  defaultPath,
+  docPathForCurrent,
+  appPathForCurrent,
+  currentApp,
+  currentDocumentPath,
+  switchToGlobal,
+  switchToDocument,
+  switchToApp,
+  createForDocument,
+  createForApp,
+}: PathSwitchCreateActionsProps) {
+  return (
+    <>
+      {effectivePath !== defaultPath ? (
+        <Action title="Switch to Global" icon={Icon.Circle} onAction={switchToGlobal} />
+      ) : null}
+      {docPathForCurrent && effectivePath !== docPathForCurrent ? (
+        <Action
+          title="Switch to Document File"
+          icon={Icon.Document}
+          onAction={switchToDocument}
+        />
+      ) : null}
+      {appPathForCurrent && currentApp && effectivePath !== appPathForCurrent ? (
+        <Action
+          title={`Switch to ${currentApp.name} file`}
+          icon={Icon.AppWindow}
+          onAction={switchToApp}
+        />
+      ) : null}
+      {currentDocumentPath && !docPathForCurrent ? (
+        <Action
+          title={`Create Now File for ${documentDisplayName(currentDocumentPath)}`}
+          icon={Icon.Plus}
+          onAction={createForDocument}
+        />
+      ) : null}
+      {currentApp && !appPathForCurrent ? (
+        <Action
+          title={`Create Now File for ${currentApp.name}`}
+          icon={Icon.Plus}
+          onAction={createForApp}
+        />
+      ) : null}
+    </>
+  );
+}
+
 function AddNestedForm({
   nowFilePath,
   applyMutationResult,
@@ -70,7 +130,7 @@ function AddNestedForm({
 }: {
   nowFilePath: string;
   applyMutationResult: (result: MutationResult) => Promise<void>;
-  refresh: () => Promise<void>;
+  refresh: () => void | Promise<void>;
 }) {
   const { pop } = useNavigation();
   return (
@@ -117,7 +177,7 @@ function LaterForm({
 }: {
   nowFilePath: string;
   applyMutationResult: (result: MutationResult) => Promise<void>;
-  refresh: () => Promise<void>;
+  refresh: () => void | Promise<void>;
 }) {
   const { pop } = useNavigation();
   return (
@@ -166,7 +226,7 @@ function EditForm({
   nowFilePath: string;
   currentName: string;
   applyMutationResult: (result: MutationResult) => Promise<void>;
-  refresh: () => Promise<void>;
+  refresh: () => void | Promise<void>;
 }) {
   const { pop } = useNavigation();
   return (
@@ -214,7 +274,7 @@ function WrapForm({
 }: {
   nowFilePath: string;
   applyMutationResult: (result: MutationResult) => Promise<void>;
-  refresh: () => Promise<void>;
+  refresh: () => void | Promise<void>;
 }) {
   const { pop } = useNavigation();
   return (
@@ -253,7 +313,7 @@ function WrapForm({
   );
 }
 
-function MoveTargetList({
+function MoveTargetListInner({
   nowFilePath,
   currentKey,
   items,
@@ -264,7 +324,7 @@ function MoveTargetList({
   currentKey: string;
   items: JsonItem[];
   applyMutationResult: (result: MutationResult) => Promise<void>;
-  refresh: () => Promise<void>;
+  refresh: () => void | Promise<void>;
 }) {
   const { pop } = useNavigation();
   const targets = items.filter((item) => item.key !== currentKey);
@@ -294,10 +354,14 @@ function MoveTargetList({
     });
   }, [targets, nowFilePath]);
 
+  /** Depend on the cached value for the selected key (primitive) so the effect only runs when selection or that key's cache entry changes, not when any other key is added to movePreviewCache. */
+  const cachedMarkdownForSelected = selectedTargetKey
+    ? movePreviewCache[selectedTargetKey]
+    : undefined;
   useEffect(() => {
     if (!selectedTargetKey) return;
-    if (movePreviewCache[selectedTargetKey]) {
-      setLastShownMarkdown(movePreviewCache[selectedTargetKey]);
+    if (cachedMarkdownForSelected !== undefined) {
+      setLastShownMarkdown(cachedMarkdownForSelected);
       return;
     }
     let cancelled = false;
@@ -310,7 +374,7 @@ function MoveTargetList({
     return () => {
       cancelled = true;
     };
-  }, [nowFilePath, selectedTargetKey, movePreviewCache]);
+  }, [nowFilePath, selectedTargetKey, cachedMarkdownForSelected]);
 
   return (
     <List
@@ -363,98 +427,15 @@ function MoveTargetList({
   );
 }
 
-function useFocusData(nowFilePath: string | null) {
-  const [focus, setFocus] = useState<JsonFocus | null>(null);
-  const [items, setItems] = useState<JsonItem[] | null>(null);
-  const [error, setError] = useState<boolean>(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  /** Pinned path: list shows and mutates this file until the user explicitly switches. Avoids path flipping when frontmost app becomes Raycast. */
-  const [pinnedPath, setPinnedPath] = useState<string | null>(null);
-  const effectivePath = pinnedPath ?? nowFilePath;
+const MoveTargetList = memo(MoveTargetListInner);
 
-  const refresh = useCallback(async () => {
-    if (!effectivePath) return;
-    setIsLoading(true);
-    setError(false);
-    setErrorMessage(null);
-    const [focusResult, itemsResult] = await Promise.all([
-      getJsonFocus(effectivePath),
-      getJsonItems(effectivePath),
-    ]);
-    setFocus(focusResult.data ?? null);
-    setItems(itemsResult.data ?? null);
-    if (focusResult.data === null && itemsResult.data === null) {
-      setError(true);
-      setErrorMessage(
-        focusResult.error ?? itemsResult.error ?? null,
-      );
-    } else if (focusResult.data) {
-      setPinnedPath(effectivePath);
-      // #region agent log
-      fetch("http://127.0.0.1:7253/ingest/fbc7b931-fa3f-4555-b420-453391a24b98", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          location: "list-focus.tsx:refresh",
-          message: "refresh writing to cache",
-          data: { nowFilePath: effectivePath, hypothesisId: "B,D" },
-          timestamp: Date.now(),
-          sessionId: "debug-session",
-        }),
-      }).catch(() => {});
-      // #endregion
-      await setFocusCache(
-        effectivePath,
-        focusResult.data.focus,
-        focusResult.data.breadcrumb,
-        itemsResult.data ?? undefined,
-      );
-    }
-    setIsLoading(false);
-  }, [effectivePath]);
+type ListFocusLaunchContext = { path?: string };
 
-  const applyMutationResult = useCallback(
-    async (result: MutationResult) => {
-      // #region agent log
-      fetch("http://127.0.0.1:7253/ingest/fbc7b931-fa3f-4555-b420-453391a24b98", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          location: "list-focus.tsx:applyMutationResult",
-          message: "applyMutationResult entry (path in closure)",
-          data: { nowFilePathInClosure: effectivePath, resultFocusKey: result.focus?.key, hypothesisId: "A,D" },
-          timestamp: Date.now(),
-          sessionId: "debug-session",
-        }),
-      }).catch(() => {});
-      // #endregion
-      setFocus(result.focus);
-      setItems(result.items);
-      setError(false);
-      setErrorMessage(null);
-      await setFocusCache(
-        effectivePath,
-        result.focus.focus,
-        result.focus.breadcrumb,
-        result.items,
-      );
-    },
-    [effectivePath],
-  );
-
-  useEffect(() => {
-    if (!effectivePath) return;
-    refresh();
-  }, [effectivePath, refresh]);
-
-  return { focus, items, error, errorMessage, isLoading, refresh, applyMutationResult, setPinnedPath, effectivePath };
-}
-
-export default function Command() {
+export default function Command(props: LaunchProps<{ launchContext?: ListFocusLaunchContext }>) {
   const prefs = getPreferenceValues<Preferences>();
   const defaultPath = resolveNowFilePath(prefs.focusFilePath);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const initialPinnedPath = props.launchContext?.path ?? null;
 
   const {
     nowFilePath,
@@ -464,20 +445,89 @@ export default function Command() {
     docPathForCurrent,
     pathReady,
     refreshPathFromStorage,
+    setUseGlobal,
+    setLastResolvedPath,
+    addAppPathMapping,
+    addDocumentPathMapping,
   } = useNowPathFromStorage({
     defaultPath,
     appSpecificNowFiles: prefs.appSpecificNowFiles,
   });
 
   const { focus, items, error, errorMessage, isLoading, refresh, applyMutationResult, setPinnedPath, effectivePath } =
-    useFocusData(pathReady ? nowFilePath : null);
-  const [cliMissing, setCliMissing] = useState<boolean | null>(null);
+    useFocusData(pathReady ? nowFilePath : null, initialPinnedPath);
   const hasDeferredOneThingSync = useRef(false);
+
+  const itemsForMove = useMemo(() => items ?? [], [items]);
 
   const currentKey = focus?.key ?? "";
   const hasItems = Array.isArray(items) && items.length > 0;
   const showEmpty = !isLoading && (error || !hasItems);
   const fileMissing = error && !focusFileExists(effectivePath ?? "");
+  const cliMissing = useCliMissing(showEmpty && !!error && !fileMissing);
+
+  const switchToGlobal = useCallback(async () => {
+    await setUseGlobal(true);
+    await refreshPathFromStorage();
+    setPinnedPath(defaultPath);
+  }, [setUseGlobal, refreshPathFromStorage, setPinnedPath, defaultPath]);
+
+  const switchToDocument = useCallback(async () => {
+    await setUseGlobal(false);
+    await setLastResolvedPath(docPathForCurrent ?? "");
+    await refreshPathFromStorage();
+    setPinnedPath(docPathForCurrent ?? null);
+  }, [setUseGlobal, setLastResolvedPath, refreshPathFromStorage, setPinnedPath, docPathForCurrent]);
+
+  const switchToApp = useCallback(async () => {
+    await setUseGlobal(false);
+    await setLastResolvedPath(appPathForCurrent ?? "");
+    await refreshPathFromStorage();
+    setPinnedPath(appPathForCurrent ?? null);
+  }, [setUseGlobal, setLastResolvedPath, refreshPathFromStorage, setPinnedPath, appPathForCurrent]);
+
+  const createForDocument = useCallback(async () => {
+    if (!currentDocumentPath) return;
+    const path = resolveNowFilePath(suggestedNowPathForDocument(currentDocumentPath));
+    try {
+      await createFocusFile(path, documentDisplayName(currentDocumentPath));
+      await addDocumentPathMapping(
+        currentDocumentPath,
+        suggestedNowPathForDocument(currentDocumentPath),
+      );
+      await setUseGlobal(false);
+      await refreshPathFromStorage();
+      setPinnedPath(path);
+      await showToast(Toast.Style.Success, "Created and using for current document");
+      await refresh();
+    } catch (e) {
+      await showToast(Toast.Style.Failure, "Failed to create file", String(e));
+    }
+  }, [
+    currentDocumentPath,
+    addDocumentPathMapping,
+    setUseGlobal,
+    refreshPathFromStorage,
+    setPinnedPath,
+    refresh,
+  ]);
+
+  const createForApp = useCallback(async () => {
+    if (!currentApp) return;
+    const path = resolveNowFilePath(suggestedNowPathForApp(currentApp));
+    try {
+      await createFocusFile(path, currentApp.name);
+      const key = currentApp.bundleId ?? currentApp.name;
+      await addAppPathMapping(key, suggestedNowPathForApp(currentApp));
+      await setUseGlobal(false);
+      await refreshPathFromStorage();
+      setPinnedPath(path);
+      await showToast(Toast.Style.Success, `Created and using for ${currentApp.name}`);
+      await refresh();
+    } catch (e) {
+      await showToast(Toast.Style.Failure, "Failed to create file", String(e));
+    }
+  }, [currentApp, addAppPathMapping, setUseGlobal, refreshPathFromStorage, setPinnedPath, refresh]);
 
   const nowInputLabel =
     effectivePath === defaultPath
@@ -491,35 +541,600 @@ export default function Command() {
   /** Path used for all mutations and forms; pinned so it does not flip when frontmost app changes. */
   const pathForMutations = effectivePath ?? nowFilePath ?? "";
 
+  /** Preview data for switch-target paths (global, document, app) so the detail panel shows the target file's content. */
+  const [switchTargetPreviews, setSwitchTargetPreviews] = useState<Record<string, FocusDataResult>>({});
+  useEffect(() => {
+    if (!pathReady) return;
+    const targets: string[] = [];
+    if (defaultPath && effectivePath !== defaultPath) targets.push(defaultPath);
+    if (docPathForCurrent && effectivePath !== docPathForCurrent) targets.push(docPathForCurrent);
+    if (appPathForCurrent && effectivePath !== appPathForCurrent) targets.push(appPathForCurrent);
+    let cancelled = false;
+    targets.forEach((path) => {
+      fetchFocusData(path).then((result) => {
+        if (!cancelled) {
+          setSwitchTargetPreviews((prev) => ({ ...prev, [path]: result }));
+        }
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [pathReady, effectivePath, defaultPath, docPathForCurrent, appPathForCurrent]);
+
   useEffect(() => {
     if (!prefs.updateOneThing || !focus?.focus) return;
     if (hasDeferredOneThingSync.current) {
-      // #region agent log
-      fetch("http://127.0.0.1:7253/ingest/fbc7b931-fa3f-4555-b420-453391a24b98", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          location: "list-focus.tsx:OneThingEffect",
-          message: "opening One Thing URL with focus",
-          data: { nowFilePath: effectivePath, focusText: focus.focus.slice(0, 60), hypothesisId: "C" },
-          timestamp: Date.now(),
-          sessionId: "debug-session",
-        }),
-      }).catch(() => {});
-      // #endregion
       open(getOneThingUrl(focus.focus));
     } else {
       hasDeferredOneThingSync.current = true;
     }
   }, [prefs.updateOneThing, focus?.focus, effectivePath]);
 
-  useEffect(() => {
-    if (!showEmpty || !error || fileMissing) {
-      setCliMissing(null);
-      return;
+  /** Compute detail element unconditionally so useMemo is always called (Rules of Hooks). */
+  const itemKeys = new Set((items ?? []).map((i) => i.key));
+  const effectiveSelectedId =
+    selectedId != null && (selectedId.startsWith("action-") || itemKeys.has(selectedId))
+      ? selectedId
+      : currentKey && itemKeys.has(currentKey)
+        ? currentKey
+        : undefined;
+  const rawBreadcrumbMax =
+    (prefs.breadcrumbMaxLength ?? String(DEFAULT_BREADCRUMB_MAX_LENGTH)).trim() ||
+    String(DEFAULT_BREADCRUMB_MAX_LENGTH);
+  const parsedBreadcrumbMax = parseInt(rawBreadcrumbMax, 10);
+  const breadcrumbMaxLengthParam =
+    Number.isNaN(parsedBreadcrumbMax) || parsedBreadcrumbMax <= 0
+      ? undefined
+      : parsedBreadcrumbMax;
+
+  /** Cache detail per selection id so arrowing doesn't create new elements and trigger rerender warnings. */
+  const detailBySelection = useMemo(() => {
+    const itemList = items ?? [];
+    const keys = new Set(itemList.map((i) => i.key));
+    const breadcrumb = focus?.breadcrumb ?? "";
+    const currentItemName = focus?.focus ?? "";
+    const actionIds: string[] = [
+      "action-add",
+      "action-complete",
+      "action-later",
+      "action-wrap",
+      "action-move",
+      "action-open-editor",
+    ];
+    if (focus) actionIds.push("action-edit");
+    if (currentDocumentPath && !docPathForCurrent) actionIds.push("action-create-document");
+    if (currentApp && !appPathForCurrent) actionIds.push("action-create-app");
+    if (effectivePath !== defaultPath) actionIds.push("action-switch-global");
+    if (docPathForCurrent && effectivePath !== docPathForCurrent) actionIds.push("action-switch-document");
+    if (appPathForCurrent && currentApp && effectivePath !== appPathForCurrent) actionIds.push("action-switch-app");
+    const allIds: string[] = [...actionIds, ...keys];
+    const record: Record<string, ReactNode> = {};
+
+    function markdownForSwitchTarget(path: string): string {
+      const data = switchTargetPreviews[path];
+      if (!data) return "Loading…";
+      if (data.error) return data.errorMessage ?? "Could not read focus file.";
+      if (data.focus && data.items) {
+        return buildPreviewMarkdown(
+          data.items,
+          data.focus.key,
+          data.focus.breadcrumb ?? "",
+          data.focus.focus ?? "",
+          null,
+          null,
+          breadcrumbMaxLengthParam,
+        );
+      }
+      return "Loading…";
     }
-    isNowOnPath().then((onPath) => setCliMissing(!onPath));
-  }, [showEmpty, error, fileMissing]);
+
+    for (const id of allIds) {
+      if (id === "action-switch-global") {
+        record[id] = <List.Item.Detail markdown={markdownForSwitchTarget(defaultPath)} />;
+        continue;
+      }
+      if (id === "action-switch-document" && docPathForCurrent) {
+        record[id] = <List.Item.Detail markdown={markdownForSwitchTarget(docPathForCurrent)} />;
+        continue;
+      }
+      if (id === "action-switch-app" && appPathForCurrent) {
+        record[id] = <List.Item.Detail markdown={markdownForSwitchTarget(appPathForCurrent)} />;
+        continue;
+      }
+
+      const selectedKeyInTree: string | null = id.startsWith("action-") ? null : (keys.has(id) ? id : null);
+      const rawAction = id.startsWith("action-") ? id.slice(7) : null;
+      const normalizedAction: PreviewAction =
+        rawAction &&
+          PREVIEW_ACTION_VALUES.includes(rawAction as (typeof PREVIEW_ACTION_VALUES)[number])
+          ? (rawAction as PreviewAction)
+          : null;
+      const isSwitchTarget = selectedKeyInTree !== null && selectedKeyInTree !== currentKey;
+      const { breadcrumb: previewBreadcrumb, focusName: previewFocusName } = isSwitchTarget
+        ? getBreadcrumbAndNameForKey(itemList, selectedKeyInTree)
+        : { breadcrumb, focusName: currentItemName };
+      const markdown = buildPreviewMarkdown(
+        itemList,
+        currentKey,
+        previewBreadcrumb,
+        previewFocusName,
+        selectedKeyInTree,
+        normalizedAction,
+        breadcrumbMaxLengthParam,
+      );
+      record[id] = <List.Item.Detail markdown={markdown} />;
+    }
+    return record;
+  }, [
+    items,
+    currentKey,
+    focus?.breadcrumb,
+    focus?.focus,
+    breadcrumbMaxLengthParam,
+    focus,
+    currentDocumentPath,
+    docPathForCurrent,
+    currentApp,
+    appPathForCurrent,
+    effectivePath,
+    defaultPath,
+    switchTargetPreviews,
+  ]);
+
+  const detail =
+    detailBySelection[effectiveSelectedId ?? currentKey ?? "action-add"] ??
+    detailBySelection["action-add"] ??
+    null;
+
+  /** Stable callback so List doesn't re-sync selection on every render (avoids render loop when arrowing). Only update state when the id actually changes so Raycast re-syncing the same selection doesn't trigger another render. */
+  const handleSelectionChange = useCallback((id: string | null | undefined) => {
+    const next = id ?? null;
+    setSelectedId((prev) => (prev === next ? prev : next));
+  }, []);
+
+  /** All hooks below must run on every render (Rules of Hooks). Do not add early returns above them. */
+  const hasSwitchOptions = Boolean(
+    effectivePath !== defaultPath ||
+    docPathForCurrent ||
+    (appPathForCurrent && currentApp) ||
+    (currentDocumentPath && !docPathForCurrent) ||
+    (currentApp && !appPathForCurrent),
+  );
+  const contextSection = useMemo(
+    () =>
+      hasSwitchOptions ? (
+        <ActionPanel.Section title={nowInputLabel}>
+          <PathSwitchCreateActions
+            effectivePath={effectivePath}
+            defaultPath={defaultPath}
+            docPathForCurrent={docPathForCurrent}
+            appPathForCurrent={appPathForCurrent}
+            currentApp={currentApp}
+            currentDocumentPath={currentDocumentPath}
+            switchToGlobal={switchToGlobal}
+            switchToDocument={switchToDocument}
+            switchToApp={switchToApp}
+            createForDocument={createForDocument}
+            createForApp={createForApp}
+          />
+        </ActionPanel.Section>
+      ) : null,
+    [
+      hasSwitchOptions,
+      nowInputLabel,
+      effectivePath,
+      defaultPath,
+      docPathForCurrent,
+      appPathForCurrent,
+      currentApp,
+      currentDocumentPath,
+      switchToGlobal,
+      switchToDocument,
+      switchToApp,
+      createForDocument,
+      createForApp,
+    ],
+  );
+  const otherSection = useMemo(
+    () => (
+      <>
+        {contextSection}
+        <ActionPanel.Section title="Other">
+          <Action
+            title="Tui"
+            icon={Icon.Terminal}
+            onAction={async () => {
+              try {
+                await openTerminalWithNowTui(pathForMutations);
+                await showToast(Toast.Style.Success, "Terminal opened");
+              } catch (e) {
+                await showToast(
+                  Toast.Style.Failure,
+                  "Could not open Terminal",
+                  String(e),
+                );
+              }
+            }}
+          />
+          <Action.Open
+            title="Open in Editor"
+            icon={Icon.Document}
+            target={pathForMutations}
+          />
+          <Action title="Refresh" icon={Icon.ArrowClockwise} onAction={refresh} />
+        </ActionPanel.Section>
+      </>
+    ),
+    [contextSection, pathForMutations, refresh],
+  );
+  const runNav = useCallback(
+    async (fn: () => Promise<MutationResult | null>, label: string) => {
+      try {
+        const result = await fn();
+        if (result) await applyMutationResult(result);
+        else await refresh();
+        await showToast(Toast.Style.Success, label);
+      } catch (e) {
+        await showToast(Toast.Style.Failure, label, String(e));
+      }
+    },
+    [applyMutationResult, refresh],
+  );
+  const actionsForAdd = useMemo(
+    () => (
+      <ActionPanel>
+        <Action.Push
+          title="Narrow Focus"
+          icon={Icon.ChevronRight}
+          target={
+            <AddNestedForm
+              nowFilePath={pathForMutations}
+              applyMutationResult={applyMutationResult}
+              refresh={refresh}
+            />
+          }
+        />
+        {otherSection}
+      </ActionPanel>
+    ),
+    [pathForMutations, applyMutationResult, refresh, otherSection],
+  );
+  const actionsForComplete = useMemo(
+    () => (
+      <ActionPanel>
+        <Action
+          title="Finish This"
+          icon={Icon.Checkmark}
+          onAction={async () => {
+            await runNav(() => runComplete(pathForMutations), "Completed");
+          }}
+        />
+        {otherSection}
+      </ActionPanel>
+    ),
+    [pathForMutations, runNav, otherSection],
+  );
+  const actionsForLater = useMemo(
+    () => (
+      <ActionPanel>
+        <Action.Push
+          title="Add Followup"
+          icon={Icon.Ellipsis}
+          target={
+            <LaterForm
+              nowFilePath={pathForMutations}
+              applyMutationResult={applyMutationResult}
+              refresh={refresh}
+            />
+          }
+        />
+        {otherSection}
+      </ActionPanel>
+    ),
+    [pathForMutations, applyMutationResult, refresh, otherSection],
+  );
+  const actionsForEdit = useMemo(
+    () =>
+      focus ? (
+        <ActionPanel>
+          <Action.Push
+            title="Edit"
+            icon={Icon.TextCursor}
+            target={
+              <EditForm
+                nowFilePath={pathForMutations}
+                currentName={focus.focus}
+                applyMutationResult={applyMutationResult}
+                refresh={refresh}
+              />
+            }
+          />
+          {otherSection}
+        </ActionPanel>
+      ) : null,
+    [pathForMutations, focus?.focus, applyMutationResult, refresh, otherSection],
+  );
+  const actionsForWrap = useMemo(
+    () => (
+      <ActionPanel>
+        <Action.Push
+          title="Wrap"
+          icon={Icon.ArrowUp}
+          target={
+            <WrapForm
+              nowFilePath={pathForMutations}
+              applyMutationResult={applyMutationResult}
+              refresh={refresh}
+            />
+          }
+        />
+        {otherSection}
+      </ActionPanel>
+    ),
+    [pathForMutations, applyMutationResult, refresh, otherSection],
+  );
+  const actionsForMove = useMemo(
+    () => (
+      <ActionPanel>
+        <Action.Push
+          title="Move"
+          icon={Icon.ArrowRight}
+          target={
+            <MoveTargetList
+              nowFilePath={pathForMutations}
+              currentKey={currentKey}
+              items={itemsForMove}
+              applyMutationResult={applyMutationResult}
+              refresh={refresh}
+            />
+          }
+        />
+        {otherSection}
+      </ActionPanel>
+    ),
+    [pathForMutations, currentKey, itemsForMove, applyMutationResult, refresh, otherSection],
+  );
+  const actionsForOpenEditor = useMemo(
+    () => (
+      <ActionPanel>
+        <Action.Open
+          title="Open in Editor"
+          icon={Icon.Document}
+          target={pathForMutations}
+        />
+        {otherSection}
+      </ActionPanel>
+    ),
+    [pathForMutations, otherSection],
+  );
+  const actionsForCreateDocument = useMemo(
+    () => (
+      <ActionPanel>
+        <Action
+          title={`Create Now File for ${documentDisplayName(currentDocumentPath ?? "")}`}
+          icon={Icon.Plus}
+          onAction={createForDocument}
+        />
+        {otherSection}
+      </ActionPanel>
+    ),
+    [currentDocumentPath, createForDocument, otherSection],
+  );
+  const actionsForCreateApp = useMemo(
+    () => (
+      <ActionPanel>
+        <Action
+          title={`Create Now File for ${currentApp?.name ?? ""}`}
+          icon={Icon.Plus}
+          onAction={createForApp}
+        />
+        {otherSection}
+      </ActionPanel>
+    ),
+    [currentApp?.name, createForApp, otherSection],
+  );
+
+  const actionsForSwitchToGlobal = useMemo(
+    () => (
+      <ActionPanel>
+        <Action title="Switch to Global" icon={Icon.Circle} onAction={switchToGlobal} />
+        {otherSection}
+      </ActionPanel>
+    ),
+    [switchToGlobal, otherSection],
+  );
+  const actionsForSwitchToDocument = useMemo(
+    () => (
+      <ActionPanel>
+        <Action
+          title="Switch to Document File"
+          icon={Icon.Document}
+          onAction={switchToDocument}
+        />
+        {otherSection}
+      </ActionPanel>
+    ),
+    [switchToDocument, otherSection],
+  );
+  const actionsForSwitchToApp = useMemo(
+    () => (
+      <ActionPanel>
+        <Action
+          title={`Switch to ${currentApp?.name ?? ""} file`}
+          icon={Icon.AppWindow}
+          onAction={switchToApp}
+        />
+        {otherSection}
+      </ActionPanel>
+    ),
+    [currentApp?.name, switchToApp, otherSection],
+  );
+
+  /** Memoize action panels per Switch section item so actions refs are stable when only selection changes. */
+  const actionsBySwitchItemKey = useMemo(() => {
+    const targets = itemsForMove.filter((i) => i.key !== currentKey);
+    const map: Record<string, ReactNode> = {};
+    for (const item of targets) {
+      const isCurrent = item.key === currentKey;
+      map[item.key] = (
+        <ActionPanel>
+          {contextSection}
+          <ActionPanel.Section title="Focus">
+            <Action
+              title="Switch"
+              icon={Icon.Star}
+              onAction={async () => {
+                try {
+                  const result = await runSwitch(pathForMutations, item.key);
+                  if (result) await applyMutationResult(result);
+                  else await refresh();
+                  await showToast(Toast.Style.Success, "Focus updated");
+                } catch (e) {
+                  await showToast(
+                    Toast.Style.Failure,
+                    "Failed to set focus",
+                    String(e),
+                  );
+                }
+              }}
+            />
+            {isCurrent ? (
+              <Action
+                title="Finish This"
+                icon={Icon.Checkmark}
+                onAction={async () => {
+                  try {
+                    const result = await runComplete(pathForMutations);
+                    if (result) await applyMutationResult(result);
+                    else await refresh();
+                    await showToast(Toast.Style.Success, "Completed");
+                  } catch (e) {
+                    await showToast(
+                      Toast.Style.Failure,
+                      "Failed to complete",
+                      String(e),
+                    );
+                  }
+                }}
+              />
+            ) : null}
+          </ActionPanel.Section>
+          <ActionPanel.Section title="Actions">
+            <Action.Push
+              title="Narrow Focus"
+              icon={Icon.ChevronRight}
+              target={
+                <AddNestedForm
+                  nowFilePath={pathForMutations}
+                  applyMutationResult={applyMutationResult}
+                  refresh={refresh}
+                />
+              }
+            />
+            <Action.Push
+              title="Add Followup"
+              icon={Icon.Ellipsis}
+              target={
+                <LaterForm
+                  nowFilePath={pathForMutations}
+                  applyMutationResult={applyMutationResult}
+                  refresh={refresh}
+                />
+              }
+            />
+            {focus ? (
+              <Action.Push
+                title="Edit"
+                icon={Icon.TextCursor}
+                target={
+                  <EditForm
+                    nowFilePath={pathForMutations}
+                    currentName={focus.focus}
+                    applyMutationResult={applyMutationResult}
+                    refresh={refresh}
+                  />
+                }
+              />
+            ) : null}
+            <Action.Push
+              title="Wrap"
+              icon={Icon.ArrowUp}
+              target={
+                <WrapForm
+                  nowFilePath={pathForMutations}
+                  applyMutationResult={applyMutationResult}
+                  refresh={refresh}
+                />
+              }
+            />
+            <Action.Push
+              title="Move"
+              icon={Icon.ArrowRight}
+              target={
+                <MoveTargetList
+                  nowFilePath={pathForMutations}
+                  currentKey={currentKey}
+                  items={itemsForMove}
+                  applyMutationResult={applyMutationResult}
+                  refresh={refresh}
+                />
+              }
+            />
+          </ActionPanel.Section>
+          <ActionPanel.Section title="Copy">
+            <Action.CopyToClipboard
+              title="Copy Title"
+              content={item.display.replace(/\s+@\s*$/, "").trim()}
+            />
+          </ActionPanel.Section>
+          <ActionPanel.Section title="Other">
+            <Action
+              title="Tui"
+              icon={Icon.Terminal}
+              onAction={async () => {
+                try {
+                  await openTerminalWithNowTui(pathForMutations);
+                  await showToast(Toast.Style.Success, "Terminal opened");
+                } catch (e) {
+                  await showToast(
+                    Toast.Style.Failure,
+                    "Could not open Terminal",
+                    String(e),
+                  );
+                }
+              }}
+            />
+            <Action.Open
+              title="Open in Editor"
+              icon={Icon.Document}
+              target={pathForMutations}
+            />
+            <Action
+              title="Refresh"
+              icon={Icon.ArrowClockwise}
+              onAction={refresh}
+            />
+            <Action
+              title="Open Extension Preferences"
+              onAction={openCommandPreferences}
+            />
+          </ActionPanel.Section>
+        </ActionPanel>
+      );
+    }
+    return map;
+  }, [
+    itemsForMove,
+    currentKey,
+    pathForMutations,
+    applyMutationResult,
+    refresh,
+    contextSection,
+    focus?.focus,
+    showToast,
+    openCommandPreferences,
+  ]);
 
   if (!pathReady) {
     return (
@@ -555,85 +1170,19 @@ export default function Command() {
           icon={Icon.Warning}
           actions={
             <ActionPanel>
-              {effectivePath !== defaultPath ? (
-                <Action
-                  title="Switch to Global"
-                  icon={Icon.Circle}
-                  onAction={async () => {
-                    await setUseGlobal(true);
-                    await refreshPathFromStorage();
-                    setPinnedPath(defaultPath);
-                  }}
-                />
-              ) : null}
-              {docPathForCurrent && effectivePath !== docPathForCurrent ? (
-                <Action
-                  title="Switch to Document File"
-                  icon={Icon.Document}
-                  onAction={async () => {
-                    await setUseGlobal(false);
-                    await setLastResolvedPath(docPathForCurrent);
-                    await refreshPathFromStorage();
-                    setPinnedPath(docPathForCurrent);
-                  }}
-                />
-              ) : null}
-              {appPathForCurrent && currentApp && effectivePath !== appPathForCurrent ? (
-                <Action
-                  title={`Switch to ${currentApp.name} file`}
-                  icon={Icon.AppWindow}
-                  onAction={async () => {
-                    await setUseGlobal(false);
-                    await setLastResolvedPath(appPathForCurrent);
-                    await refreshPathFromStorage();
-                    setPinnedPath(appPathForCurrent);
-                  }}
-                />
-              ) : null}
-              {currentDocumentPath && !docPathForCurrent ? (
-                <Action
-                  title={`Create Now File for ${documentDisplayName(currentDocumentPath)}`}
-                  icon={Icon.Plus}
-                  onAction={async () => {
-                    const path = resolveNowFilePath(suggestedNowPathForDocument(currentDocumentPath));
-                    try {
-                      await createFocusFile(path, documentDisplayName(currentDocumentPath));
-                      await addDocumentPathMapping(
-                        currentDocumentPath,
-                        suggestedNowPathForDocument(currentDocumentPath),
-                      );
-                      await setUseGlobal(false);
-                      await refreshPathFromStorage();
-                      setPinnedPath(path);
-                      await showToast(Toast.Style.Success, "Created and using for current document");
-                      await refresh();
-                    } catch (e) {
-                      await showToast(Toast.Style.Failure, "Failed to create file", String(e));
-                    }
-                  }}
-                />
-              ) : null}
-              {currentApp && !appPathForCurrent ? (
-                <Action
-                  title={`Create Now File for ${currentApp.name}`}
-                  icon={Icon.Plus}
-                  onAction={async () => {
-                    const path = resolveNowFilePath(suggestedNowPathForApp(currentApp));
-                    try {
-                      await createFocusFile(path, currentApp.name);
-                      const key = currentApp.bundleId ?? currentApp.name;
-                      await addAppPathMapping(key, suggestedNowPathForApp(currentApp));
-                      await setUseGlobal(false);
-                      await refreshPathFromStorage();
-                      setPinnedPath(path);
-                      await showToast(Toast.Style.Success, `Created and using for ${currentApp.name}`);
-                      await refresh();
-                    } catch (e) {
-                      await showToast(Toast.Style.Failure, "Failed to create file", String(e));
-                    }
-                  }}
-                />
-              ) : null}
+              <PathSwitchCreateActions
+                effectivePath={effectivePath}
+                defaultPath={defaultPath}
+                docPathForCurrent={docPathForCurrent}
+                appPathForCurrent={appPathForCurrent}
+                currentApp={currentApp}
+                currentDocumentPath={currentDocumentPath}
+                switchToGlobal={switchToGlobal}
+                switchToDocument={switchToDocument}
+                switchToApp={switchToApp}
+                createForDocument={createForDocument}
+                createForApp={createForApp}
+              />
               {fileMissing ? (
                 <Action
                   title="Init"
@@ -736,7 +1285,7 @@ export default function Command() {
               />
               <Action
                 title="Open Extension Preferences"
-                onAction={openExtensionPreferences}
+                onAction={openCommandPreferences}
               />
             </ActionPanel>
           }
@@ -745,319 +1294,58 @@ export default function Command() {
     );
   }
 
-  const itemKeys = new Set((items ?? []).map((i) => i.key));
-  /** Prefer user's selection (stays on action after e.g. Finish This); default to current focus only when nothing selected. */
-  const effectiveSelectedId =
-    selectedId != null && (selectedId.startsWith("action-") || itemKeys.has(selectedId))
-      ? selectedId
-      : currentKey && itemKeys.has(currentKey)
-        ? currentKey
-        : undefined;
-  const selectedKeyInTree =
-    selectedId !== null && itemKeys.has(selectedId) ? selectedId : null;
-  const rawAction = selectedId?.startsWith("action-")
-    ? selectedId.slice(7)
-    : null;
-  const normalizedAction: PreviewAction =
-    rawAction &&
-      PREVIEW_ACTION_VALUES.includes(rawAction as (typeof PREVIEW_ACTION_VALUES)[number])
-      ? (rawAction as PreviewAction)
-      : null;
-  const rawBreadcrumbMax =
-    (prefs.breadcrumbMaxLength ?? String(DEFAULT_BREADCRUMB_MAX_LENGTH)).trim() ||
-    String(DEFAULT_BREADCRUMB_MAX_LENGTH);
-  const parsedBreadcrumbMax = parseInt(rawBreadcrumbMax, 10);
-  const breadcrumbMaxLengthParam =
-    Number.isNaN(parsedBreadcrumbMax) || parsedBreadcrumbMax <= 0
-      ? undefined
-      : parsedBreadcrumbMax;
-  const markdown = buildPreviewMarkdown(
-    items ?? [],
-    currentKey,
-    focus?.breadcrumb ?? "",
-    focus?.focus ?? "",
-    selectedKeyInTree,
-    normalizedAction,
-    breadcrumbMaxLengthParam,
-  );
-  const detail = <List.Item.Detail markdown={markdown} />;
-
-  const hasSwitchOptions = Boolean(
-    effectivePath !== defaultPath ||
-    docPathForCurrent ||
-    (appPathForCurrent && currentApp) ||
-    (currentDocumentPath && !docPathForCurrent) ||
-    (currentApp && !appPathForCurrent),
-  );
-  const contextSection = hasSwitchOptions ? (
-    <ActionPanel.Section title={nowInputLabel}>
-      {effectivePath !== defaultPath ? (
-        <Action
-          title="Switch to Global"
-          icon={Icon.Circle}
-          onAction={async () => {
-            await setUseGlobal(true);
-            await refreshPathFromStorage();
-            setPinnedPath(defaultPath);
-          }}
-        />
-      ) : null}
-      {docPathForCurrent && effectivePath !== docPathForCurrent ? (
-        <Action
-          title="Switch to Document File"
-          icon={Icon.Document}
-          onAction={async () => {
-            await setUseGlobal(false);
-            await setLastResolvedPath(docPathForCurrent);
-            await refreshPathFromStorage();
-            setPinnedPath(docPathForCurrent);
-          }}
-        />
-      ) : null}
-      {appPathForCurrent && currentApp && effectivePath !== appPathForCurrent ? (
-        <Action
-          title={`Switch to ${currentApp.name} file`}
-          icon={Icon.AppWindow}
-          onAction={async () => {
-            await setUseGlobal(false);
-            await setLastResolvedPath(appPathForCurrent);
-            await refreshPathFromStorage();
-            setPinnedPath(appPathForCurrent);
-          }}
-        />
-      ) : null}
-      {currentDocumentPath && !docPathForCurrent ? (
-        <Action
-          title={`Create Now File for ${documentDisplayName(currentDocumentPath)}`}
-          icon={Icon.Plus}
-          onAction={async () => {
-            const path = resolveNowFilePath(suggestedNowPathForDocument(currentDocumentPath));
-            try {
-              await createFocusFile(path, documentDisplayName(currentDocumentPath));
-              await addDocumentPathMapping(
-                currentDocumentPath,
-                suggestedNowPathForDocument(currentDocumentPath),
-              );
-              await setUseGlobal(false);
-              await refreshPathFromStorage();
-              setPinnedPath(path);
-              await showToast(Toast.Style.Success, "Created and using for current document");
-              await refresh();
-            } catch (e) {
-              await showToast(Toast.Style.Failure, "Failed to create file", String(e));
-            }
-          }}
-        />
-      ) : null}
-      {currentApp && !appPathForCurrent ? (
-        <Action
-          title={`Create Now File for ${currentApp.name}`}
-          icon={Icon.Plus}
-          onAction={async () => {
-            const path = resolveNowFilePath(suggestedNowPathForApp(currentApp));
-            try {
-              await createFocusFile(path, currentApp.name);
-              const key = currentApp.bundleId ?? currentApp.name;
-              await addAppPathMapping(key, suggestedNowPathForApp(currentApp));
-              await setUseGlobal(false);
-              await refreshPathFromStorage();
-              setPinnedPath(path);
-              await showToast(Toast.Style.Success, `Created and using for ${currentApp.name}`);
-              await refresh();
-            } catch (e) {
-              await showToast(Toast.Style.Failure, "Failed to create file", String(e));
-            }
-          }}
-        />
-      ) : null}
-    </ActionPanel.Section>
-  ) : null;
-
-  const otherSection = (
-    <>
-      {contextSection}
-      <ActionPanel.Section title="Other">
-        <Action
-          title="Tui"
-          icon={Icon.Terminal}
-          onAction={async () => {
-                  try {
-                    await openTerminalWithNowTui(pathForMutations);
-                    await showToast(Toast.Style.Success, "Terminal opened");
-                  } catch (e) {
-                    await showToast(
-                      Toast.Style.Failure,
-                      "Could not open Terminal",
-                      String(e),
-                    );
-                  }
-                }}
-              />
-              <Action.Open
-                title="Open in Editor"
-                icon={Icon.Document}
-                target={pathForMutations}
-              />
-        <Action title="Refresh" icon={Icon.ArrowClockwise} onAction={refresh} />
-      </ActionPanel.Section>
-    </>
-  );
-
-  const runNav = async (
-    fn: () => Promise<MutationResult | null>,
-    label: string,
-  ) => {
-    try {
-      const result = await fn();
-      if (result) await applyMutationResult(result);
-      else await refresh();
-      await showToast(Toast.Style.Success, label);
-    } catch (e) {
-      await showToast(Toast.Style.Failure, label, String(e));
-    }
-  };
-
   return (
     <List
       isLoading={isLoading}
       isShowingDetail
       searchBarPlaceholder={nowInputLabel}
       selectedItemId={effectiveSelectedId}
-      onSelectionChange={(id) => setSelectedId(id ?? null)}
+      onSelectionChange={handleSelectionChange}
     >
       <List.Section title="Actions">
         <List.Item
           id="action-add"
           title="Narrow Focus"
           icon={Icon.ChevronRight}
-          detail={detail}
-          actions={
-            <ActionPanel>
-              <Action.Push
-                title="Narrow Focus"
-                icon={Icon.ChevronRight}
-                target={
-                  <AddNestedForm
-                    nowFilePath={pathForMutations}
-                    applyMutationResult={applyMutationResult}
-                    refresh={refresh}
-                  />
-                }
-              />
-              {otherSection}
-            </ActionPanel>
-          }
+          detail={detail as any}
+          actions={actionsForAdd as any}
         />
         <List.Item
           id="action-complete"
           title="Finish This"
           icon={Icon.Checkmark}
-          detail={detail}
-          actions={
-            <ActionPanel>
-              <Action
-                title="Finish This"
-                icon={Icon.Checkmark}
-                onAction={async () => {
-                  await runNav(() => runComplete(pathForMutations), "Completed");
-                }}
-              />
-              {otherSection}
-            </ActionPanel>
-          }
+          detail={detail as any}
+          actions={actionsForComplete as any}
         />
         <List.Item
           id="action-later"
           title="Add Followup"
           icon={Icon.Ellipsis}
-          detail={detail}
-          actions={
-            <ActionPanel>
-              <Action.Push
-                title="Add Followup"
-                icon={Icon.Ellipsis}
-                target={
-                  <LaterForm
-                    nowFilePath={pathForMutations}
-                    applyMutationResult={applyMutationResult}
-                    refresh={refresh}
-                  />
-                }
-              />
-              {otherSection}
-            </ActionPanel>
-          }
+          detail={detail as any}
+          actions={actionsForLater as any}
         />
         {focus ? (
           <List.Item
             id="action-edit"
             title="Edit"
             icon={Icon.TextCursor}
-            detail={detail}
-            actions={
-              <ActionPanel>
-                <Action.Push
-                  title="Edit"
-                  icon={Icon.TextCursor}
-                  target={
-                    <EditForm
-                      nowFilePath={pathForMutations}
-                      currentName={focus.focus}
-                      applyMutationResult={applyMutationResult}
-                      refresh={refresh}
-                    />
-                  }
-                />
-                {otherSection}
-              </ActionPanel>
-            }
+            detail={detail as any}
+            actions={actionsForEdit as any}
           />
         ) : null}
         <List.Item
           id="action-wrap"
           title="Wrap"
           icon={Icon.ArrowUp}
-          detail={detail}
-          actions={
-            <ActionPanel>
-              <Action.Push
-                title="Wrap"
-                icon={Icon.ArrowUp}
-                target={
-                  <WrapForm
-                    nowFilePath={pathForMutations}
-                    applyMutationResult={applyMutationResult}
-                    refresh={refresh}
-                  />
-                }
-              />
-              {otherSection}
-            </ActionPanel>
-          }
+          detail={detail as any}
+          actions={actionsForWrap as any}
         />
         <List.Item
           id="action-move"
           title="Move"
           icon={Icon.ArrowRight}
-          detail={detail}
-          actions={
-            <ActionPanel>
-              <Action.Push
-                title="Move"
-                icon={Icon.ArrowRight}
-                target={
-                  <MoveTargetList
-                    nowFilePath={pathForMutations}
-                    currentKey={currentKey}
-                    items={items ?? []}
-                    applyMutationResult={applyMutationResult}
-                    refresh={refresh}
-                  />
-                }
-              />
-              {otherSection}
-            </ActionPanel>
-          }
+          detail={detail as any}
+          actions={actionsForMove as any}
         />
       </List.Section>
       <List.Section title="Now File">
@@ -1065,50 +1353,43 @@ export default function Command() {
           id="action-open-editor"
           title="Open in Editor"
           icon={Icon.Document}
-          detail={detail}
-          actions={
-            <ActionPanel>
-              <Action.Open
-                title="Open in Editor"
-                icon={Icon.Document}
-                target={pathForMutations}
-              />
-              {otherSection}
-            </ActionPanel>
-          }
+          detail={detail as any}
+          actions={actionsForOpenEditor as any}
         />
+        {effectivePath !== defaultPath ? (
+          <List.Item
+            id="action-switch-global"
+            title="Switch to Global"
+            icon={Icon.Circle}
+            detail={detail as any}
+            actions={actionsForSwitchToGlobal as any}
+          />
+        ) : null}
+        {docPathForCurrent && effectivePath !== docPathForCurrent ? (
+          <List.Item
+            id="action-switch-document"
+            title="Switch to Document File"
+            icon={Icon.Document}
+            detail={detail as any}
+            actions={actionsForSwitchToDocument as any}
+          />
+        ) : null}
+        {appPathForCurrent && currentApp && effectivePath !== appPathForCurrent ? (
+          <List.Item
+            id="action-switch-app"
+            title={`Switch to ${currentApp.name} file`}
+            icon={Icon.AppWindow}
+            detail={detail as any}
+            actions={actionsForSwitchToApp as any}
+          />
+        ) : null}
         {currentDocumentPath && !docPathForCurrent ? (
           <List.Item
             id="action-create-document"
             title={`Create Now File for ${documentDisplayName(currentDocumentPath)}`}
             icon={Icon.Plus}
-            detail={detail}
-            actions={
-              <ActionPanel>
-                <Action
-                  title={`Create Now File for ${documentDisplayName(currentDocumentPath)}`}
-                  icon={Icon.Plus}
-                  onAction={async () => {
-                    const path = resolveNowFilePath(suggestedNowPathForDocument(currentDocumentPath));
-                    try {
-                      await createFocusFile(path, documentDisplayName(currentDocumentPath));
-                      await addDocumentPathMapping(
-                        currentDocumentPath,
-                        suggestedNowPathForDocument(currentDocumentPath),
-                      );
-                      await setUseGlobal(false);
-                      await refreshPathFromStorage();
-                      setPinnedPath(path);
-                      await showToast(Toast.Style.Success, "Created and using for current document");
-                      await refresh();
-                    } catch (e) {
-                      await showToast(Toast.Style.Failure, "Failed to create file", String(e));
-                    }
-                  }}
-                />
-                {otherSection}
-              </ActionPanel>
-            }
+            detail={detail as any}
+            actions={actionsForCreateDocument as any}
           />
         ) : null}
         {currentApp && !appPathForCurrent ? (
@@ -1116,31 +1397,8 @@ export default function Command() {
             id="action-create-app"
             title={`Create Now File for ${currentApp.name}`}
             icon={Icon.Plus}
-            detail={detail}
-            actions={
-              <ActionPanel>
-                <Action
-                  title={`Create Now File for ${currentApp.name}`}
-                  icon={Icon.Plus}
-                  onAction={async () => {
-                    const path = resolveNowFilePath(suggestedNowPathForApp(currentApp));
-                    try {
-                      await createFocusFile(path, currentApp.name);
-                      const key = currentApp.bundleId ?? currentApp.name;
-                      await addAppPathMapping(key, suggestedNowPathForApp(currentApp));
-                      await setUseGlobal(false);
-                      await refreshPathFromStorage();
-                      setPinnedPath(path);
-                      await showToast(Toast.Style.Success, `Created and using for ${currentApp.name}`);
-                      await refresh();
-                    } catch (e) {
-                      await showToast(Toast.Style.Failure, "Failed to create file", String(e));
-                    }
-                  }}
-                />
-                {otherSection}
-              </ActionPanel>
-            }
+            detail={detail as any}
+            actions={actionsForCreateApp as any}
           />
         ) : null}
       </List.Section>
@@ -1155,158 +1413,8 @@ export default function Command() {
                 id={item.key}
                 title={item.display.trim()}
                 icon={isCurrent ? Icon.Star : undefined}
-                detail={detail}
-                actions={
-                  <ActionPanel>
-                    {contextSection}
-                    <ActionPanel.Section title="Focus">
-                      <Action
-                        title="Switch"
-                        icon={Icon.Star}
-                        onAction={async () => {
-                          try {
-                            const result = await runSwitch(pathForMutations, item.key);
-                            if (result) await applyMutationResult(result);
-                            else await refresh();
-                            await showToast(Toast.Style.Success, "Focus updated");
-                          } catch (e) {
-                            await showToast(
-                              Toast.Style.Failure,
-                              "Failed to set focus",
-                              String(e),
-                            );
-                          }
-                        }}
-                      />
-                      {isCurrent ? (
-                        <Action
-                          title="Finish This"
-                          icon={Icon.Checkmark}
-                          onAction={async () => {
-                            try {
-                              const result = await runComplete(pathForMutations);
-                              if (result) await applyMutationResult(result);
-                              else await refresh();
-                              await showToast(
-                                Toast.Style.Success,
-                                "Completed",
-                              );
-                            } catch (e) {
-                              await showToast(
-                                Toast.Style.Failure,
-                                "Failed to complete",
-                                String(e),
-                              );
-                            }
-                          }}
-                        />
-                      ) : null}
-                    </ActionPanel.Section>
-                    <ActionPanel.Section title="Actions">
-                      <Action.Push
-                        title="Narrow Focus"
-                        icon={Icon.ChevronRight}
-                        target={
-                          <AddNestedForm
-                            nowFilePath={pathForMutations}
-                            applyMutationResult={applyMutationResult}
-                            refresh={refresh}
-                          />
-                        }
-                      />
-                      <Action.Push
-                        title="Add Followup"
-                        icon={Icon.Ellipsis}
-                        target={
-                          <LaterForm
-                            nowFilePath={pathForMutations}
-                            applyMutationResult={applyMutationResult}
-                            refresh={refresh}
-                          />
-                        }
-                      />
-                      {focus ? (
-                        <Action.Push
-                          title="Edit"
-                          icon={Icon.TextCursor}
-                          target={
-                            <EditForm
-                              nowFilePath={pathForMutations}
-                              currentName={focus.focus}
-                              applyMutationResult={applyMutationResult}
-                              refresh={refresh}
-                            />
-                          }
-                        />
-                      ) : null}
-                      <Action.Push
-                        title="Wrap"
-                        icon={Icon.ArrowUp}
-                        target={
-                          <WrapForm
-                            nowFilePath={pathForMutations}
-                            applyMutationResult={applyMutationResult}
-                            refresh={refresh}
-                          />
-                        }
-                      />
-                      <Action.Push
-                        title="Move"
-                        icon={Icon.ArrowRight}
-                        target={
-                          <MoveTargetList
-                            nowFilePath={pathForMutations}
-                            currentKey={currentKey}
-                            items={items ?? []}
-                            applyMutationResult={applyMutationResult}
-                            refresh={refresh}
-                          />
-                        }
-                      />
-                    </ActionPanel.Section>
-                    <ActionPanel.Section title="Copy">
-                      <Action.CopyToClipboard
-                        title="Copy Title"
-                        content={item.display.replace(/\s+@\s*$/, "").trim()}
-                      />
-                    </ActionPanel.Section>
-                    <ActionPanel.Section title="Other">
-                      <Action
-                        title="Tui"
-                        icon={Icon.Terminal}
-                        onAction={async () => {
-                          try {
-                            await openTerminalWithNowTui(pathForMutations);
-                            await showToast(
-                              Toast.Style.Success,
-                              "Terminal opened",
-                            );
-                          } catch (e) {
-                            await showToast(
-                              Toast.Style.Failure,
-                              "Could not open Terminal",
-                              String(e),
-                            );
-                          }
-                        }}
-                      />
-                      <Action.Open
-                        title="Open in Editor"
-                        icon={Icon.Document}
-                        target={pathForMutations}
-                      />
-                      <Action
-                        title="Refresh"
-                        icon={Icon.ArrowClockwise}
-                        onAction={refresh}
-                      />
-                      <Action
-                        title="Open Extension Preferences"
-                        onAction={openExtensionPreferences}
-                      />
-                    </ActionPanel.Section>
-                  </ActionPanel>
-                }
+                detail={detail as any}
+                actions={actionsBySwitchItemKey[item.key] as any}
               />
             );
           })}

@@ -1,21 +1,22 @@
 import {
+  environment,
   getPreferenceValues,
   Icon,
+  LaunchType,
   MenuBarExtra,
   open,
   openExtensionPreferences,
   showToast,
   Toast,
 } from "@raycast/api";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+
 import { DATA_STR, truncateBreadcrumb } from "now-format";
 import {
   createFocusFile,
   focusFileExists,
-  getJsonFocus,
   documentDisplayName,
   getOneThingUrl,
-  isNowOnPath,
   NOW_INSTALL_URL,
   openTerminalWithNowStatus,
   resolveNowFilePath,
@@ -24,16 +25,14 @@ import {
   suggestedNowPathForApp,
   suggestedNowPathForDocument,
 } from "./lib/now";
-import {
-  addAppPathMapping,
-  addDocumentPathMapping,
-  setLastResolvedPath,
-  setUseGlobal,
-} from "./lib/nowStorage";
-import { getFocusCache, setFocusCache } from "./lib/focusCache";
+import { createDeeplink } from "@raycast/utils";
+import { useCliMissing } from "./lib/useCliMissing";
+import { useFocusData } from "./lib/useFocusData";
 import { useNowPathFromStorage } from "./lib/useNowPath";
 
-const FOCUS_LIST_DEEPLINK = "raycast://extensions/shanberg/now/list-focus";
+function focusListDeeplink(nowFilePath: string): string {
+  return createDeeplink({ command: "list-focus", context: { path: nowFilePath } });
+}
 
 interface Preferences {
   focusFilePath: string;
@@ -51,8 +50,10 @@ interface PathActionsMenuSectionProps {
   currentApp: { name: string; bundleId?: string } | null;
   appPathForCurrent: string | null;
   refreshPathFromStorage: () => Promise<void>;
-  setFocus: (focus: { focus: string; breadcrumb: string } | null) => void;
-  setFocusCache: (path: string, focus: string, breadcrumb: string) => Promise<void>;
+  setUseGlobal: (useGlobal: boolean) => Promise<void>;
+  setLastResolvedPath: (path: string) => Promise<void>;
+  addAppPathMapping: (key: string, nowPath: string) => Promise<void>;
+  addDocumentPathMapping: (documentPath: string, nowPath: string) => Promise<void>;
   setNowFilePath: (path: string) => void;
   setSourceLabel: (label: string) => void;
 }
@@ -65,8 +66,10 @@ function PathActionsMenuSection({
   currentApp,
   appPathForCurrent,
   refreshPathFromStorage,
-  setFocus,
-  setFocusCache,
+  setUseGlobal,
+  setLastResolvedPath,
+  addAppPathMapping,
+  addDocumentPathMapping,
   setNowFilePath,
   setSourceLabel,
 }: PathActionsMenuSectionProps) {
@@ -84,16 +87,11 @@ function PathActionsMenuSection({
                 suggestedNowPathForDocument(currentDocumentPath),
               );
               await setUseGlobal(false);
+              await setLastResolvedPath(path);
+              setNowFilePath(path);
+              setSourceLabel(`Document — ${documentDisplayName(currentDocumentPath)}`);
               await refreshPathFromStorage();
               await showToast(Toast.Style.Success, "Created and using for current document");
-              const result = await getJsonFocus(path);
-              if (result.data) {
-                setFocus({
-                  focus: result.data.focus,
-                  breadcrumb: result.data.breadcrumb,
-                });
-                await setFocusCache(path, result.data.focus, result.data.breadcrumb);
-              }
             } catch (e) {
               await showToast(Toast.Style.Failure, "Failed to create file", String(e));
             }
@@ -110,16 +108,11 @@ function PathActionsMenuSection({
               const key = currentApp.bundleId ?? currentApp.name;
               await addAppPathMapping(key, suggestedNowPathForApp(currentApp));
               await setUseGlobal(false);
+              await setLastResolvedPath(path);
+              setNowFilePath(path);
+              setSourceLabel(`${currentApp.name}`);
               await refreshPathFromStorage();
               await showToast(Toast.Style.Success, `Created and using for ${currentApp.name}`);
-              const result = await getJsonFocus(path);
-              if (result.data) {
-                setFocus({
-                  focus: result.data.focus,
-                  breadcrumb: result.data.breadcrumb,
-                });
-                await setFocusCache(path, result.data.focus, result.data.breadcrumb);
-              }
             } catch (e) {
               await showToast(Toast.Style.Failure, "Failed to create file", String(e));
             }
@@ -143,14 +136,6 @@ function PathActionsMenuSection({
             await setLastResolvedPath(docPathForCurrent);
             setNowFilePath(docPathForCurrent);
             setSourceLabel(currentDocumentPath ? `Document — ${currentDocumentPath}` : "Document");
-            const result = await getJsonFocus(docPathForCurrent);
-            if (result.data) {
-              setFocus({
-                focus: result.data.focus,
-                breadcrumb: result.data.breadcrumb,
-              });
-              await setFocusCache(docPathForCurrent, result.data.focus, result.data.breadcrumb);
-            }
           }}
         />
       ) : null}
@@ -162,14 +147,6 @@ function PathActionsMenuSection({
             await setLastResolvedPath(appPathForCurrent);
             setNowFilePath(appPathForCurrent);
             setSourceLabel(`${currentApp.name} — ${appPathForCurrent}`);
-            const result = await getJsonFocus(appPathForCurrent);
-            if (result.data) {
-              setFocus({
-                focus: result.data.focus,
-                breadcrumb: result.data.breadcrumb,
-              });
-              await setFocusCache(appPathForCurrent, result.data.focus, result.data.breadcrumb);
-            }
           }}
         />
       ) : null}
@@ -180,13 +157,6 @@ function PathActionsMenuSection({
 export default function Command() {
   const prefs = getPreferenceValues<Preferences>();
   const defaultPath = resolveNowFilePath(prefs.focusFilePath);
-  const [focus, setFocus] = useState<{
-    focus: string;
-    breadcrumb: string;
-  } | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [cliMissing, setCliMissing] = useState<boolean | null>(null);
 
   const {
     nowFilePath,
@@ -199,10 +169,31 @@ export default function Command() {
     docPathForCurrent,
     pathReady: storageReady,
     refreshPathFromStorage,
+    setUseGlobal,
+    setLastResolvedPath,
+    addAppPathMapping,
+    addDocumentPathMapping,
   } = useNowPathFromStorage({
     defaultPath,
     appSpecificNowFiles: prefs.appSpecificNowFiles,
   });
+
+  const {
+    focus,
+    errorMessage,
+    isLoading,
+    refresh,
+    applyMutationResult,
+  } = useFocusData(
+    storageReady ? nowFilePath : null,
+    null,
+    {
+      cacheOnly: environment.launchType === LaunchType.Background,
+      maxCacheAgeMs: 60_000,
+    },
+  );
+
+  const cliMissing = useCliMissing(focus === null && !isLoading);
 
   const isUsingAppFile = nowFilePath !== defaultPath;
 
@@ -215,58 +206,11 @@ export default function Command() {
           ? `Now: ${currentApp.name}`
           : "Now";
 
-  const CACHE_FRESH_MS = 60_000;
-
-  useEffect(() => {
-    if (!storageReady) return;
-    let cancelled = false;
-    setIsLoading(true);
-    (async () => {
-      const cached = await getFocusCache(nowFilePath);
-      if (!cancelled && cached && Date.now() - cached.updatedAt < CACHE_FRESH_MS) {
-        setFocus({ focus: cached.focus, breadcrumb: cached.breadcrumb });
-        setErrorMessage(null);
-        setIsLoading(false);
-        return;
-      }
-      const result = await getJsonFocus(nowFilePath);
-      if (!cancelled) {
-        setFocus(
-          result.data
-            ? { focus: result.data.focus, breadcrumb: result.data.breadcrumb }
-            : null,
-        );
-        setErrorMessage(result.error ?? null);
-        if (result.data) {
-          await setFocusCache(
-            nowFilePath,
-            result.data.focus,
-            result.data.breadcrumb,
-          );
-        }
-        setIsLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [nowFilePath, storageReady]);
-
   useEffect(() => {
     if (prefs.updateOneThing && focus?.focus) {
       open(getOneThingUrl(focus.focus));
     }
   }, [prefs.updateOneThing, focus?.focus]);
-
-  useEffect(() => {
-    if (focus !== null) {
-      setCliMissing(null);
-      return;
-    }
-    if (!isLoading) {
-      isNowOnPath().then((onPath) => setCliMissing(!onPath));
-    }
-  }, [focus, isLoading]);
 
   if (!storageReady || isLoading) {
     return (
@@ -298,8 +242,10 @@ export default function Command() {
             currentApp={currentApp}
             appPathForCurrent={appPathForCurrent}
             refreshPathFromStorage={refreshPathFromStorage}
-            setFocus={setFocus}
-            setFocusCache={setFocusCache}
+            setUseGlobal={setUseGlobal}
+            setLastResolvedPath={setLastResolvedPath}
+            addAppPathMapping={addAppPathMapping}
+            addDocumentPathMapping={addDocumentPathMapping}
             setNowFilePath={setNowFilePath}
             setSourceLabel={setSourceLabel}
           />
@@ -310,16 +256,8 @@ export default function Command() {
               onAction={async () => {
                 try {
                   await createFocusFile(nowFilePath);
-                  // Brief delay so the file is flushed before the CLI reads it
                   await new Promise((r) => setTimeout(r, 100));
-                  const result = await getJsonFocus(nowFilePath);
-                  if (result.data) {
-                    setFocus({
-                      focus: result.data.focus,
-                      breadcrumb: result.data.breadcrumb,
-                    });
-                    await setFocusCache(nowFilePath, result.data.focus, result.data.breadcrumb);
-                  }
+                  await refresh();
                 } catch {
                   // Keep empty state
                 }
@@ -356,11 +294,11 @@ export default function Command() {
             />
           ) : null}
         </MenuBarExtra.Section>
-        <MenuBarExtra.Section>
+        <MenuBarExtra.Submenu title="More" icon={Icon.Gear}>
           <MenuBarExtra.Item
             title="Open Focus List"
             icon={Icon.List}
-            onAction={() => open(FOCUS_LIST_DEEPLINK)}
+            onAction={() => open(focusListDeeplink(nowFilePath))}
           />
           <MenuBarExtra.Item
             title="Open in Editor"
@@ -371,7 +309,7 @@ export default function Command() {
             title="Open Extension Preferences…"
             onAction={openExtensionPreferences}
           />
-        </MenuBarExtra.Section>
+        </MenuBarExtra.Submenu>
       </MenuBarExtra>
     );
   }
@@ -411,35 +349,22 @@ export default function Command() {
             try {
               const result = await runComplete(nowFilePath);
               if (result) {
-                setFocus({
-                  focus: result.focus.focus,
-                  breadcrumb: result.focus.breadcrumb,
-                });
-                await setFocusCache(
-                  nowFilePath,
-                  result.focus.focus,
-                  result.focus.breadcrumb,
-                  result.items,
-                );
+                await applyMutationResult(result);
               } else {
-                const focusResult = await getJsonFocus(nowFilePath);
-                if (focusResult.data) {
-                  setFocus({
-                    focus: focusResult.data.focus,
-                    breadcrumb: focusResult.data.breadcrumb,
-                  });
-                  await setFocusCache(
-                    nowFilePath,
-                    focusResult.data.focus,
-                    focusResult.data.breadcrumb,
-                  );
-                }
+                await refresh();
               }
               await showToast(Toast.Style.Success, "Completed");
             } catch (e) {
               await showToast(Toast.Style.Failure, "Failed to complete", String(e));
             }
           }}
+          alternate={
+            <MenuBarExtra.Item
+              title="Open Focus List"
+              icon={Icon.List}
+              onAction={() => open(focusListDeeplink(nowFilePath))}
+            />
+          }
         />
       </MenuBarExtra.Section>
       <MenuBarExtra.Section>
@@ -452,17 +377,19 @@ export default function Command() {
           currentApp={currentApp}
           appPathForCurrent={appPathForCurrent}
           refreshPathFromStorage={refreshPathFromStorage}
-          setFocus={setFocus}
-          setFocusCache={setFocusCache}
+          setUseGlobal={setUseGlobal}
+          setLastResolvedPath={setLastResolvedPath}
+          addAppPathMapping={addAppPathMapping}
+          addDocumentPathMapping={addDocumentPathMapping}
           setNowFilePath={setNowFilePath}
           setSourceLabel={setSourceLabel}
         />
       </MenuBarExtra.Section>
-      <MenuBarExtra.Section>
+      <MenuBarExtra.Submenu title="More" icon={Icon.Gear}>
         <MenuBarExtra.Item
           title="Open Focus List"
           icon={Icon.List}
-          onAction={() => open(FOCUS_LIST_DEEPLINK)}
+          onAction={() => open(focusListDeeplink(nowFilePath))}
         />
         <MenuBarExtra.Item
           title="Open in Editor"
@@ -473,7 +400,7 @@ export default function Command() {
           title="Open Extension Preferences…"
           onAction={openExtensionPreferences}
         />
-      </MenuBarExtra.Section>
+      </MenuBarExtra.Submenu>
     </MenuBarExtra>
   );
 }

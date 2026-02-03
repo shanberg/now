@@ -391,6 +391,42 @@ export function getPlaceholderWrap(
   return { wrapParentLine, indentedCurrentLine };
 }
 
+/**
+ * Returns breadcrumb and focus name for an item by key, using the flat items list.
+ * Used so extensions can show "preview as if this item were focus" for switch-target items.
+ */
+export function getBreadcrumbAndNameForKey(
+  items: JsonItem[],
+  key: string,
+): { breadcrumb: string; focusName: string } {
+  const idx = items.findIndex((i) => i.key === key);
+  if (idx < 0) return { breadcrumb: "", focusName: "—" };
+  const path: string[] = [];
+  let i = idx;
+  const indentLen = DATA_STR.indent.length;
+  while (i >= 0) {
+    const raw = items[i].display.replace(/\s+@\s*$/, "").trimEnd();
+    const indStr = getIndentFromDisplay(items[i].display);
+    const name = raw.slice(indStr.length).trim() || "—";
+    path.unshift(name);
+    const depth = indStr.length;
+    if (depth === 0) break;
+    const parentDepth = depth - indentLen;
+    let parentIdx = -1;
+    for (let j = i - 1; j >= 0; j--) {
+      if (getIndentFromDisplay(items[j].display).length === parentDepth) {
+        parentIdx = j;
+        break;
+      }
+    }
+    i = parentIdx;
+  }
+  const focusName = path[path.length - 1] ?? "—";
+  const breadcrumb =
+    path.length > 1 ? path.slice(0, -1).join(" / ") : "Focusing on";
+  return { breadcrumb, focusName };
+}
+
 /** Valid values for selectedAction in buildPreviewMarkdown. Single source of truth for CLI and extensions. */
 export const PREVIEW_ACTION_VALUES = [
   "complete",
