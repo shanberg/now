@@ -19,7 +19,14 @@
       "subtitle": "Now",
       "description": "Show current now focus in the menu bar.",
       "mode": "menu-bar",
-      "interval": "1m"
+      "interval": "2m"
+    },
+    {
+      "name": "ensure-watcher",
+      "title": "Ensure Watcher",
+      "description": "Starts the file and app watcher so the menu bar updates when you switch apps or edit now files. Runs in the background when the extension is loaded.",
+      "mode": "no-view",
+      "interval": "5m"
     },
     {
       "name": "list-focus",
@@ -115,6 +122,7 @@
   "dependencies": {
     "@raycast/api": "^1.69.0",
     "@raycast/utils": "^1.19.0",
+    "chokidar": "^4.0.0",
     "now-format": "file:../../packages/now-format"
   },
   "devDependencies": {
@@ -130,6 +138,7 @@
   },
   "scripts": {
     "build": "ray build -e dist",
+    "build:watcher": "swiftc -O -o assets/now-watcher assets/NowWatcher.swift",
     "dev": "ray develop",
     "fix-lint": "ray lint --fix",
     "lint": "ray lint",

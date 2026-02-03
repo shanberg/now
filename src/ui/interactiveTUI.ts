@@ -63,6 +63,7 @@ function buildMainActionOptions(
 ): SelectOptionWithPrimary[] {
   const base: SelectOptionWithPrimary[] = [
     { name: "Narrow focus", value: "add", primary: true },
+    ...when(!isLeaf, { name: "Dive in", value: "diveIn", primary: true }),
     { name: "Finish this", value: "complete", primary: true },
     { name: "Add followup", value: "later", primary: true },
     { name: "Switch", value: "switch" },
@@ -71,7 +72,6 @@ function buildMainActionOptions(
     { name: "Move", value: "move" },
   ];
   const nav: SelectOptionWithPrimary[] = [
-    ...when(!isLeaf, { name: "Dive in", value: "diveIn", primary: true }),
     ...when(siblingCount > 0, { name: "Next", value: "focusNextSibling" }, {
       name: "Previous",
       value: "focusPreviousSibling",

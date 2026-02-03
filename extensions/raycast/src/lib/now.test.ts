@@ -51,7 +51,9 @@ describe("getDocPathForCurrentDocument", () => {
   it("exact match: stored path === current path returns that now file", () => {
     const docPath = "/Users/me/proj/notes.md";
     const json = JSON.stringify({ [docPath]: nowPath });
-    expect(getDocPathForCurrentDocument(json, docPath)).toBe(resolveNowFilePath(nowPath));
+    expect(getDocPathForCurrentDocument(json, docPath)).toBe(
+      resolveNowFilePath(nowPath),
+    );
   });
 
   it("exact match with normalization: resolve equality (trailing slash)", () => {
@@ -74,21 +76,27 @@ describe("getDocPathForCurrentDocument", () => {
     const storedPath = "/Users/me/proj/notes.md";
     const currentPath = "/Users/me/proj/other/notes.md";
     const json = JSON.stringify({ [storedPath]: nowPath });
-    expect(getDocPathForCurrentDocument(json, currentPath)).toBe(resolveNowFilePath(nowPath));
+    expect(getDocPathForCurrentDocument(json, currentPath)).toBe(
+      resolveNowFilePath(nowPath),
+    );
   });
 
   it("same path (dirname), filename changed: returns entry with closest filename", () => {
     const storedPath = "/Users/me/proj/notes.md";
     const currentPath = "/Users/me/proj/notes-draft.md";
     const json = JSON.stringify({ [storedPath]: nowPath });
-    expect(getDocPathForCurrentDocument(json, currentPath)).toBe(resolveNowFilePath(nowPath));
+    expect(getDocPathForCurrentDocument(json, currentPath)).toBe(
+      resolveNowFilePath(nowPath),
+    );
   });
 
   it("same path with stored key containing ./: normalizes and matches by path", () => {
     const storedPath = "/Users/me/proj/./notes.md";
     const currentPath = "/Users/me/proj/notes-draft.md";
     const json = JSON.stringify({ [storedPath]: nowPath });
-    expect(getDocPathForCurrentDocument(json, currentPath)).toBe(resolveNowFilePath(nowPath));
+    expect(getDocPathForCurrentDocument(json, currentPath)).toBe(
+      resolveNowFilePath(nowPath),
+    );
   });
 
   it("no same-filename and no same-path candidates returns null", () => {

@@ -39,6 +39,7 @@ export type UseNowPathOptions = {
  * @property docPathForCurrent - Resolved Now path for the current document if mapped, else null.
  * @property pathReady - True after first resolution has completed (storage loaded and runResolution ran).
  * @property refreshPathFromStorage - Re-runs path resolution (app/document + storage). Stable: depends only on setLastResolvedPathValue.
+ * @property refreshPathFromStorageWithApp - Re-runs path resolution using the given app (e.g. from watcher) instead of getFrontmostApplication. Use when deeplink may have made Raycast frontmost.
  * @property setUseGlobal - Writes useGlobal to storage ("true" | "false"). Stable.
  * @property setLastResolvedPath - Writes lastResolvedPath to storage. Stable.
  * @property addAppPathMapping - Merges key → nowPath into app paths JSON in storage. Depends on appPathsJson and setAppPathsValue.
@@ -54,11 +55,19 @@ export type UseNowPathResult = {
   appPathForCurrent: string | null;
   docPathForCurrent: string | null;
   pathReady: boolean;
+  appPathsJson: string;
+  docPathsJson: string;
   refreshPathFromStorage: () => Promise<void>;
+  refreshPathFromStorageWithApp: (
+    app: { bundleId?: string; name: string },
+  ) => Promise<void>;
   setUseGlobal: (useGlobal: boolean) => Promise<void>;
   setLastResolvedPath: (path: string) => Promise<void>;
   addAppPathMapping: (key: string, nowPath: string) => Promise<void>;
-  addDocumentPathMapping: (documentPath: string, nowPath: string) => Promise<void>;
+  addDocumentPathMapping: (
+    documentPath: string,
+    nowPath: string,
+  ) => Promise<void>;
 };
 
 /**
@@ -88,16 +97,32 @@ export function useNowPathFromStorage(
   const { defaultPath, appSpecificNowFiles } = options;
   const [pathContext, setPathContext] = useState<PathContextState | null>(null);
 
-  const { value: useGlobalRaw, setValue: setUseGlobalValue, isLoading: useGlobalLoading } =
-    useLocalStorage<string>(NOW_USE_GLOBAL_KEY, "false");
-  const { value: docPathsJson, setValue: setDocPathsValue, isLoading: docPathsLoading } =
-    useLocalStorage<string>(NOW_DOCUMENT_PATHS_KEY, "{}");
-  const { value: appPathsJson, setValue: setAppPathsValue, isLoading: appPathsLoading } =
-    useLocalStorage<string>(NOW_APP_PATHS_KEY, "{}");
-  const { value: lastResolvedPathRaw, setValue: setLastResolvedPathValue, isLoading: lastResolvedLoading } =
-    useLocalStorage<string>(NOW_LAST_RESOLVED_PATH_KEY, "");
+  const {
+    value: useGlobalRaw,
+    setValue: setUseGlobalValue,
+    isLoading: useGlobalLoading,
+  } = useLocalStorage<string>(NOW_USE_GLOBAL_KEY, "false");
+  const {
+    value: docPathsJson,
+    setValue: setDocPathsValue,
+    isLoading: docPathsLoading,
+  } = useLocalStorage<string>(NOW_DOCUMENT_PATHS_KEY, "{}");
+  const {
+    value: appPathsJson,
+    setValue: setAppPathsValue,
+    isLoading: appPathsLoading,
+  } = useLocalStorage<string>(NOW_APP_PATHS_KEY, "{}");
+  const {
+    value: lastResolvedPathRaw,
+    setValue: setLastResolvedPathValue,
+    isLoading: lastResolvedLoading,
+  } = useLocalStorage<string>(NOW_LAST_RESOLVED_PATH_KEY, "");
 
-  const storageLoading = useGlobalLoading || docPathsLoading || appPathsLoading || lastResolvedLoading;
+  const storageLoading =
+    useGlobalLoading ||
+    docPathsLoading ||
+    appPathsLoading ||
+    lastResolvedLoading;
 
   const defaultPathRef = useRef(defaultPath);
   const appSpecificNowFilesRef = useRef(appSpecificNowFiles);
@@ -108,7 +133,9 @@ export function useNowPathFromStorage(
   const lastWrittenResolvedPathRef = useRef<string | null>(null);
   const prevSignatureInputsRef = useRef<string>("");
   const prevStorageSignatureRef = useRef<string>("");
-  const resolutionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resolutionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   defaultPathRef.current = defaultPath;
   appSpecificNowFilesRef.current = appSpecificNowFiles;
   useGlobalRef.current = useGlobalRaw;
@@ -158,10 +185,48 @@ export function useNowPathFromStorage(
     }
   }, [setLastResolvedPathValue]);
 
-  const signatureInputs =
-    `${useGlobalRaw}|${docPathsJson}|${appPathsJson}`;
-  const storageSignature =
-    `${signatureInputs}|${lastResolvedPathRaw}`;
+  const runResolutionWithAppOverride = useCallback(
+    async (overrideApp: { bundleId?: string; name: string }) => {
+      const useGlobal = useGlobalRef.current === "true";
+      const mergedAppJson = mergeAppPathsJson(
+        appSpecificNowFilesRef.current,
+        appPathsRef.current ?? "{}",
+      );
+
+      const result = resolveNowPathFromContext({
+        defaultPath: defaultPathRef.current,
+        useGlobal,
+        mergedAppJson,
+        app: overrideApp,
+        lastResolvedPath: lastResolvedRef.current ?? null,
+        documentPath: null,
+        documentPathsJson: docPathsRef.current ?? "{}",
+      });
+
+      setPathContext({
+        nowFilePath: result.path,
+        sourceLabel: result.sourceLabel,
+        currentApp: overrideApp,
+        currentDocumentPath: null,
+        appPathForCurrent: result.appPathForCurrent ?? null,
+        docPathForCurrent: result.docPathForCurrent ?? null,
+        ready: true,
+      });
+
+      const willWriteStorage =
+        !useGlobal &&
+        result.path !== defaultPathRef.current &&
+        result.path !== lastResolvedRef.current;
+      if (willWriteStorage) {
+        lastWrittenResolvedPathRef.current = result.path;
+        await setLastResolvedPathValue(result.path);
+      }
+    },
+    [setLastResolvedPathValue],
+  );
+
+  const signatureInputs = `${useGlobalRaw}|${docPathsJson}|${appPathsJson}`;
+  const storageSignature = `${signatureInputs}|${lastResolvedPathRaw}`;
 
   useEffect(() => {
     if (storageLoading) return;
@@ -178,7 +243,8 @@ export function useNowPathFromStorage(
     }
     prevSignatureInputsRef.current = signatureInputs;
     prevStorageSignatureRef.current = storageSignature;
-    if (resolutionTimeoutRef.current) clearTimeout(resolutionTimeoutRef.current);
+    if (resolutionTimeoutRef.current)
+      clearTimeout(resolutionTimeoutRef.current);
     resolutionTimeoutRef.current = setTimeout(() => {
       resolutionTimeoutRef.current = null;
       runResolution().then(() => { });
@@ -265,7 +331,10 @@ export function useNowPathFromStorage(
       appPathForCurrent,
       docPathForCurrent,
       pathReady,
+      appPathsJson: appPathsJson ?? "{}",
+      docPathsJson: docPathsJson ?? "{}",
       refreshPathFromStorage: runResolution,
+      refreshPathFromStorageWithApp: runResolutionWithAppOverride,
       setUseGlobal,
       setLastResolvedPath,
       addAppPathMapping,
@@ -274,9 +343,12 @@ export function useNowPathFromStorage(
   }, [
     pathContext,
     defaultPath,
+    appPathsJson,
+    docPathsJson,
     setNowFilePath,
     setSourceLabel,
     runResolution,
+    runResolutionWithAppOverride,
     setUseGlobal,
     setLastResolvedPath,
     addAppPathMapping,

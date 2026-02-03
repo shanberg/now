@@ -8,7 +8,12 @@ import { useCachedPromise } from "@raycast/utils";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getJsonFocus, getJsonItems, type MutationResult } from "./now";
 import type { JsonFocus, JsonItem } from "./now";
-import { getFocusCache, setFocusCache, type FocusCacheEntry } from "./focusCache";
+import {
+  getFocusCache,
+  getFocusCacheSync,
+  setFocusCache,
+  type FocusCacheEntry,
+} from "./focusCache";
 
 /**
  * Result shape of {@link fetchFocusData} and the cached promise used by {@link useFocusData}.
@@ -61,16 +66,18 @@ export async function fetchFocusData(path: string): Promise<FocusDataResult> {
     focus,
     items,
     error: bothNull,
-    errorMessage: bothNull ? (focusResult.error ?? itemsResult.error ?? null) : null,
+    errorMessage: bothNull
+      ? (focusResult.error ?? itemsResult.error ?? null)
+      : null,
   };
 }
 
 /**
  * Return value of {@link useFocusData}.
  *
- * **Stable across rerenders** (same reference unless dependencies change): `refresh`, `applyMutationResult`, `setPinnedPath`.  
- * **Memoized when source is data**: when useFocusData returns from useCachedPromise `data` (not cacheOnly/freshCache), `focus` and `items` are memoized by content so unchanged content yields the same reference.  
- * **Not stable** (new reference when data or path change): `effectivePath`.  
+ * **Stable across rerenders** (same reference unless dependencies change): `refresh`, `applyMutationResult`, `setPinnedPath`.
+ * **Memoized when source is fetch data**: when the hook uses useCachedPromise result (i.e. not cacheOnly or freshCache mode), `focus` and `items` are memoized by content so unchanged content yields the same reference. In that mode, `error` / `errorMessage` merge useCachedPromise's data error with the hook's `error` (e.g. fetch failure) so both are surfaced.
+ * **Not stable** (new reference when data or path change): `effectivePath`.
  * **Primitives**: `error`, `errorMessage`, `isLoading` are values, not refs.
  *
  * @property focus - Current focus (key, focus, breadcrumb) or null.
@@ -127,32 +134,44 @@ export function useFocusData(
   const cacheOnly = options?.cacheOnly === true;
   const maxCacheAgeMs = options?.maxCacheAgeMs;
 
-  const [pinnedPath, setPinnedPath] = useState<string | null>(initialPinnedPath ?? null);
+  const [pinnedPath, setPinnedPath] = useState<string | null>(
+    initialPinnedPath ?? null,
+  );
   const effectivePath = pinnedPath ?? nowFilePath;
   const pathForFetch = effectivePath ?? "";
 
-  const [cacheOnlyData, setCacheOnlyData] = useState<FocusDataResult | null>(null);
+  const [cacheOnlyData, setCacheOnlyData] = useState<FocusDataResult | null>(
+    null,
+  );
   const [cacheOnlyLoading, setCacheOnlyLoading] = useState(true);
   const [cacheCheckDone, setCacheCheckDone] = useState(false);
-  const [freshCacheData, setFreshCacheData] = useState<FocusDataResult | null>(null);
+  const [freshCacheData, setFreshCacheData] = useState<FocusDataResult | null>(
+    null,
+  );
   const [hasFreshCache, setHasFreshCache] = useState(false);
 
   const executeFetch =
     !!effectivePath &&
-    (cacheOnly ? false : maxCacheAgeMs != null ? cacheCheckDone && !hasFreshCache : true);
+    (cacheOnly
+      ? false
+      : maxCacheAgeMs != null
+        ? cacheCheckDone && !hasFreshCache
+        : true);
 
-  const { data, error: hookError, isLoading, revalidate, mutate } = useCachedPromise(
-    fetchFocusData,
-    [pathForFetch],
-    {
-      execute: executeFetch,
-      keepPreviousData: true,
-      failureToastOptions: {
-        title: "Could not load focus",
-        message: "Check path and CLI, then retry.",
-      },
+  const {
+    data,
+    error: hookError,
+    isLoading,
+    revalidate,
+    mutate,
+  } = useCachedPromise(fetchFocusData, [pathForFetch], {
+    execute: executeFetch,
+    keepPreviousData: true,
+    failureToastOptions: {
+      title: "Could not load focus",
+      message: "Check path and CLI, then retry.",
     },
-  );
+  });
 
   useEffect(() => {
     if (!cacheOnly || !effectivePath) {
@@ -207,6 +226,7 @@ export function useFocusData(
     data?.focus?.focus,
     data?.focus?.breadcrumb,
     data?.items?.length,
+    data?.items?.map((i: JsonItem) => i.key).join(",") ?? "",
     effectivePath,
   ]);
 
@@ -241,9 +261,17 @@ export function useFocusData(
   const applyMutationResultWithMutate = useCallback(
     async (result: MutationResult) => {
       await mutate(Promise.resolve(), {
-        optimisticUpdate: (prev: FocusDataResult | undefined): FocusDataResult | undefined =>
+        optimisticUpdate: (
+          prev: FocusDataResult | undefined,
+        ): FocusDataResult | undefined =>
           prev
-            ? { ...prev, focus: result.focus, items: result.items, error: false, errorMessage: null }
+            ? {
+              ...prev,
+              focus: result.focus,
+              items: result.items,
+              error: false,
+              errorMessage: null,
+            }
             : prev,
         shouldRevalidateAfter: false,
       });
@@ -262,9 +290,17 @@ export function useFocusData(
   const applyMutationResultFreshCache = useCallback(
     async (result: MutationResult) => {
       await mutate(Promise.resolve(), {
-        optimisticUpdate: (prev: FocusDataResult | undefined): FocusDataResult | undefined =>
+        optimisticUpdate: (
+          prev: FocusDataResult | undefined,
+        ): FocusDataResult | undefined =>
           prev
-            ? { ...prev, focus: result.focus, items: result.items, error: false, errorMessage: null }
+            ? {
+              ...prev,
+              focus: result.focus,
+              items: result.items,
+              error: false,
+              errorMessage: null,
+            }
             : prev,
         shouldRevalidateAfter: false,
       });
@@ -287,7 +323,23 @@ export function useFocusData(
   );
 
   const useCacheOnlyReturn = cacheOnly;
-  const useFreshCacheReturn = !cacheOnly && maxCacheAgeMs != null && hasFreshCache && freshCacheData != null;
+  const useFreshCacheReturn =
+    !cacheOnly &&
+    maxCacheAgeMs != null &&
+    hasFreshCache &&
+    freshCacheData != null;
+
+  // Use sync cache for first paint when path is set and async cache hasn't run yet (cacheOnly menubar, or maxCacheAgeMs before cacheCheckDone).
+  const syncFirstPaint = useMemo(() => {
+    if (!effectivePath || cacheCheckDone) return null;
+    const entry = getFocusCacheSync(effectivePath);
+    if (!entry) return null;
+    if (cacheOnly) return cacheEntryToFocusDataResult(entry);
+    if (maxCacheAgeMs == null) return null;
+    if (Date.now() - entry.updatedAt >= maxCacheAgeMs) return null;
+    return cacheEntryToFocusDataResult(entry);
+  }, [cacheOnly, maxCacheAgeMs, effectivePath, cacheCheckDone]);
+  const useSyncFirstPaint = syncFirstPaint != null;
 
   const focusFromData = useMemo(
     () => data?.focus ?? null,
@@ -295,34 +347,47 @@ export function useFocusData(
   );
   const itemsFromData = useMemo(
     () => data?.items ?? null,
-    [data?.items?.length, data?.items?.map((i: JsonItem) => i.key).join(",") ?? ""],
+    [
+      data?.items?.length,
+      data?.items?.map((i: JsonItem) => i.key).join(",") ?? "",
+    ],
   );
 
-  const focus = useCacheOnlyReturn
-    ? (cacheOnlyData?.focus ?? null)
-    : useFreshCacheReturn
-      ? (freshCacheData?.focus ?? null)
-      : focusFromData;
-  const items = useCacheOnlyReturn
-    ? (cacheOnlyData?.items ?? null)
-    : useFreshCacheReturn
-      ? (freshCacheData?.items ?? null)
-      : itemsFromData;
-  const error = useCacheOnlyReturn
-    ? (cacheOnlyData?.error ?? false)
-    : useFreshCacheReturn
-      ? (freshCacheData?.error ?? false)
-      : (data?.error ?? false);
-  const errorMessage = useCacheOnlyReturn
-    ? (cacheOnlyData?.errorMessage ?? null)
-    : useFreshCacheReturn
-      ? (freshCacheData?.errorMessage ?? null)
-      : (data?.errorMessage ?? null);
-  const isLoadingValue = useCacheOnlyReturn
-    ? cacheOnlyLoading
-    : useFreshCacheReturn
-      ? false
-      : isLoading;
+  const focus = useSyncFirstPaint
+    ? (syncFirstPaint.focus ?? null)
+    : useCacheOnlyReturn
+      ? (cacheOnlyData?.focus ?? null)
+      : useFreshCacheReturn
+        ? (freshCacheData?.focus ?? null)
+        : focusFromData;
+  const items = useSyncFirstPaint
+    ? (syncFirstPaint.items ?? null)
+    : useCacheOnlyReturn
+      ? (cacheOnlyData?.items ?? null)
+      : useFreshCacheReturn
+        ? (freshCacheData?.items ?? null)
+        : itemsFromData;
+  const error = useSyncFirstPaint
+    ? false
+    : useCacheOnlyReturn
+      ? (cacheOnlyData?.error ?? false)
+      : useFreshCacheReturn
+        ? (freshCacheData?.error ?? false)
+        : (data?.error ?? false);
+  const errorMessage = useSyncFirstPaint
+    ? null
+    : useCacheOnlyReturn
+      ? (cacheOnlyData?.errorMessage ?? null)
+      : useFreshCacheReturn
+        ? (freshCacheData?.errorMessage ?? null)
+        : (data?.errorMessage ?? null);
+  const isLoadingValue = useSyncFirstPaint
+    ? false
+    : useCacheOnlyReturn
+      ? cacheOnlyLoading
+      : useFreshCacheReturn
+        ? false
+        : isLoading;
   const refresh = useCacheOnlyReturn ? refreshCacheOnly : refreshRevalidate;
   const applyMutationResult = useCacheOnlyReturn
     ? applyMutationResultCacheOnly
@@ -333,8 +398,14 @@ export function useFocusData(
   return {
     focus,
     items,
-    error: useCacheOnlyReturn || useFreshCacheReturn ? error : error || !!hookError,
-    errorMessage: useCacheOnlyReturn || useFreshCacheReturn ? errorMessage : errorMessage ?? (hookError?.message ?? null),
+    error:
+      useSyncFirstPaint || useCacheOnlyReturn || useFreshCacheReturn
+        ? error
+        : error || !!hookError,
+    errorMessage:
+      useSyncFirstPaint || useCacheOnlyReturn || useFreshCacheReturn
+        ? errorMessage
+        : (errorMessage ?? hookError?.message ?? null),
     isLoading: isLoadingValue,
     refresh,
     applyMutationResult,

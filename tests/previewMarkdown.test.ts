@@ -105,6 +105,20 @@ Deno.test("buildPreviewMarkdown - action wrap shows wrap parent and indented cur
   assertEquals(md.includes("▶ Beta"), true);
 });
 
+Deno.test("buildPreviewMarkdown - action dive-in shows previous focus and new focus on first deepest child", () => {
+  const md = buildPreviewMarkdown(
+    ITEMS,
+    "0",
+    "Focusing on",
+    "Root",
+    null,
+    "dive-in",
+  );
+  assertEquals(md.includes("▷ Root"), true);
+  assertEquals(md.includes("▶ Alpha"), true);
+  assertEquals(md.includes("▶ **Alpha**"), true);
+});
+
 Deno.test("buildPreviewMarkdown - breadcrumbMaxLength center-truncates breadcrumb", () => {
   const longBreadcrumb = "Accomplish quarterly goals / Learn rust / Take a course";
   const md = buildPreviewMarkdown(

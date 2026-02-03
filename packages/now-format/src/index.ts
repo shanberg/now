@@ -427,6 +427,35 @@ export function getBreadcrumbAndNameForKey(
   return { breadcrumb, focusName };
 }
 
+/**
+ * Index of the first deepest descendant of the item at currentIndex (dive-in target).
+ * Follows first child until leaf; returns null if the current item has no children.
+ */
+export function getFirstDeepestChildIndex(
+  items: { display: string }[],
+  currentIndex: number,
+): number | null {
+  if (currentIndex < 0 || currentIndex >= items.length) return null;
+  const indentLen = DATA_STR.indent.length;
+  let idx = currentIndex;
+  let depth = getIndentFromDisplay(items[idx].display).length;
+  while (true) {
+    const childDepth = depth + indentLen;
+    let nextIdx: number | null = null;
+    for (let j = idx + 1; j < items.length; j++) {
+      const d = getIndentFromDisplay(items[j].display).length;
+      if (d <= depth) break;
+      if (d === childDepth) {
+        nextIdx = j;
+        break;
+      }
+    }
+    if (nextIdx === null) return idx === currentIndex ? null : idx;
+    idx = nextIdx;
+    depth = childDepth;
+  }
+}
+
 /** Valid values for selectedAction in buildPreviewMarkdown. Single source of truth for CLI and extensions. */
 export const PREVIEW_ACTION_VALUES = [
   "complete",
@@ -434,6 +463,7 @@ export const PREVIEW_ACTION_VALUES = [
   "later",
   "wrap",
   "edit",
+  "dive-in",
 ] as const;
 
 export type PreviewAction = (typeof PREVIEW_ACTION_VALUES)[number] | null;
@@ -475,15 +505,23 @@ export function buildPreviewMarkdown(
     selectedAction === "complete" && currentIndex >= 0
       ? getNextFocusIndex(items, currentIndex)
       : null;
+  const diveInTargetIndex =
+    selectedAction === "dive-in" && currentIndex >= 0
+      ? getFirstDeepestChildIndex(items, currentIndex)
+      : null;
 
   let lines = items.map((item, index) => {
     const raw = item.display.replace(/\s+@\s*$/, "").trimEnd();
     const isCurrent = item.key === currentKey;
     const isSelected = selectedKey !== null && item.key === selectedKey;
     const isNextFocus = nextFocusIndex !== null && index === nextFocusIndex;
+    const isDiveInTarget =
+      diveInTargetIndex !== null && index === diveInTargetIndex;
     let line = raw;
     if (isCurrent) {
       if (selectedAction === "add") {
+        line = raw.replace(/^(\s*)(.*)$/, `$1${PREVIOUS_FOCUS_PREFIX}$2`);
+      } else if (selectedAction === "dive-in" && diveInTargetIndex !== null) {
         line = raw.replace(/^(\s*)(.*)$/, `$1${PREVIOUS_FOCUS_PREFIX}$2`);
       } else if (selectedKey !== null && selectedKey !== currentKey) {
         line = raw.replace(/^(\s*)(.*)$/, `$1${PREVIOUS_FOCUS_PREFIX}$2`);
@@ -496,6 +534,8 @@ export function buildPreviewMarkdown(
         }
       }
     } else if (isNextFocus && selectedAction === "complete") {
+      line = raw.replace(/^(\s*)(.*)$/, `$1${FOCUS_PREFIX}$2`);
+    } else if (isDiveInTarget && selectedAction === "dive-in") {
       line = raw.replace(/^(\s*)(.*)$/, `$1${FOCUS_PREFIX}$2`);
     } else if (isSelected) {
       line = raw.replace(/^(\s*)(.*)$/, `$1${FOCUS_PREFIX}$2`);
@@ -534,12 +574,22 @@ export function buildPreviewMarkdown(
     ];
   }
 
-  const rawBreadcrumb = breadcrumb || "";
+  let rawBreadcrumb = breadcrumb || "";
+  let headerFocusName = currentItemName || "—";
+  if (
+    selectedAction === "dive-in" &&
+    diveInTargetIndex !== null &&
+    items[diveInTargetIndex]
+  ) {
+    const after = getBreadcrumbAndNameForKey(items, items[diveInTargetIndex].key);
+    rawBreadcrumb = after.breadcrumb;
+    headerFocusName = after.focusName;
+  }
   const line1 =
     breadcrumbMaxLength != null && breadcrumbMaxLength > 0
       ? truncateBreadcrumb(rawBreadcrumb, breadcrumbMaxLength)
       : rawBreadcrumb;
-  const line2 = `${DATA_STR.focus} **${currentItemName || "—"}**`;
+  const line2 = `${DATA_STR.focus} **${headerFocusName}**`;
   const header = (line1 ? line1 + "\n\n" : "") + line2 + "\n\n";
   return header + "```\n" + lines.join("\n") + "\n```";
 }

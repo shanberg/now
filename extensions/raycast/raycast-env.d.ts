@@ -26,6 +26,8 @@ declare type Preferences = ExtensionPreferences
 declare namespace Preferences {
   /** Preferences accessible in the `menu-bar-focus` command */
   export type MenuBarFocus = ExtensionPreferences & {}
+  /** Preferences accessible in the `ensure-watcher` command */
+  export type EnsureWatcher = ExtensionPreferences & {}
   /** Preferences accessible in the `list-focus` command */
   export type ListFocus = ExtensionPreferences & {}
 }
@@ -33,6 +35,8 @@ declare namespace Preferences {
 declare namespace Arguments {
   /** Arguments passed to the `menu-bar-focus` command */
   export type MenuBarFocus = {}
+  /** Arguments passed to the `ensure-watcher` command */
+  export type EnsureWatcher = {}
   /** Arguments passed to the `list-focus` command */
   export type ListFocus = {}
 }

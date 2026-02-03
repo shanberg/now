@@ -9,7 +9,11 @@
  */
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { useFocusData, fetchFocusData, type FocusDataResult } from "./useFocusData";
+import {
+  useFocusData,
+  fetchFocusData,
+  type FocusDataResult,
+} from "./useFocusData";
 import type { JsonFocus, JsonItem } from "./now";
 import type { MutationResult } from "./now";
 import { useCachedPromise } from "@raycast/utils";
@@ -32,8 +36,13 @@ vi.mock("@raycast/utils", () => ({
 
 vi.mock("./focusCache", () => ({
   getFocusCache: (path: string) => mockGetFocusCache(path),
-  setFocusCache: (path: string, focus: string, breadcrumb: string, items?: unknown[]) =>
-    mockSetFocusCache(path, focus, breadcrumb, items),
+  getFocusCacheSync: () => null,
+  setFocusCache: (
+    path: string,
+    focus: string,
+    breadcrumb: string,
+    items?: unknown[],
+  ) => mockSetFocusCache(path, focus, breadcrumb, items),
 }));
 
 vi.mock("./now", async (importOriginal) => {
@@ -45,11 +54,13 @@ vi.mock("./now", async (importOriginal) => {
   };
 });
 
-function setUseCachedPromiseReturn(overrides: {
-  data?: FocusDataResult | undefined;
-  isLoading?: boolean;
-  error?: Error | undefined;
-} = {}) {
+function setUseCachedPromiseReturn(
+  overrides: {
+    data?: FocusDataResult | undefined;
+    isLoading?: boolean;
+    error?: Error | undefined;
+  } = {},
+) {
   mockData = overrides.data;
   mockIsLoading = overrides.isLoading ?? false;
   mockError = overrides.error;
@@ -169,7 +180,10 @@ describe("useFocusData", () => {
     });
 
     it("surfaces hook error when useCachedPromise returns error", () => {
-      setUseCachedPromiseReturn({ data: sampleData, error: new Error("Network error") });
+      setUseCachedPromiseReturn({
+        data: sampleData,
+        error: new Error("Network error"),
+      });
       const { result } = renderHook(() => useFocusData("/path"));
 
       expect(result.current.error).toBe(true);
@@ -245,7 +259,13 @@ describe("useFocusData", () => {
     it("calls mutate with optimisticUpdate and then setFocusCache when effectivePath is set", async () => {
       const { result } = renderHook(() => useFocusData("/path"));
       const mutationResult: MutationResult = {
-        focus: { key: "key2", focus: "New focus", breadcrumb: "a > b > c", isLeaf: true, isRoot: false },
+        focus: {
+          key: "key2",
+          focus: "New focus",
+          breadcrumb: "a > b > c",
+          isLeaf: true,
+          isRoot: false,
+        },
         items: [
           { key: "key2", display: "New focus" },
           { key: "key3", display: "Other" },

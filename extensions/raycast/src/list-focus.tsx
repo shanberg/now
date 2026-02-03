@@ -1,9 +1,11 @@
 import {
   Action,
   ActionPanel,
+  environment,
   Form,
   getPreferenceValues,
   Icon,
+  LaunchType,
   List,
   open,
   openCommandPreferences,
@@ -12,8 +14,27 @@ import {
   useNavigation,
   type LaunchProps,
 } from "@raycast/api";
-import { useCallback, useEffect, memo, useMemo, useRef, useState, type ReactNode } from "react";
+import { createDeeplink } from "@raycast/utils";
+import {
+  useCallback,
+  useEffect,
+  memo,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
+import {
+  computePathSwitchContext,
+  pathSwitchContextSwitchTargetPaths,
+  pathSwitchContextToDescriptors,
+  type PathActionDescriptor,
+} from "./lib/pathContext";
+import {
+  PathSwitchActionsList,
+  type PathSwitchCallbacks,
+} from "./lib/pathSwitchActions";
 import {
   createFocusFile,
   focusFileExists,
@@ -30,6 +51,7 @@ import {
   suggestedNowPathForApp,
   suggestedNowPathForDocument,
   runComplete,
+  runDiveIn,
   runEdit,
   runLater,
   getPreviewMarkdownForMove,
@@ -39,8 +61,13 @@ import {
   runWrap,
 } from "./lib/now";
 import { useCliMissing } from "./lib/useCliMissing";
-import { fetchFocusData, useFocusData, type FocusDataResult } from "./lib/useFocusData";
+import {
+  fetchFocusData,
+  useFocusData,
+  type FocusDataResult,
+} from "./lib/useFocusData";
 import { useNowPathFromStorage } from "./lib/useNowPath";
+import { collectPathsToWatch, ensureWatcherRunning } from "./lib/watcherClient";
 import {
   buildPreviewMarkdown,
   getBreadcrumbAndNameForKey,
@@ -48,7 +75,8 @@ import {
   type PreviewAction,
 } from "now-format";
 
-const DEFAULT_BREADCRUMB_MAX_LENGTH = 64;
+/** Detail panel always truncates breadcrumb to this length. */
+const DETAIL_PANEL_BREADCRUMB_MAX_LENGTH = 50;
 
 /** List no longer opens the menubar after mutations; that caused extension reload. Menubar reads from focus cache when opened. */
 interface Preferences {
@@ -56,71 +84,6 @@ interface Preferences {
   updateOneThing?: boolean;
   appSpecificNowFiles?: string;
   breadcrumbMaxLength?: string;
-}
-
-/** Shared props for path switch/create actions (empty state and context section). */
-interface PathSwitchCreateActionsProps {
-  effectivePath: string | null;
-  defaultPath: string;
-  docPathForCurrent: string | null;
-  appPathForCurrent: string | null;
-  currentApp: { name: string; bundleId?: string } | null;
-  currentDocumentPath: string | null;
-  switchToGlobal: () => Promise<void>;
-  switchToDocument: () => Promise<void>;
-  switchToApp: () => Promise<void>;
-  createForDocument: () => Promise<void>;
-  createForApp: () => Promise<void>;
-}
-
-function PathSwitchCreateActions({
-  effectivePath,
-  defaultPath,
-  docPathForCurrent,
-  appPathForCurrent,
-  currentApp,
-  currentDocumentPath,
-  switchToGlobal,
-  switchToDocument,
-  switchToApp,
-  createForDocument,
-  createForApp,
-}: PathSwitchCreateActionsProps) {
-  return (
-    <>
-      {effectivePath !== defaultPath ? (
-        <Action title="Switch to Global" icon={Icon.Circle} onAction={switchToGlobal} />
-      ) : null}
-      {docPathForCurrent && effectivePath !== docPathForCurrent ? (
-        <Action
-          title="Switch to Document File"
-          icon={Icon.Document}
-          onAction={switchToDocument}
-        />
-      ) : null}
-      {appPathForCurrent && currentApp && effectivePath !== appPathForCurrent ? (
-        <Action
-          title={`Switch to ${currentApp.name} file`}
-          icon={Icon.AppWindow}
-          onAction={switchToApp}
-        />
-      ) : null}
-      {currentDocumentPath && !docPathForCurrent ? (
-        <Action
-          title={`Create Now File for ${documentDisplayName(currentDocumentPath)}`}
-          icon={Icon.Plus}
-          onAction={createForDocument}
-        />
-      ) : null}
-      {currentApp && !appPathForCurrent ? (
-        <Action
-          title={`Create Now File for ${currentApp.name}`}
-          icon={Icon.Plus}
-          onAction={createForApp}
-        />
-      ) : null}
-    </>
-  );
 }
 
 function AddNestedForm({
@@ -429,9 +392,404 @@ function MoveTargetListInner({
 
 const MoveTargetList = memo(MoveTargetListInner);
 
+/** Everything needed to build an action panel for a given selection id. Used by a single factory so we have one useMemo for all panels. otherSection/contextSection typed as any to avoid ReactNode mismatch with @raycast/api. */
+type ActionPanelContext = {
+  pathForMutations: string;
+  focus: JsonFocus | null;
+  currentKey: string;
+  itemsForMove: JsonItem[];
+  applyMutationResult: (result: MutationResult) => Promise<void>;
+  refresh: () => void | Promise<void>;
+  runNav: (
+    fn: () => Promise<MutationResult | null>,
+    label: string,
+  ) => Promise<void>;
+  setSelectedId: (id: string | null) => void;
+  pathDescriptorsForList: PathActionDescriptor[];
+  pathSwitchCallbacks: PathSwitchCallbacks;
+  otherSection: any;
+  contextSection: any;
+};
+
+/** Returns action panel for a selection id. Typed as any to avoid React/ReactNode mismatch between project and @raycast/api. */
+function buildActionPanel(
+  selectionId: string,
+  ctx: ActionPanelContext,
+): any {
+  const {
+    pathForMutations,
+    focus,
+    currentKey,
+    itemsForMove,
+    applyMutationResult,
+    refresh,
+    runNav,
+    setSelectedId,
+    pathDescriptorsForList,
+    pathSwitchCallbacks,
+    otherSection,
+    contextSection,
+  } = ctx;
+
+  const iconForPathId = (id: PathActionDescriptor["id"]) => {
+    switch (id) {
+      case "switch-global":
+        return Icon.Circle;
+      case "switch-document":
+        return Icon.Document;
+      case "switch-app":
+        return Icon.AppWindow;
+      case "create-document":
+      case "create-app":
+        return Icon.Plus;
+    }
+  };
+
+  // Path switch/create actions (action-{pathId})
+  const pathDescriptor = pathDescriptorsForList.find(
+    (d) => `action-${d.id}` === selectionId,
+  );
+  if (pathDescriptor) {
+    const onAction = pathSwitchCallbacks[pathDescriptor.id];
+    if (!onAction) return null;
+    return (
+      <ActionPanel>
+        <Action
+          title={pathDescriptor.title}
+          icon={iconForPathId(pathDescriptor.id)}
+          onAction={onAction}
+        />
+        {otherSection}
+      </ActionPanel>
+    ) as unknown as any;
+  }
+
+  // Switch section: item key (tree node)
+  const itemForKey = itemsForMove.find((i) => i.key === selectionId);
+  if (itemForKey) {
+    const isCurrent = itemForKey.key === currentKey;
+    return (
+      <ActionPanel>
+        {contextSection}
+        <ActionPanel.Section title="Focus">
+          <Action
+            title="Switch"
+            icon={Icon.Star}
+            onAction={async () => {
+              try {
+                const result = await runSwitch(pathForMutations, itemForKey.key);
+                if (result) await applyMutationResult(result);
+                else await refresh();
+                await showToast(Toast.Style.Success, "Focus updated");
+                setSelectedId("action-add");
+              } catch (e) {
+                await showToast(
+                  Toast.Style.Failure,
+                  "Failed to set focus",
+                  String(e),
+                );
+              }
+            }}
+          />
+          {isCurrent ? (
+            <Action
+              title="Finish This"
+              icon={Icon.Checkmark}
+              onAction={async () => {
+                try {
+                  const result = await runComplete(pathForMutations);
+                  if (result) await applyMutationResult(result);
+                  else await refresh();
+                  await showToast(Toast.Style.Success, "Completed");
+                } catch (e) {
+                  await showToast(
+                    Toast.Style.Failure,
+                    "Failed to complete",
+                    String(e),
+                  );
+                }
+              }}
+            />
+          ) : null}
+        </ActionPanel.Section>
+        <ActionPanel.Section title="Actions">
+          <Action.Push
+            title="Narrow Focus"
+            icon={Icon.ChevronRight}
+            target={
+              <AddNestedForm
+                nowFilePath={pathForMutations}
+                applyMutationResult={applyMutationResult}
+                refresh={refresh}
+              />
+            }
+          />
+          {focus && !focus.isLeaf ? (
+            <Action
+              title="Dive In"
+              icon={Icon.ChevronDown}
+              onAction={async () => {
+                try {
+                  await runDiveIn(pathForMutations);
+                  await refresh();
+                  await showToast(Toast.Style.Success, "Dove in");
+                  setSelectedId("action-add");
+                } catch (e) {
+                  await showToast(
+                    Toast.Style.Failure,
+                    "Dive in failed",
+                    String(e),
+                  );
+                }
+              }}
+            />
+          ) : null}
+          <Action.Push
+            title="Add Followup"
+            icon={Icon.Ellipsis}
+            target={
+              <LaterForm
+                nowFilePath={pathForMutations}
+                applyMutationResult={applyMutationResult}
+                refresh={refresh}
+              />
+            }
+          />
+          {focus ? (
+            <Action.Push
+              title="Edit"
+              icon={Icon.TextCursor}
+              target={
+                <EditForm
+                  nowFilePath={pathForMutations}
+                  currentName={focus.focus}
+                  applyMutationResult={applyMutationResult}
+                  refresh={refresh}
+                />
+              }
+            />
+          ) : null}
+          <Action.Push
+            title="Wrap"
+            icon={Icon.ArrowUp}
+            target={
+              <WrapForm
+                nowFilePath={pathForMutations}
+                applyMutationResult={applyMutationResult}
+                refresh={refresh}
+              />
+            }
+          />
+          <Action.Push
+            title="Move"
+            icon={Icon.ArrowRight}
+            target={
+              <MoveTargetList
+                nowFilePath={pathForMutations}
+                currentKey={currentKey}
+                items={itemsForMove}
+                applyMutationResult={applyMutationResult}
+                refresh={refresh}
+              />
+            }
+          />
+        </ActionPanel.Section>
+        <ActionPanel.Section title="Copy">
+          <Action.CopyToClipboard
+            title="Copy Title"
+            content={itemForKey.display.replace(/\s+@\s*$/, "").trim()}
+          />
+        </ActionPanel.Section>
+        <ActionPanel.Section title="Other">
+          <Action
+            title="Tui"
+            icon={Icon.Terminal}
+            onAction={async () => {
+              try {
+                await openTerminalWithNowTui(pathForMutations);
+                await showToast(Toast.Style.Success, "Terminal opened");
+              } catch (e) {
+                await showToast(
+                  Toast.Style.Failure,
+                  "Could not open Terminal",
+                  String(e),
+                );
+              }
+            }}
+          />
+          <Action.Open
+            title="Open in Editor"
+            icon={Icon.Document}
+            target={pathForMutations}
+          />
+          <Action
+            title="Refresh"
+            icon={Icon.ArrowClockwise}
+            onAction={refresh}
+          />
+          <Action
+            title="Open Extension Preferences"
+            onAction={openCommandPreferences}
+          />
+        </ActionPanel.Section>
+      </ActionPanel>
+    ) as any;
+  }
+
+  // Fixed action ids
+  switch (selectionId) {
+    case "action-add":
+      return (
+        <ActionPanel>
+          <Action.Push
+            title="Narrow Focus"
+            icon={Icon.ChevronRight}
+            target={
+              <AddNestedForm
+                nowFilePath={pathForMutations}
+                applyMutationResult={applyMutationResult}
+                refresh={refresh}
+              />
+            }
+          />
+          {focus && !focus.isLeaf ? (
+            <Action
+              title="Dive In"
+              icon={Icon.ChevronDown}
+              onAction={async () => {
+                await runNav(async () => {
+                  await runDiveIn(pathForMutations);
+                  return null;
+                }, "Dove in");
+                setSelectedId("action-add");
+              }}
+            />
+          ) : null}
+          {otherSection}
+        </ActionPanel>
+      ) as any;
+    case "action-dive-in":
+      return (
+        <ActionPanel>
+          <Action
+            title="Dive In"
+            icon={Icon.ChevronDown}
+            onAction={async () => {
+              await runNav(async () => {
+                await runDiveIn(pathForMutations);
+                return null;
+              }, "Dove in");
+              setSelectedId("action-add");
+            }}
+          />
+          {otherSection}
+        </ActionPanel>
+      ) as any;
+    case "action-complete":
+      return (
+        <ActionPanel>
+          <Action
+            title="Finish This"
+            icon={Icon.Checkmark}
+            onAction={async () => {
+              await runNav(() => runComplete(pathForMutations), "Completed");
+            }}
+          />
+          {otherSection}
+        </ActionPanel>
+      ) as any;
+    case "action-later":
+      return (
+        <ActionPanel>
+          <Action.Push
+            title="Add Followup"
+            icon={Icon.Ellipsis}
+            target={
+              <LaterForm
+                nowFilePath={pathForMutations}
+                applyMutationResult={applyMutationResult}
+                refresh={refresh}
+              />
+            }
+          />
+          {otherSection}
+        </ActionPanel>
+      );
+    case "action-edit":
+      return (focus ? (
+        <ActionPanel>
+          <Action.Push
+            title="Edit"
+            icon={Icon.TextCursor}
+            target={
+              <EditForm
+                nowFilePath={pathForMutations}
+                currentName={focus.focus}
+                applyMutationResult={applyMutationResult}
+                refresh={refresh}
+              />
+            }
+          />
+          {otherSection}
+        </ActionPanel>
+      ) : null) as any;
+    case "action-wrap":
+      return (
+        <ActionPanel>
+          <Action.Push
+            title="Wrap"
+            icon={Icon.ArrowUp}
+            target={
+              <WrapForm
+                nowFilePath={pathForMutations}
+                applyMutationResult={applyMutationResult}
+                refresh={refresh}
+              />
+            }
+          />
+          {otherSection}
+        </ActionPanel>
+      ) as any;
+    case "action-move":
+      return (
+        <ActionPanel>
+          <Action.Push
+            title="Move"
+            icon={Icon.ArrowRight}
+            target={
+              <MoveTargetList
+                nowFilePath={pathForMutations}
+                currentKey={currentKey}
+                items={itemsForMove}
+                applyMutationResult={applyMutationResult}
+                refresh={refresh}
+              />
+            }
+          />
+          {otherSection}
+        </ActionPanel>
+      ) as any;
+    case "action-open-editor":
+      return (
+        <ActionPanel>
+          <Action.Open
+            title="Open in Editor"
+            icon={Icon.Document}
+            target={pathForMutations}
+          />
+          {otherSection}
+        </ActionPanel>
+      ) as any;
+    default:
+      return null;
+  }
+}
+
 type ListFocusLaunchContext = { path?: string };
 
-export default function Command(props: LaunchProps<{ launchContext?: ListFocusLaunchContext }>) {
+export default function Command(
+  props: LaunchProps<{ launchContext?: ListFocusLaunchContext }>,
+) {
   const prefs = getPreferenceValues<Preferences>();
   const defaultPath = resolveNowFilePath(prefs.focusFilePath);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -444,6 +802,8 @@ export default function Command(props: LaunchProps<{ launchContext?: ListFocusLa
     appPathForCurrent,
     docPathForCurrent,
     pathReady,
+    appPathsJson,
+    docPathsJson,
     refreshPathFromStorage,
     setUseGlobal,
     setLastResolvedPath,
@@ -454,8 +814,17 @@ export default function Command(props: LaunchProps<{ launchContext?: ListFocusLa
     appSpecificNowFiles: prefs.appSpecificNowFiles,
   });
 
-  const { focus, items, error, errorMessage, isLoading, refresh, applyMutationResult, setPinnedPath, effectivePath } =
-    useFocusData(pathReady ? nowFilePath : null, initialPinnedPath);
+  const {
+    focus,
+    items,
+    error,
+    errorMessage,
+    isLoading,
+    refresh,
+    applyMutationResult,
+    setPinnedPath,
+    effectivePath,
+  } = useFocusData(pathReady ? nowFilePath : null, initialPinnedPath);
   const hasDeferredOneThingSync = useRef(false);
 
   const itemsForMove = useMemo(() => items ?? [], [items]);
@@ -470,27 +839,72 @@ export default function Command(props: LaunchProps<{ launchContext?: ListFocusLa
     await setUseGlobal(true);
     await refreshPathFromStorage();
     setPinnedPath(defaultPath);
-  }, [setUseGlobal, refreshPathFromStorage, setPinnedPath, defaultPath]);
+    const result = await runSwitch(defaultPath, "0");
+    if (result) await applyMutationResult(result);
+    else await refresh();
+    setSelectedId("action-add");
+  }, [
+    setUseGlobal,
+    refreshPathFromStorage,
+    setPinnedPath,
+    defaultPath,
+    applyMutationResult,
+    refresh,
+    setSelectedId,
+  ]);
 
   const switchToDocument = useCallback(async () => {
+    const path = docPathForCurrent ?? "";
     await setUseGlobal(false);
-    await setLastResolvedPath(docPathForCurrent ?? "");
+    await setLastResolvedPath(path);
     await refreshPathFromStorage();
     setPinnedPath(docPathForCurrent ?? null);
-  }, [setUseGlobal, setLastResolvedPath, refreshPathFromStorage, setPinnedPath, docPathForCurrent]);
+    const result = await runSwitch(path, "0");
+    if (result) await applyMutationResult(result);
+    else await refresh();
+    setSelectedId("action-add");
+  }, [
+    setUseGlobal,
+    setLastResolvedPath,
+    refreshPathFromStorage,
+    setPinnedPath,
+    docPathForCurrent,
+    applyMutationResult,
+    refresh,
+    setSelectedId,
+  ]);
 
   const switchToApp = useCallback(async () => {
+    const path = appPathForCurrent ?? "";
     await setUseGlobal(false);
-    await setLastResolvedPath(appPathForCurrent ?? "");
+    await setLastResolvedPath(path);
     await refreshPathFromStorage();
     setPinnedPath(appPathForCurrent ?? null);
-  }, [setUseGlobal, setLastResolvedPath, refreshPathFromStorage, setPinnedPath, appPathForCurrent]);
+    const result = await runSwitch(path, "0");
+    if (result) await applyMutationResult(result);
+    else await refresh();
+    setSelectedId("action-add");
+  }, [
+    setUseGlobal,
+    setLastResolvedPath,
+    refreshPathFromStorage,
+    setPinnedPath,
+    appPathForCurrent,
+    applyMutationResult,
+    refresh,
+    setSelectedId,
+  ]);
 
   const createForDocument = useCallback(async () => {
     if (!currentDocumentPath) return;
-    const path = resolveNowFilePath(suggestedNowPathForDocument(currentDocumentPath));
+    const path = resolveNowFilePath(
+      suggestedNowPathForDocument(currentDocumentPath),
+    );
     try {
       await createFocusFile(path, documentDisplayName(currentDocumentPath));
+      const result = await runSwitch(path, "0");
+      if (result) await applyMutationResult(result);
+      else await refresh();
       await addDocumentPathMapping(
         currentDocumentPath,
         suggestedNowPathForDocument(currentDocumentPath),
@@ -498,8 +912,12 @@ export default function Command(props: LaunchProps<{ launchContext?: ListFocusLa
       await setUseGlobal(false);
       await refreshPathFromStorage();
       setPinnedPath(path);
-      await showToast(Toast.Style.Success, "Created and using for current document");
+      await showToast(
+        Toast.Style.Success,
+        "Created and using for current document",
+      );
       await refresh();
+      setSelectedId("action-add");
     } catch (e) {
       await showToast(Toast.Style.Failure, "Failed to create file", String(e));
     }
@@ -510,6 +928,8 @@ export default function Command(props: LaunchProps<{ launchContext?: ListFocusLa
     refreshPathFromStorage,
     setPinnedPath,
     refresh,
+    applyMutationResult,
+    setSelectedId,
   ]);
 
   const createForApp = useCallback(async () => {
@@ -517,38 +937,92 @@ export default function Command(props: LaunchProps<{ launchContext?: ListFocusLa
     const path = resolveNowFilePath(suggestedNowPathForApp(currentApp));
     try {
       await createFocusFile(path, currentApp.name);
+      const result = await runSwitch(path, "0");
+      if (result) await applyMutationResult(result);
+      else await refresh();
       const key = currentApp.bundleId ?? currentApp.name;
       await addAppPathMapping(key, suggestedNowPathForApp(currentApp));
       await setUseGlobal(false);
       await refreshPathFromStorage();
       setPinnedPath(path);
-      await showToast(Toast.Style.Success, `Created and using for ${currentApp.name}`);
+      await showToast(
+        Toast.Style.Success,
+        `Created and using for ${currentApp.name}`,
+      );
       await refresh();
+      setSelectedId("action-add");
     } catch (e) {
       await showToast(Toast.Style.Failure, "Failed to create file", String(e));
     }
-  }, [currentApp, addAppPathMapping, setUseGlobal, refreshPathFromStorage, setPinnedPath, refresh]);
+  }, [
+    currentApp,
+    addAppPathMapping,
+    setUseGlobal,
+    refreshPathFromStorage,
+    setPinnedPath,
+    refresh,
+    applyMutationResult,
+    setSelectedId,
+  ]);
 
-  const nowInputLabel =
-    effectivePath === defaultPath
-      ? "Now"
-      : docPathForCurrent && effectivePath === docPathForCurrent && currentDocumentPath
-        ? `Now: ${documentDisplayName(currentDocumentPath)}`
-        : appPathForCurrent && effectivePath === appPathForCurrent && currentApp
-          ? `Now: ${currentApp.name}`
-          : "Now";
+  const pathSwitchContext = useMemo(
+    () =>
+      computePathSwitchContext({
+        activePath: effectivePath,
+        defaultPath,
+        docPathForCurrent,
+        appPathForCurrent,
+        currentApp,
+        currentDocumentPath,
+      }),
+    [
+      effectivePath,
+      defaultPath,
+      docPathForCurrent,
+      appPathForCurrent,
+      currentApp,
+      currentDocumentPath,
+    ],
+  );
+  const nowInputLabel = pathSwitchContext.contextLabel;
 
   /** Path used for all mutations and forms; pinned so it does not flip when frontmost app changes. */
   const pathForMutations = effectivePath ?? nowFilePath ?? "";
 
   /** Preview data for switch-target paths (global, document, app) so the detail panel shows the target file's content. */
-  const [switchTargetPreviews, setSwitchTargetPreviews] = useState<Record<string, FocusDataResult>>({});
+  const [switchTargetPreviews, setSwitchTargetPreviews] = useState<
+    Record<string, FocusDataResult>
+  >({});
+  useEffect(() => {
+    if (!pathReady || !defaultPath) return;
+    const paths = collectPathsToWatch(
+      defaultPath,
+      appPathsJson,
+      docPathsJson,
+      prefs.appSpecificNowFiles,
+    );
+    ensureWatcherRunning(
+      environment.supportPath,
+      environment.assetsPath,
+      paths,
+      createDeeplink({
+        command: "menu-bar-focus",
+        launchType: LaunchType.Background,
+      }),
+    );
+  }, [
+    pathReady,
+    defaultPath,
+    appPathsJson,
+    docPathsJson,
+    prefs.appSpecificNowFiles,
+    environment.supportPath,
+    environment.assetsPath,
+  ]);
+
   useEffect(() => {
     if (!pathReady) return;
-    const targets: string[] = [];
-    if (defaultPath && effectivePath !== defaultPath) targets.push(defaultPath);
-    if (docPathForCurrent && effectivePath !== docPathForCurrent) targets.push(docPathForCurrent);
-    if (appPathForCurrent && effectivePath !== appPathForCurrent) targets.push(appPathForCurrent);
+    const targets = pathSwitchContextSwitchTargetPaths(pathSwitchContext);
     let cancelled = false;
     targets.forEach((path) => {
       fetchFocusData(path).then((result) => {
@@ -560,7 +1034,7 @@ export default function Command(props: LaunchProps<{ launchContext?: ListFocusLa
     return () => {
       cancelled = true;
     };
-  }, [pathReady, effectivePath, defaultPath, docPathForCurrent, appPathForCurrent]);
+  }, [pathReady, pathSwitchContext]);
 
   useEffect(() => {
     if (!prefs.updateOneThing || !focus?.focus) return;
@@ -574,20 +1048,12 @@ export default function Command(props: LaunchProps<{ launchContext?: ListFocusLa
   /** Compute detail element unconditionally so useMemo is always called (Rules of Hooks). */
   const itemKeys = new Set((items ?? []).map((i) => i.key));
   const effectiveSelectedId =
-    selectedId != null && (selectedId.startsWith("action-") || itemKeys.has(selectedId))
+    selectedId != null &&
+      (selectedId.startsWith("action-") || itemKeys.has(selectedId))
       ? selectedId
       : currentKey && itemKeys.has(currentKey)
         ? currentKey
         : undefined;
-  const rawBreadcrumbMax =
-    (prefs.breadcrumbMaxLength ?? String(DEFAULT_BREADCRUMB_MAX_LENGTH)).trim() ||
-    String(DEFAULT_BREADCRUMB_MAX_LENGTH);
-  const parsedBreadcrumbMax = parseInt(rawBreadcrumbMax, 10);
-  const breadcrumbMaxLengthParam =
-    Number.isNaN(parsedBreadcrumbMax) || parsedBreadcrumbMax <= 0
-      ? undefined
-      : parsedBreadcrumbMax;
-
   /** Cache detail per selection id so arrowing doesn't create new elements and trigger rerender warnings. */
   const detailBySelection = useMemo(() => {
     const itemList = items ?? [];
@@ -603,11 +1069,11 @@ export default function Command(props: LaunchProps<{ launchContext?: ListFocusLa
       "action-open-editor",
     ];
     if (focus) actionIds.push("action-edit");
-    if (currentDocumentPath && !docPathForCurrent) actionIds.push("action-create-document");
-    if (currentApp && !appPathForCurrent) actionIds.push("action-create-app");
-    if (effectivePath !== defaultPath) actionIds.push("action-switch-global");
-    if (docPathForCurrent && effectivePath !== docPathForCurrent) actionIds.push("action-switch-document");
-    if (appPathForCurrent && currentApp && effectivePath !== appPathForCurrent) actionIds.push("action-switch-app");
+    if (focus && !focus.isLeaf) actionIds.push("action-dive-in");
+    const pathDescriptors = pathSwitchContextToDescriptors(pathSwitchContext);
+    for (const d of pathDescriptors) {
+      actionIds.push(`action-${d.id}`);
+    }
     const allIds: string[] = [...actionIds, ...keys];
     const record: Record<string, ReactNode> = {};
 
@@ -623,7 +1089,7 @@ export default function Command(props: LaunchProps<{ launchContext?: ListFocusLa
           data.focus.focus ?? "",
           null,
           null,
-          breadcrumbMaxLengthParam,
+          DETAIL_PANEL_BREADCRUMB_MAX_LENGTH,
         );
       }
       return "Loading…";
@@ -631,29 +1097,81 @@ export default function Command(props: LaunchProps<{ launchContext?: ListFocusLa
 
     for (const id of allIds) {
       if (id === "action-switch-global") {
-        record[id] = <List.Item.Detail markdown={markdownForSwitchTarget(defaultPath)} />;
+        record[id] = (
+          <List.Item.Detail markdown={markdownForSwitchTarget(defaultPath)} />
+        );
         continue;
       }
       if (id === "action-switch-document" && docPathForCurrent) {
-        record[id] = <List.Item.Detail markdown={markdownForSwitchTarget(docPathForCurrent)} />;
+        record[id] = (
+          <List.Item.Detail
+            markdown={markdownForSwitchTarget(docPathForCurrent)}
+          />
+        );
         continue;
       }
       if (id === "action-switch-app" && appPathForCurrent) {
-        record[id] = <List.Item.Detail markdown={markdownForSwitchTarget(appPathForCurrent)} />;
+        record[id] = (
+          <List.Item.Detail
+            markdown={markdownForSwitchTarget(appPathForCurrent)}
+          />
+        );
+        continue;
+      }
+      if (id === "action-create-document" && currentDocumentPath) {
+        const rootName = documentDisplayName(currentDocumentPath);
+        const newFileItems: JsonItem[] = [
+          { display: `${rootName} @`, key: "0" },
+        ];
+        const markdown = buildPreviewMarkdown(
+          newFileItems,
+          "0",
+          "Focusing on",
+          rootName,
+          null,
+          null,
+          DETAIL_PANEL_BREADCRUMB_MAX_LENGTH,
+        );
+        record[id] = <List.Item.Detail markdown={markdown} />;
+        continue;
+      }
+      if (id === "action-create-app" && currentApp) {
+        const rootName = currentApp.name;
+        const newFileItems: JsonItem[] = [
+          { display: `${rootName} @`, key: "0" },
+        ];
+        const markdown = buildPreviewMarkdown(
+          newFileItems,
+          "0",
+          "Focusing on",
+          rootName,
+          null,
+          null,
+          DETAIL_PANEL_BREADCRUMB_MAX_LENGTH,
+        );
+        record[id] = <List.Item.Detail markdown={markdown} />;
         continue;
       }
 
-      const selectedKeyInTree: string | null = id.startsWith("action-") ? null : (keys.has(id) ? id : null);
+      const selectedKeyInTree: string | null = id.startsWith("action-")
+        ? null
+        : keys.has(id)
+          ? id
+          : null;
       const rawAction = id.startsWith("action-") ? id.slice(7) : null;
       const normalizedAction: PreviewAction =
         rawAction &&
-          PREVIEW_ACTION_VALUES.includes(rawAction as (typeof PREVIEW_ACTION_VALUES)[number])
+          PREVIEW_ACTION_VALUES.includes(
+            rawAction as (typeof PREVIEW_ACTION_VALUES)[number],
+          )
           ? (rawAction as PreviewAction)
           : null;
-      const isSwitchTarget = selectedKeyInTree !== null && selectedKeyInTree !== currentKey;
-      const { breadcrumb: previewBreadcrumb, focusName: previewFocusName } = isSwitchTarget
-        ? getBreadcrumbAndNameForKey(itemList, selectedKeyInTree)
-        : { breadcrumb, focusName: currentItemName };
+      const isSwitchTarget =
+        selectedKeyInTree !== null && selectedKeyInTree !== currentKey;
+      const { breadcrumb: previewBreadcrumb, focusName: previewFocusName } =
+        isSwitchTarget
+          ? getBreadcrumbAndNameForKey(itemList, selectedKeyInTree)
+          : { breadcrumb, focusName: currentItemName };
       const markdown = buildPreviewMarkdown(
         itemList,
         currentKey,
@@ -661,7 +1179,7 @@ export default function Command(props: LaunchProps<{ launchContext?: ListFocusLa
         previewFocusName,
         selectedKeyInTree,
         normalizedAction,
-        breadcrumbMaxLengthParam,
+        DETAIL_PANEL_BREADCRUMB_MAX_LENGTH,
       );
       record[id] = <List.Item.Detail markdown={markdown} />;
     }
@@ -671,13 +1189,12 @@ export default function Command(props: LaunchProps<{ launchContext?: ListFocusLa
     currentKey,
     focus?.breadcrumb,
     focus?.focus,
-    breadcrumbMaxLengthParam,
     focus,
     currentDocumentPath,
     docPathForCurrent,
     currentApp,
     appPathForCurrent,
-    effectivePath,
+    pathSwitchContext,
     defaultPath,
     switchTargetPreviews,
   ]);
@@ -694,46 +1211,42 @@ export default function Command(props: LaunchProps<{ launchContext?: ListFocusLa
   }, []);
 
   /** All hooks below must run on every render (Rules of Hooks). Do not add early returns above them. */
-  const hasSwitchOptions = Boolean(
-    effectivePath !== defaultPath ||
-    docPathForCurrent ||
-    (appPathForCurrent && currentApp) ||
-    (currentDocumentPath && !docPathForCurrent) ||
-    (currentApp && !appPathForCurrent),
+  const pathDescriptorsForList = useMemo(
+    () => pathSwitchContextToDescriptors(pathSwitchContext),
+    [pathSwitchContext],
+  );
+  const hasSwitchOptions = pathDescriptorsForList.length > 0;
+  const pathSwitchCallbacks: PathSwitchCallbacks = useMemo(
+    () => ({
+      "switch-global": switchToGlobal,
+      "switch-document": switchToDocument,
+      "switch-app": switchToApp,
+      "create-document": createForDocument,
+      "create-app": createForApp,
+    }),
+    [
+      switchToGlobal,
+      switchToDocument,
+      switchToApp,
+      createForDocument,
+      createForApp,
+    ],
   );
   const contextSection = useMemo(
     () =>
       hasSwitchOptions ? (
         <ActionPanel.Section title={nowInputLabel}>
-          <PathSwitchCreateActions
-            effectivePath={effectivePath}
-            defaultPath={defaultPath}
-            docPathForCurrent={docPathForCurrent}
-            appPathForCurrent={appPathForCurrent}
-            currentApp={currentApp}
-            currentDocumentPath={currentDocumentPath}
-            switchToGlobal={switchToGlobal}
-            switchToDocument={switchToDocument}
-            switchToApp={switchToApp}
-            createForDocument={createForDocument}
-            createForApp={createForApp}
+          <PathSwitchActionsList
+            context={pathSwitchContext}
+            callbacks={pathSwitchCallbacks}
           />
         </ActionPanel.Section>
       ) : null,
     [
       hasSwitchOptions,
       nowInputLabel,
-      effectivePath,
-      defaultPath,
-      docPathForCurrent,
-      appPathForCurrent,
-      currentApp,
-      currentDocumentPath,
-      switchToGlobal,
-      switchToDocument,
-      switchToApp,
-      createForDocument,
-      createForApp,
+      pathSwitchContext,
+      pathSwitchCallbacks,
     ],
   );
   const otherSection = useMemo(
@@ -762,7 +1275,11 @@ export default function Command(props: LaunchProps<{ launchContext?: ListFocusLa
             icon={Icon.Document}
             target={pathForMutations}
           />
-          <Action title="Refresh" icon={Icon.ArrowClockwise} onAction={refresh} />
+          <Action
+            title="Refresh"
+            icon={Icon.ArrowClockwise}
+            onAction={refresh}
+          />
         </ActionPanel.Section>
       </>
     ),
@@ -781,360 +1298,62 @@ export default function Command(props: LaunchProps<{ launchContext?: ListFocusLa
     },
     [applyMutationResult, refresh],
   );
-  const actionsForAdd = useMemo(
-    () => (
-      <ActionPanel>
-        <Action.Push
-          title="Narrow Focus"
-          icon={Icon.ChevronRight}
-          target={
-            <AddNestedForm
-              nowFilePath={pathForMutations}
-              applyMutationResult={applyMutationResult}
-              refresh={refresh}
-            />
-          }
-        />
-        {otherSection}
-      </ActionPanel>
-    ),
-    [pathForMutations, applyMutationResult, refresh, otherSection],
-  );
-  const actionsForComplete = useMemo(
-    () => (
-      <ActionPanel>
-        <Action
-          title="Finish This"
-          icon={Icon.Checkmark}
-          onAction={async () => {
-            await runNav(() => runComplete(pathForMutations), "Completed");
-          }}
-        />
-        {otherSection}
-      </ActionPanel>
-    ),
-    [pathForMutations, runNav, otherSection],
-  );
-  const actionsForLater = useMemo(
-    () => (
-      <ActionPanel>
-        <Action.Push
-          title="Add Followup"
-          icon={Icon.Ellipsis}
-          target={
-            <LaterForm
-              nowFilePath={pathForMutations}
-              applyMutationResult={applyMutationResult}
-              refresh={refresh}
-            />
-          }
-        />
-        {otherSection}
-      </ActionPanel>
-    ),
-    [pathForMutations, applyMutationResult, refresh, otherSection],
-  );
-  const actionsForEdit = useMemo(
-    () =>
-      focus ? (
-        <ActionPanel>
-          <Action.Push
-            title="Edit"
-            icon={Icon.TextCursor}
-            target={
-              <EditForm
-                nowFilePath={pathForMutations}
-                currentName={focus.focus}
-                applyMutationResult={applyMutationResult}
-                refresh={refresh}
-              />
-            }
-          />
-          {otherSection}
-        </ActionPanel>
-      ) : null,
-    [pathForMutations, focus?.focus, applyMutationResult, refresh, otherSection],
-  );
-  const actionsForWrap = useMemo(
-    () => (
-      <ActionPanel>
-        <Action.Push
-          title="Wrap"
-          icon={Icon.ArrowUp}
-          target={
-            <WrapForm
-              nowFilePath={pathForMutations}
-              applyMutationResult={applyMutationResult}
-              refresh={refresh}
-            />
-          }
-        />
-        {otherSection}
-      </ActionPanel>
-    ),
-    [pathForMutations, applyMutationResult, refresh, otherSection],
-  );
-  const actionsForMove = useMemo(
-    () => (
-      <ActionPanel>
-        <Action.Push
-          title="Move"
-          icon={Icon.ArrowRight}
-          target={
-            <MoveTargetList
-              nowFilePath={pathForMutations}
-              currentKey={currentKey}
-              items={itemsForMove}
-              applyMutationResult={applyMutationResult}
-              refresh={refresh}
-            />
-          }
-        />
-        {otherSection}
-      </ActionPanel>
-    ),
-    [pathForMutations, currentKey, itemsForMove, applyMutationResult, refresh, otherSection],
-  );
-  const actionsForOpenEditor = useMemo(
-    () => (
-      <ActionPanel>
-        <Action.Open
-          title="Open in Editor"
-          icon={Icon.Document}
-          target={pathForMutations}
-        />
-        {otherSection}
-      </ActionPanel>
-    ),
-    [pathForMutations, otherSection],
-  );
-  const actionsForCreateDocument = useMemo(
-    () => (
-      <ActionPanel>
-        <Action
-          title={`Create Now File for ${documentDisplayName(currentDocumentPath ?? "")}`}
-          icon={Icon.Plus}
-          onAction={createForDocument}
-        />
-        {otherSection}
-      </ActionPanel>
-    ),
-    [currentDocumentPath, createForDocument, otherSection],
-  );
-  const actionsForCreateApp = useMemo(
-    () => (
-      <ActionPanel>
-        <Action
-          title={`Create Now File for ${currentApp?.name ?? ""}`}
-          icon={Icon.Plus}
-          onAction={createForApp}
-        />
-        {otherSection}
-      </ActionPanel>
-    ),
-    [currentApp?.name, createForApp, otherSection],
-  );
 
-  const actionsForSwitchToGlobal = useMemo(
-    () => (
-      <ActionPanel>
-        <Action title="Switch to Global" icon={Icon.Circle} onAction={switchToGlobal} />
-        {otherSection}
-      </ActionPanel>
-    ),
-    [switchToGlobal, otherSection],
+  /** Single descriptor-based factory: one useMemo builds all action panels from (selectionId + context). */
+  const actionPanelContext = useMemo<ActionPanelContext>(
+    () => ({
+      pathForMutations,
+      focus,
+      currentKey,
+      itemsForMove,
+      applyMutationResult,
+      refresh,
+      runNav,
+      setSelectedId,
+      pathDescriptorsForList,
+      pathSwitchCallbacks,
+      otherSection,
+      contextSection,
+    }),
+    [
+      pathForMutations,
+      focus,
+      currentKey,
+      itemsForMove,
+      applyMutationResult,
+      refresh,
+      runNav,
+      pathDescriptorsForList,
+      pathSwitchCallbacks,
+      otherSection,
+      contextSection,
+    ],
   );
-  const actionsForSwitchToDocument = useMemo(
-    () => (
-      <ActionPanel>
-        <Action
-          title="Switch to Document File"
-          icon={Icon.Document}
-          onAction={switchToDocument}
-        />
-        {otherSection}
-      </ActionPanel>
-    ),
-    [switchToDocument, otherSection],
-  );
-  const actionsForSwitchToApp = useMemo(
-    () => (
-      <ActionPanel>
-        <Action
-          title={`Switch to ${currentApp?.name ?? ""} file`}
-          icon={Icon.AppWindow}
-          onAction={switchToApp}
-        />
-        {otherSection}
-      </ActionPanel>
-    ),
-    [currentApp?.name, switchToApp, otherSection],
-  );
-
-  /** Memoize action panels per Switch section item so actions refs are stable when only selection changes. */
-  const actionsBySwitchItemKey = useMemo(() => {
-    const targets = itemsForMove.filter((i) => i.key !== currentKey);
+  const allSelectionIds = useMemo(() => {
+    const actionIds: string[] = [
+      "action-add",
+      "action-complete",
+      "action-later",
+      "action-wrap",
+      "action-move",
+      "action-open-editor",
+    ];
+    if (focus) actionIds.push("action-edit");
+    if (focus && !focus.isLeaf) actionIds.push("action-dive-in");
+    const pathIds = pathDescriptorsForList.map((d) => `action-${d.id}`);
+    const switchItemKeys = itemsForMove
+      .filter((i) => i.key !== currentKey)
+      .map((i) => i.key);
+    return [...actionIds, ...pathIds, ...switchItemKeys];
+  }, [focus, pathDescriptorsForList, itemsForMove, currentKey]);
+  const actionPanelsBySelection = useMemo(() => {
     const map: Record<string, ReactNode> = {};
-    for (const item of targets) {
-      const isCurrent = item.key === currentKey;
-      map[item.key] = (
-        <ActionPanel>
-          {contextSection}
-          <ActionPanel.Section title="Focus">
-            <Action
-              title="Switch"
-              icon={Icon.Star}
-              onAction={async () => {
-                try {
-                  const result = await runSwitch(pathForMutations, item.key);
-                  if (result) await applyMutationResult(result);
-                  else await refresh();
-                  await showToast(Toast.Style.Success, "Focus updated");
-                } catch (e) {
-                  await showToast(
-                    Toast.Style.Failure,
-                    "Failed to set focus",
-                    String(e),
-                  );
-                }
-              }}
-            />
-            {isCurrent ? (
-              <Action
-                title="Finish This"
-                icon={Icon.Checkmark}
-                onAction={async () => {
-                  try {
-                    const result = await runComplete(pathForMutations);
-                    if (result) await applyMutationResult(result);
-                    else await refresh();
-                    await showToast(Toast.Style.Success, "Completed");
-                  } catch (e) {
-                    await showToast(
-                      Toast.Style.Failure,
-                      "Failed to complete",
-                      String(e),
-                    );
-                  }
-                }}
-              />
-            ) : null}
-          </ActionPanel.Section>
-          <ActionPanel.Section title="Actions">
-            <Action.Push
-              title="Narrow Focus"
-              icon={Icon.ChevronRight}
-              target={
-                <AddNestedForm
-                  nowFilePath={pathForMutations}
-                  applyMutationResult={applyMutationResult}
-                  refresh={refresh}
-                />
-              }
-            />
-            <Action.Push
-              title="Add Followup"
-              icon={Icon.Ellipsis}
-              target={
-                <LaterForm
-                  nowFilePath={pathForMutations}
-                  applyMutationResult={applyMutationResult}
-                  refresh={refresh}
-                />
-              }
-            />
-            {focus ? (
-              <Action.Push
-                title="Edit"
-                icon={Icon.TextCursor}
-                target={
-                  <EditForm
-                    nowFilePath={pathForMutations}
-                    currentName={focus.focus}
-                    applyMutationResult={applyMutationResult}
-                    refresh={refresh}
-                  />
-                }
-              />
-            ) : null}
-            <Action.Push
-              title="Wrap"
-              icon={Icon.ArrowUp}
-              target={
-                <WrapForm
-                  nowFilePath={pathForMutations}
-                  applyMutationResult={applyMutationResult}
-                  refresh={refresh}
-                />
-              }
-            />
-            <Action.Push
-              title="Move"
-              icon={Icon.ArrowRight}
-              target={
-                <MoveTargetList
-                  nowFilePath={pathForMutations}
-                  currentKey={currentKey}
-                  items={itemsForMove}
-                  applyMutationResult={applyMutationResult}
-                  refresh={refresh}
-                />
-              }
-            />
-          </ActionPanel.Section>
-          <ActionPanel.Section title="Copy">
-            <Action.CopyToClipboard
-              title="Copy Title"
-              content={item.display.replace(/\s+@\s*$/, "").trim()}
-            />
-          </ActionPanel.Section>
-          <ActionPanel.Section title="Other">
-            <Action
-              title="Tui"
-              icon={Icon.Terminal}
-              onAction={async () => {
-                try {
-                  await openTerminalWithNowTui(pathForMutations);
-                  await showToast(Toast.Style.Success, "Terminal opened");
-                } catch (e) {
-                  await showToast(
-                    Toast.Style.Failure,
-                    "Could not open Terminal",
-                    String(e),
-                  );
-                }
-              }}
-            />
-            <Action.Open
-              title="Open in Editor"
-              icon={Icon.Document}
-              target={pathForMutations}
-            />
-            <Action
-              title="Refresh"
-              icon={Icon.ArrowClockwise}
-              onAction={refresh}
-            />
-            <Action
-              title="Open Extension Preferences"
-              onAction={openCommandPreferences}
-            />
-          </ActionPanel.Section>
-        </ActionPanel>
-      );
+    for (const id of allSelectionIds) {
+      const panel = buildActionPanel(id, actionPanelContext);
+      if (panel != null) map[id] = panel;
     }
     return map;
-  }, [
-    itemsForMove,
-    currentKey,
-    pathForMutations,
-    applyMutationResult,
-    refresh,
-    contextSection,
-    focus?.focus,
-    showToast,
-    openCommandPreferences,
-  ]);
+  }, [allSelectionIds, actionPanelContext]);
 
   if (!pathReady) {
     return (
@@ -1151,7 +1370,8 @@ export default function Command(props: LaunchProps<{ launchContext?: ListFocusLa
         : cliMissing
           ? "Install the now CLI to use this extension."
           : error
-            ? errorMessage ?? "Check path and format, or run 'now status' in Terminal to see the CLI error."
+            ? (errorMessage ??
+              "Check path and format, or run 'now status' in Terminal to see the CLI error.")
             : "Set your focus file path in extension preferences and ensure the now CLI is installed.") +
       `\n\n${nowInputLabel}`;
     return (
@@ -1170,18 +1390,9 @@ export default function Command(props: LaunchProps<{ launchContext?: ListFocusLa
           icon={Icon.Warning}
           actions={
             <ActionPanel>
-              <PathSwitchCreateActions
-                effectivePath={effectivePath}
-                defaultPath={defaultPath}
-                docPathForCurrent={docPathForCurrent}
-                appPathForCurrent={appPathForCurrent}
-                currentApp={currentApp}
-                currentDocumentPath={currentDocumentPath}
-                switchToGlobal={switchToGlobal}
-                switchToDocument={switchToDocument}
-                switchToApp={switchToApp}
-                createForDocument={createForDocument}
-                createForApp={createForApp}
+              <PathSwitchActionsList
+                context={pathSwitchContext}
+                callbacks={pathSwitchCallbacks}
               />
               {fileMissing ? (
                 <Action
@@ -1190,6 +1401,9 @@ export default function Command(props: LaunchProps<{ launchContext?: ListFocusLa
                   onAction={async () => {
                     try {
                       await createFocusFile(pathForMutations);
+                      const result = await runSwitch(pathForMutations, "0");
+                      if (result) await applyMutationResult(result);
+                      else await refresh();
                       await showToast(
                         Toast.Style.Success,
                         "Focus file created",
@@ -1308,21 +1522,30 @@ export default function Command(props: LaunchProps<{ launchContext?: ListFocusLa
           title="Narrow Focus"
           icon={Icon.ChevronRight}
           detail={detail as any}
-          actions={actionsForAdd as any}
+          actions={actionPanelsBySelection["action-add"] as any}
         />
+        {focus && !focus.isLeaf ? (
+          <List.Item
+            id="action-dive-in"
+            title="Dive In"
+            icon={Icon.ChevronDown}
+            detail={detail as any}
+            actions={actionPanelsBySelection["action-dive-in"] as any}
+          />
+        ) : null}
         <List.Item
           id="action-complete"
           title="Finish This"
           icon={Icon.Checkmark}
           detail={detail as any}
-          actions={actionsForComplete as any}
+          actions={actionPanelsBySelection["action-complete"] as any}
         />
         <List.Item
           id="action-later"
           title="Add Followup"
           icon={Icon.Ellipsis}
           detail={detail as any}
-          actions={actionsForLater as any}
+          actions={actionPanelsBySelection["action-later"] as any}
         />
         {focus ? (
           <List.Item
@@ -1330,7 +1553,7 @@ export default function Command(props: LaunchProps<{ launchContext?: ListFocusLa
             title="Edit"
             icon={Icon.TextCursor}
             detail={detail as any}
-            actions={actionsForEdit as any}
+            actions={actionPanelsBySelection["action-edit"] as any}
           />
         ) : null}
         <List.Item
@@ -1338,14 +1561,14 @@ export default function Command(props: LaunchProps<{ launchContext?: ListFocusLa
           title="Wrap"
           icon={Icon.ArrowUp}
           detail={detail as any}
-          actions={actionsForWrap as any}
+          actions={actionPanelsBySelection["action-wrap"] as any}
         />
         <List.Item
           id="action-move"
           title="Move"
           icon={Icon.ArrowRight}
           detail={detail as any}
-          actions={actionsForMove as any}
+          actions={actionPanelsBySelection["action-move"] as any}
         />
       </List.Section>
       <List.Section title="Now File">
@@ -1354,53 +1577,26 @@ export default function Command(props: LaunchProps<{ launchContext?: ListFocusLa
           title="Open in Editor"
           icon={Icon.Document}
           detail={detail as any}
-          actions={actionsForOpenEditor as any}
+          actions={actionPanelsBySelection["action-open-editor"] as any}
         />
-        {effectivePath !== defaultPath ? (
+        {pathDescriptorsForList.map((d: PathActionDescriptor) => (
           <List.Item
-            id="action-switch-global"
-            title="Switch to Global"
-            icon={Icon.Circle}
+            key={d.id}
+            id={`action-${d.id}`}
+            title={d.title}
+            icon={
+              d.id === "switch-global"
+                ? Icon.Circle
+                : d.id === "switch-document"
+                  ? Icon.Document
+                  : d.id === "switch-app"
+                    ? Icon.AppWindow
+                    : Icon.Plus
+            }
             detail={detail as any}
-            actions={actionsForSwitchToGlobal as any}
+            actions={actionPanelsBySelection[`action-${d.id}`] as any}
           />
-        ) : null}
-        {docPathForCurrent && effectivePath !== docPathForCurrent ? (
-          <List.Item
-            id="action-switch-document"
-            title="Switch to Document File"
-            icon={Icon.Document}
-            detail={detail as any}
-            actions={actionsForSwitchToDocument as any}
-          />
-        ) : null}
-        {appPathForCurrent && currentApp && effectivePath !== appPathForCurrent ? (
-          <List.Item
-            id="action-switch-app"
-            title={`Switch to ${currentApp.name} file`}
-            icon={Icon.AppWindow}
-            detail={detail as any}
-            actions={actionsForSwitchToApp as any}
-          />
-        ) : null}
-        {currentDocumentPath && !docPathForCurrent ? (
-          <List.Item
-            id="action-create-document"
-            title={`Create Now File for ${documentDisplayName(currentDocumentPath)}`}
-            icon={Icon.Plus}
-            detail={detail as any}
-            actions={actionsForCreateDocument as any}
-          />
-        ) : null}
-        {currentApp && !appPathForCurrent ? (
-          <List.Item
-            id="action-create-app"
-            title={`Create Now File for ${currentApp.name}`}
-            icon={Icon.Plus}
-            detail={detail as any}
-            actions={actionsForCreateApp as any}
-          />
-        ) : null}
+        ))}
       </List.Section>
       <List.Section title="Switch">
         {items
@@ -1414,7 +1610,7 @@ export default function Command(props: LaunchProps<{ launchContext?: ListFocusLa
                 title={item.display.trim()}
                 icon={isCurrent ? Icon.Star : undefined}
                 detail={detail as any}
-                actions={actionsBySwitchItemKey[item.key] as any}
+                actions={actionPanelsBySelection[item.key] as any}
               />
             );
           })}

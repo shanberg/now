@@ -17,7 +17,8 @@ type CacheMap = Record<string, FocusCacheEntry>;
 
 function getCacheMap(): CacheMap {
   const raw = focusCache.get(NOW_FOCUS_CACHE_KEY);
-  if (typeof raw !== "string" || !raw.trim() || raw.trim()[0] !== "{") return {};
+  if (typeof raw !== "string" || !raw.trim() || raw.trim()[0] !== "{")
+    return {};
   try {
     const map = JSON.parse(raw) as CacheMap;
     return map != null && typeof map === "object" ? map : {};
@@ -35,10 +36,17 @@ function setCacheMap(map: CacheMap): void {
  * refresh/mutation; menubar reads when opened so it shows the same state.
  * Uses Raycast Cache API (disk-based, LRU) for recommended menu bar behavior.
  */
-export function getFocusCache(path: string): Promise<FocusCacheEntry | null> {
+
+/** Synchronous read for instant first paint (e.g. menubar on click). */
+export function getFocusCacheSync(path: string): FocusCacheEntry | null {
   const map = getCacheMap();
   const entry = map[path];
-  return Promise.resolve(entry != null ? entry : null);
+  return entry != null ? entry : null;
+}
+
+export function getFocusCache(path: string): Promise<FocusCacheEntry | null> {
+  const entry = getFocusCacheSync(path);
+  return Promise.resolve(entry);
 }
 
 export function setFocusCache(
@@ -48,7 +56,12 @@ export function setFocusCache(
   items?: JsonItem[],
 ): Promise<void> {
   const map = getCacheMap();
-  map[path] = { focus, breadcrumb, updatedAt: Date.now(), ...(items != null && { items }) };
+  map[path] = {
+    focus,
+    breadcrumb,
+    updatedAt: Date.now(),
+    ...(items != null && { items }),
+  };
   setCacheMap(map);
   return Promise.resolve();
 }

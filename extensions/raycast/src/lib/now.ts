@@ -20,10 +20,18 @@ async function runNowMutation(
   ...args: string[]
 ): Promise<MutationResult | null> {
   try {
-    const { stdout } = await runNow(nowFilePath, command, ...args, "--emit-json");
+    const { stdout } = await runNow(
+      nowFilePath,
+      command,
+      ...args,
+      "--emit-json",
+    );
     const trimmed = stdout.trim();
     if (!trimmed) return null;
-    const parsed = JSON.parse(trimmed) as { focus: JsonFocus; items: JsonItem[] };
+    const parsed = JSON.parse(trimmed) as {
+      focus: JsonFocus;
+      items: JsonItem[];
+    };
     if (parsed?.focus == null || !Array.isArray(parsed.items)) return null;
     return { focus: parsed.focus, items: parsed.items };
   } catch {
@@ -51,15 +59,19 @@ async function getEnvForSubprocess(): Promise<NodeJS.ProcessEnv> {
     if (path && path.length > 0) return { ...process.env };
     const shell = process.env.SHELL || "/bin/zsh";
     try {
-      const { stdout } = await execFileAsync(shell, ["-l", "-c", "echo $PATH"], {
-        encoding: "utf-8",
-        timeout: 5000,
-        env: {
-          HOME: process.env.HOME ?? "",
-          USER: process.env.USER ?? "",
-          PATH: "/usr/bin:/bin",
+      const { stdout } = await execFileAsync(
+        shell,
+        ["-l", "-c", "echo $PATH"],
+        {
+          encoding: "utf-8",
+          timeout: 5000,
+          env: {
+            HOME: process.env.HOME ?? "",
+            USER: process.env.USER ?? "",
+            PATH: "/usr/bin:/bin",
+          },
         },
-      });
+      );
       return { ...process.env, PATH: stdout.trim() };
     } catch {
       return { ...process.env };
@@ -88,8 +100,12 @@ export const NOW_APP_PATHS_KEY = "nowAppPaths";
 export const NOW_DOCUMENT_PATHS_KEY = "nowDocumentPaths";
 /** LocalStorage key: last resolved now file path (used when app/document resolution fails so we don't flip to Global). */
 export const NOW_LAST_RESOLVED_PATH_KEY = "nowLastResolvedPath";
+/** LocalStorage key: menubar-pinned now file path (when set, menubar does not auto-switch file). */
+export const NOW_MENUBAR_PINNED_PATH_KEY = "nowMenubarPinnedPath";
 
-export function parseJsonToRecord(json: string | undefined): Record<string, string> {
+export function parseJsonToRecord(
+  json: string | undefined,
+): Record<string, string> {
   if (json == null || typeof json !== "string") return {};
   const trimmed = json.trim();
   if (!trimmed || (trimmed[0] !== "{" && trimmed[0] !== "[")) return {};
@@ -128,7 +144,9 @@ export function filenameSimilarity(a: string, b: string): number {
 function levenshtein(a: string, b: string): number {
   const m = a.length;
   const n = b.length;
-  const d: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  const d: number[][] = Array.from({ length: m + 1 }, () =>
+    Array(n + 1).fill(0),
+  );
   for (let i = 0; i <= m; i++) d[i][0] = i;
   for (let j = 0; j <= n; j++) d[0][j] = j;
   for (let i = 1; i <= m; i++) {
@@ -161,7 +179,8 @@ function getAppMapKey(
   map: Record<string, string>,
   app: { bundleId?: string; name: string },
 ): string | null {
-  if (app.bundleId != null && map[app.bundleId] !== undefined) return app.bundleId;
+  if (app.bundleId != null && map[app.bundleId] !== undefined)
+    return app.bundleId;
   if (app.name && map[app.name] !== undefined) return app.name;
   return null;
 }
@@ -253,8 +272,10 @@ export function getDocPathForCurrentDocument(
     const storedNormalized = resolve(storedDocPath);
     const storedBase = basename(storedNormalized);
     const storedDir = dirname(storedNormalized);
-    if (storedBase === currentBase) sameFilenameCandidates.push([storedDocPath, nowFilePath]);
-    if (storedDir === currentDir) samePathCandidates.push([storedDocPath, nowFilePath]);
+    if (storedBase === currentBase)
+      sameFilenameCandidates.push([storedDocPath, nowFilePath]);
+    if (storedDir === currentDir)
+      samePathCandidates.push([storedDocPath, nowFilePath]);
   }
 
   if (sameFilenameCandidates.length > 0)
@@ -322,8 +343,7 @@ export function resolveNowPathFromContext(options: {
     const path = resolveNowFilePathForApp(defaultPath, mergedAppJson, app);
     return {
       path,
-      sourceLabel:
-        path !== defaultPath ? `${app.name} — ${path}` : "Global",
+      sourceLabel: path !== defaultPath ? `${app.name} — ${path}` : "Global",
       appPathForCurrent: getAppPathForCurrentApp(mergedAppJson, app),
       docPathForCurrent,
     };
@@ -379,10 +399,13 @@ export async function getCurrentDocumentPath(): Promise<string | null> {
     return ""
   `;
   try {
-    const { stdout } = await execAsync(`osascript -e ${JSON.stringify(script)}`, {
-      encoding: "utf-8",
-      timeout: 3000,
-    });
+    const { stdout } = await execAsync(
+      `osascript -e ${JSON.stringify(script)}`,
+      {
+        encoding: "utf-8",
+        timeout: 3000,
+      },
+    );
     const raw = stdout.trim();
     if (!raw) return null;
     const path = normalizeAppleScriptPath(raw);
@@ -420,7 +443,8 @@ export function resolveNowFilePathForApp(
   mappingJson: string | undefined,
   app: { bundleId?: string; name: string },
 ): string {
-  if (!mappingJson || typeof mappingJson !== "string") return resolveNowFilePath(defaultPath);
+  if (!mappingJson || typeof mappingJson !== "string")
+    return resolveNowFilePath(defaultPath);
   const trimmed = mappingJson.trim();
   if (!trimmed || trimmed[0] !== "{") return resolveNowFilePath(defaultPath);
   let map: Record<string, string>;
@@ -538,7 +562,11 @@ export async function isNowOnPath(): Promise<boolean> {
       return true; // other error means now exists but failed (e.g. exit 1)
     }
   };
-  if (await tryWithEnv(process.env.PATH ? process.env : { ...process.env, PATH: DEFAULT_PATH }))
+  if (
+    await tryWithEnv(
+      process.env.PATH ? process.env : { ...process.env, PATH: DEFAULT_PATH },
+    )
+  )
     return true;
   const envWithPath = await getEnvForSubprocess();
   return tryWithEnv(envWithPath);
@@ -559,7 +587,9 @@ export async function runNow(
       ? { ...process.env }
       : { ...process.env, PATH: DEFAULT_PATH };
 
-  const run = (env: NodeJS.ProcessEnv): Promise<{ stdout: string; stderr: string }> =>
+  const run = (
+    env: NodeJS.ProcessEnv,
+  ): Promise<{ stdout: string; stderr: string }> =>
     new Promise((resolve, reject) => {
       execFile(
         "now",
@@ -578,7 +608,8 @@ export async function runNow(
               return;
             }
             const msg =
-              ((stderr ?? "").trim() || (err as NodeJS.ErrnoException).message) ??
+              ((stderr ?? "").trim() ||
+                (err as NodeJS.ErrnoException).message) ??
               "now failed";
             reject(new Error(msg));
             return;
