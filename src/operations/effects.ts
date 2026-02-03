@@ -4,10 +4,12 @@
 import { D } from "../consts.ts";
 import { type TreeNode } from "../../types.d.ts";
 import {
+  deserialize,
   getCurrentItemBreadcrumb,
   getItemsList,
   getNodesList,
-} from "./treeNavigation.ts";
+  serialize,
+} from "./nowFormatReexports.ts";
 import {
   addChildToCurrentItem,
   addNextSiblingToCurrentItem,
@@ -28,7 +30,6 @@ import {
   readMarkdownFile,
   writeMarkdownFile,
 } from "./fileOperations.ts";
-import { deserialize, serialize } from "./treeSerialization.ts";
 
 /**
  * Retrieves the tree structure from the markdown file.

@@ -3,11 +3,19 @@ import { D } from "./consts.ts";
 const args = Deno.args;
 const cmd = args[0] ?? "status";
 
+const MUTATION_COMMANDS = [
+  "complete",
+  "add",
+  "later",
+  "edit",
+  "switch",
+  "wrap",
+  "move",
+] as const;
+
 const isEmitJsonMutation =
   args[args.length - 1] === "--emit-json" &&
-  ["complete", "add", "later", "edit", "switch", "wrap", "move"].includes(
-    cmd,
-  );
+  MUTATION_COMMANDS.includes(cmd as (typeof MUTATION_COMMANDS)[number]);
 if (cmd !== "json" && !isEmitJsonMutation) {
   D || console.clear();
 }
@@ -68,13 +76,7 @@ const { unixCLI } = await import("./ui/unixCLI.ts");
 
 const cliCommands = [
   "status",
-  "complete",
-  "add",
-  "later",
-  "edit",
-  "switch",
-  "wrap",
-  "move",
+  ...MUTATION_COMMANDS,
   "dive-in",
   "next",
   "previous",
@@ -82,45 +84,30 @@ const cliCommands = [
   "up",
 ] as const;
 
-const mutationCommandsWithEmitJson = [
-  "complete",
+const COMMANDS_REQUIRING_ARG: readonly string[] = [
   "add",
   "later",
   "edit",
   "switch",
   "wrap",
   "move",
-] as const;
+];
 
 if (cliCommands.includes(cmd as (typeof cliCommands)[number])) {
   const c = cmd as (typeof cliCommands)[number];
   const emitJson =
-    mutationCommandsWithEmitJson.includes(
-      c as (typeof mutationCommandsWithEmitJson)[number],
-    ) && args[args.length - 1] === "--emit-json";
+    MUTATION_COMMANDS.includes(c as (typeof MUTATION_COMMANDS)[number]) &&
+    args[args.length - 1] === "--emit-json";
   const positionals = emitJson ? args.slice(1, -1) : args.slice(1);
   const options = emitJson ? { emitJson: true } : undefined;
 
-  if (c === "add" || c === "later") {
+  if (COMMANDS_REQUIRING_ARG.includes(c)) {
     if (positionals[0] === undefined) {
       console.error(`${c} requires an argument`);
       Deno.exit(1);
     }
-    await unixCLI(c, options, ...positionals);
-  } else if (
-    c === "edit" ||
-    c === "switch" ||
-    c === "wrap" ||
-    c === "move"
-  ) {
-    if (positionals[0] === undefined) {
-      console.error(`${c} requires an argument`);
-      Deno.exit(1);
-    }
-    await unixCLI(c, options, ...positionals);
-  } else {
-    await unixCLI(c, options, ...positionals);
   }
+  await unixCLI(c, options, ...positionals);
   Deno.exit(0);
 }
 

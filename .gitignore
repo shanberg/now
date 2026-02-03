@@ -1,6 +1,7 @@
 .frame-MD.now.MD
 .now.log
 .DS_Store
+.cursor/debug.log
 
 # Dependencies
 node_modules/
