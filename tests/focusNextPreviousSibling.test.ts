@@ -5,147 +5,107 @@ import {
 } from "../src/operations/index.ts";
 import { type TreeNode } from "../types.d.ts";
 
-Deno.test("focusNextSibling - move to next sibling", () => {
-  const tree: TreeNode = {
+/** Root node with flat children; currentIndex is the child index that has isCurrent: true. */
+function rootWithSiblings(
+  childNames: string[],
+  currentIndex: number,
+): TreeNode {
+  return {
+    key: "0",
+    name: "Root",
+    isCurrent: false,
+    children: childNames.map((name, i) => ({
+      key: String(i + 1),
+      name,
+      children: [],
+      isCurrent: i === currentIndex,
+    })),
+  };
+}
+
+/** Root > Parent > flat inner children; currentIndex is the inner child with isCurrent. */
+function rootWithNestedSiblings(
+  innerNames: string[],
+  currentIndex: number,
+): TreeNode {
+  return {
     key: "0",
     name: "Root",
     isCurrent: false,
     children: [
-      { key: "1", name: "Alpha", children: [], isCurrent: true },
-      { key: "2", name: "Beta", children: [], isCurrent: false },
-      { key: "3", name: "Gamma", children: [], isCurrent: false },
+      {
+        key: "1",
+        name: "Parent",
+        isCurrent: false,
+        children: innerNames.map((name, i) => ({
+          key: String(i + 2),
+          name,
+          children: [],
+          isCurrent: i === currentIndex,
+        })),
+      },
     ],
   };
+}
 
-  const updated = focusNextSibling(tree);
+/** Asserts exactly one child at expectedIndex has isCurrent; rest false. */
+function expectCurrentAtFlat(
+  node: TreeNode,
+  expectedIndex: number,
+): void {
+  const children = node.children!;
+  for (let i = 0; i < children.length; i++) {
+    assertEquals(children[i].isCurrent, i === expectedIndex);
+  }
+}
 
-  assertEquals(updated.children![0].isCurrent, false);
-  assertEquals(updated.children![1].isCurrent, true);
-  assertEquals(updated.children![2].isCurrent, false);
+/** Asserts exactly one inner child at expectedIndex has isCurrent. */
+function expectCurrentAtNested(
+  node: TreeNode,
+  innerExpectedIndex: number,
+): void {
+  const inner = node.children![0].children!;
+  for (let i = 0; i < inner.length; i++) {
+    assertEquals(inner[i].isCurrent, i === innerExpectedIndex);
+  }
+}
+
+Deno.test("focusNextSibling - move to next sibling", () => {
+  const tree = rootWithSiblings(["Alpha", "Beta", "Gamma"], 0);
+  expectCurrentAtFlat(focusNextSibling(tree), 1);
 });
 
 Deno.test("focusNextSibling - wrap from last to first", () => {
-  const tree: TreeNode = {
-    key: "0",
-    name: "Root",
-    isCurrent: false,
-    children: [
-      { key: "1", name: "Alpha", children: [], isCurrent: false },
-      { key: "2", name: "Beta", children: [], isCurrent: false },
-      { key: "3", name: "Gamma", children: [], isCurrent: true },
-    ],
-  };
-
-  const updated = focusNextSibling(tree);
-
-  assertEquals(updated.children![0].isCurrent, true);
-  assertEquals(updated.children![1].isCurrent, false);
-  assertEquals(updated.children![2].isCurrent, false);
+  const tree = rootWithSiblings(["Alpha", "Beta", "Gamma"], 2);
+  expectCurrentAtFlat(focusNextSibling(tree), 0);
 });
 
 Deno.test("focusNextSibling - only child, focus unchanged", () => {
-  const tree: TreeNode = {
-    key: "0",
-    name: "Root",
-    isCurrent: false,
-    children: [{ key: "1", name: "Only", children: [], isCurrent: true }],
-  };
-
-  const updated = focusNextSibling(tree);
-  assertEquals(updated.children![0].isCurrent, true);
+  const tree = rootWithSiblings(["Only"], 0);
+  expectCurrentAtFlat(focusNextSibling(tree), 0);
 });
 
 Deno.test("focusNextSibling - nested, move within siblings", () => {
-  const tree: TreeNode = {
-    key: "0",
-    name: "Root",
-    isCurrent: false,
-    children: [
-      {
-        key: "1",
-        name: "Parent",
-        isCurrent: false,
-        children: [
-          { key: "2", name: "A", children: [], isCurrent: true },
-          { key: "3", name: "B", children: [], isCurrent: false },
-        ],
-      },
-    ],
-  };
-
-  const updated = focusNextSibling(tree);
-  assertEquals(updated.children![0].children![0].isCurrent, false);
-  assertEquals(updated.children![0].children![1].isCurrent, true);
+  const tree = rootWithNestedSiblings(["A", "B"], 0);
+  expectCurrentAtNested(focusNextSibling(tree), 1);
 });
 
 Deno.test("focusPreviousSibling - move to previous sibling", () => {
-  const tree: TreeNode = {
-    key: "0",
-    name: "Root",
-    isCurrent: false,
-    children: [
-      { key: "1", name: "Alpha", children: [], isCurrent: false },
-      { key: "2", name: "Beta", children: [], isCurrent: true },
-      { key: "3", name: "Gamma", children: [], isCurrent: false },
-    ],
-  };
-
-  const updated = focusPreviousSibling(tree);
-
-  assertEquals(updated.children![0].isCurrent, true);
-  assertEquals(updated.children![1].isCurrent, false);
+  const tree = rootWithSiblings(["Alpha", "Beta", "Gamma"], 1);
+  expectCurrentAtFlat(focusPreviousSibling(tree), 0);
 });
 
 Deno.test("focusPreviousSibling - wrap from first to last", () => {
-  const tree: TreeNode = {
-    key: "0",
-    name: "Root",
-    isCurrent: false,
-    children: [
-      { key: "1", name: "Alpha", children: [], isCurrent: true },
-      { key: "2", name: "Beta", children: [], isCurrent: false },
-      { key: "3", name: "Gamma", children: [], isCurrent: false },
-    ],
-  };
-
-  const updated = focusPreviousSibling(tree);
-
-  assertEquals(updated.children![0].isCurrent, false);
-  assertEquals(updated.children![1].isCurrent, false);
-  assertEquals(updated.children![2].isCurrent, true);
+  const tree = rootWithSiblings(["Alpha", "Beta", "Gamma"], 0);
+  expectCurrentAtFlat(focusPreviousSibling(tree), 2);
 });
 
 Deno.test("focusPreviousSibling - only child, focus unchanged", () => {
-  const tree: TreeNode = {
-    key: "0",
-    name: "Root",
-    isCurrent: false,
-    children: [{ key: "1", name: "Only", children: [], isCurrent: true }],
-  };
-
-  const updated = focusPreviousSibling(tree);
-  assertEquals(updated.children![0].isCurrent, true);
+  const tree = rootWithSiblings(["Only"], 0);
+  expectCurrentAtFlat(focusPreviousSibling(tree), 0);
 });
 
 Deno.test("focusPreviousSibling - nested, move within siblings", () => {
-  const tree: TreeNode = {
-    key: "0",
-    name: "Root",
-    isCurrent: false,
-    children: [
-      {
-        key: "1",
-        name: "Parent",
-        isCurrent: false,
-        children: [
-          { key: "2", name: "A", children: [], isCurrent: false },
-          { key: "3", name: "B", children: [], isCurrent: true },
-        ],
-      },
-    ],
-  };
-
-  const updated = focusPreviousSibling(tree);
-  assertEquals(updated.children![0].children![0].isCurrent, true);
-  assertEquals(updated.children![0].children![1].isCurrent, false);
+  const tree = rootWithNestedSiblings(["A", "B"], 1);
+  expectCurrentAtNested(focusPreviousSibling(tree), 0);
 });

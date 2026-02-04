@@ -32,26 +32,35 @@ import {
 } from "./fileOperations.ts";
 
 /**
- * Retrieves the tree structure from the markdown file.
- * @param {string} path - The path to the markdown file.
- * @returns {Promise<TreeNode>} The root node of the tree structure.
+ * Parses markdown content into a tree. Throws with a path-aware message on empty or parse error.
+ * @param content - Raw file content.
+ * @param path - Path used in error messages.
+ * @returns Parsed tree.
  */
-export const getTree = async (path: string): Promise<TreeNode> => {
-  const content = await readMarkdownFile(path);
+function parseTreeContent(content: string, path: string): TreeNode {
   if (!content.trim()) {
     throw new Error(
       `Could not read focus file at ${path} (missing or empty). Create it with: NOW_FILE=${path} now init [root-name]`,
     );
   }
-  let tree: TreeNode;
   try {
-    tree = deserialize(content);
+    return deserialize(content);
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
     throw new Error(
       `Could not read focus file at ${path}: ${detail}. Fix the file format or run NOW_FILE=${path} now init [root-name] to recreate.`,
     );
   }
+}
+
+/**
+ * Retrieves the tree structure from the markdown file.
+ * @param {string} path - The path to the markdown file.
+ * @returns {Promise<TreeNode>} The root node of the tree structure.
+ */
+export const getTree = async (path: string): Promise<TreeNode> => {
+  const content = await readMarkdownFile(path);
+  const tree = parseTreeContent(content, path);
   D && validateTree(tree, "getTree");
   return tree;
 };

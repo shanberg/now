@@ -35,26 +35,104 @@ export function getWatcherDirtyPath(supportPath: string): string {
   return join(supportPath, NOW_WATCHER_DIRTY_FILENAME);
 }
 
+/** Parsed dirty file: ts (ms), optional app. Null if file missing, invalid JSON, or not an object. */
+export type WatcherDirtyData = {
+  ts: number;
+  app?: { bundleId?: string; name: string };
+};
+
+function parseDirtyContent(
+  parsed: unknown,
+): WatcherDirtyData | null {
+  const obj =
+    parsed != null && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as { ts?: number; app?: { bundleId?: string; name?: string } })
+      : null;
+  if (!obj) return null;
+  const ts = typeof obj.ts === "number" ? obj.ts : 0;
+  const app =
+    obj.app != null && typeof obj.app.name === "string"
+      ? { bundleId: obj.app.bundleId, name: obj.app.name }
+      : undefined;
+  return { ts, app };
+}
+
+/** Reads and parses the dirty file. Returns null on read/parse error or when content is not a JSON object. */
+export function readWatcherDirtyFileSync(
+  filePath: string,
+): WatcherDirtyData | null {
+  try {
+    const raw = readFileSync(filePath, "utf-8");
+    const parsed = JSON.parse(raw) as unknown;
+    return parseDirtyContent(parsed);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Collects all registered now-file paths: default + app paths (prefs + storage merged)
- * + document paths, each resolved and deduped.
+ * + app paths, each resolved and deduped.
  */
 export function collectPathsToWatch(
   defaultPath: string,
   appPathsJson: string | undefined,
-  docPathsJson: string | undefined,
   appSpecificNowFiles: string | undefined,
 ): string[] {
   const mergedApp = mergeAppPathsJson(appSpecificNowFiles, appPathsJson);
   const appPaths = Object.values(parseJsonToRecord(mergedApp)).map(
     resolveNowFilePath,
   );
-  const docPaths = Object.values(parseJsonToRecord(docPathsJson)).map(
-    resolveNowFilePath,
-  );
   const defaultResolved = defaultPath ? resolveNowFilePath(defaultPath) : "";
-  const all = [defaultResolved, ...appPaths, ...docPaths].filter(Boolean);
+  const all = [defaultResolved, ...appPaths].filter(Boolean);
   return [...new Set(all)];
+}
+
+/** Kills processes listening on the given port (lsof -ti :port). No-op if none or lsof fails. */
+function killProcessesOnPort(port: number): void {
+  try {
+    const out = execSync(`lsof -ti :${port}`, { encoding: "utf-8" });
+    const pids = out.trim().split(/\s+/).filter(Boolean);
+    for (const s of pids) {
+      const pid = parseInt(s, 10);
+      if (!Number.isNaN(pid) && pid > 0) process.kill(pid, "SIGTERM");
+    }
+  } catch {
+    // no process on port
+  }
+}
+
+/** Kills the process whose PID is stored in the file. No-op if file missing or invalid. */
+function killPidFromFile(pidPath: string): void {
+  try {
+    const pidStr = readFileSync(pidPath, "utf-8").trim();
+    const pid = parseInt(pidStr, 10);
+    if (!Number.isNaN(pid) && pid > 0) process.kill(pid, "SIGTERM");
+  } catch {
+    // no pid file or process already gone
+  }
+}
+
+/** After delayMs, health-check the URL; if not ok or fetch fails, spawn the watcher. */
+function spawnWatcherIfUnhealthy(
+  healthUrl: string,
+  assetsPath: string,
+  configPath: string,
+  delayMs: number,
+): void {
+  setTimeout(() => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 500);
+    fetch(healthUrl, { signal: controller.signal })
+      .then((res) => {
+        clearTimeout(timeoutId);
+        if (!res.ok) spawnWatcher(assetsPath, configPath);
+      })
+      .catch(() => {
+        clearTimeout(timeoutId);
+        spawnWatcher(assetsPath, configPath);
+      });
+  }, delayMs);
 }
 
 /**
@@ -80,6 +158,13 @@ export function ensureWatcherRunning(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 500);
 
+  const killAndSpawn = (): void => {
+    writeFileSync(dirtyPath, '{"ts":0}', "utf-8");
+    killProcessesOnPort(WATCHER_PORT);
+    killPidFromFile(pidPath);
+    spawnWatcherIfUnhealthy(healthUrl, assetsPath, configPath, 300);
+  };
+
   fetch(healthUrl, { signal: controller.signal })
     .then((res) => {
       clearTimeout(timeoutId);
@@ -90,40 +175,6 @@ export function ensureWatcherRunning(
       clearTimeout(timeoutId);
       killAndSpawn();
     });
-
-  function killAndSpawn() {
-    writeFileSync(dirtyPath, '{"ts":0}', "utf-8");
-    try {
-      const out = execSync(`lsof -ti :${WATCHER_PORT}`, { encoding: "utf-8" });
-      const pids = out.trim().split(/\s+/).filter(Boolean);
-      for (const s of pids) {
-        const pid = parseInt(s, 10);
-        if (!Number.isNaN(pid) && pid > 0) process.kill(pid, "SIGTERM");
-      }
-    } catch {
-      // no process on port
-    }
-    try {
-      const pidStr = readFileSync(pidPath, "utf-8").trim();
-      const pid = parseInt(pidStr, 10);
-      if (!Number.isNaN(pid) && pid > 0) process.kill(pid, "SIGTERM");
-    } catch {
-      // no pid file or process already gone
-    }
-    setTimeout(() => {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 500);
-      fetch(healthUrl, { signal: ctrl.signal })
-        .then((r) => {
-          clearTimeout(t);
-          if (!r.ok) spawnWatcher(assetsPath, configPath);
-        })
-        .catch(() => {
-          clearTimeout(t);
-          spawnWatcher(assetsPath, configPath);
-        });
-    }, 300);
-  }
 }
 
 function spawnWatcher(assetsPath: string, configPath: string): void {

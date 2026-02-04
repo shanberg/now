@@ -7,7 +7,3 @@ export function getFrontmostApplication(): Promise<{
 } | null> {
   return Promise.resolve(null);
 }
-
-export function getCurrentDocumentPath(): Promise<string | null> {
-  return Promise.resolve(null);
-}

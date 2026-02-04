@@ -11,21 +11,16 @@ import { pathSwitchContextToDescriptors } from "./pathContext";
 
 export type PathSwitchCallbacks = {
   "switch-global"?: () => void | Promise<void>;
-  "switch-document"?: () => void | Promise<void>;
   "switch-app"?: () => void | Promise<void>;
-  "create-document"?: () => void | Promise<void>;
   "create-app"?: () => void | Promise<void>;
 };
 
-function iconFor(id: PathActionDescriptor["id"]) {
+export function pathActionIcon(id: PathActionDescriptor["id"]) {
   switch (id) {
     case "switch-global":
       return Icon.Circle;
-    case "switch-document":
-      return Icon.Document;
     case "switch-app":
       return Icon.AppWindow;
-    case "create-document":
     case "create-app":
       return Icon.Plus;
     default:
@@ -50,7 +45,7 @@ export function PathSwitchActionsList({
           <Action
             key={d.id}
             title={d.title}
-            icon={iconFor(d.id)}
+            icon={pathActionIcon(d.id)}
             onAction={onAction}
           />
         );

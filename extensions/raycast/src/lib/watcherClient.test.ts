@@ -8,15 +8,15 @@ import {
   collectPathsToWatch,
   getWatcherDirtyPath,
   NOW_WATCHER_DIRTY_FILENAME,
+  readWatcherDirtyFileSync,
   WATCHER_CONFIG_FILENAME,
   WATCHER_PORT,
 } from "./watcherClient";
 
 describe("collectPathsToWatch", () => {
-  it("returns defaultPath only when app and doc JSON are empty", () => {
+  it("returns defaultPath only when app JSON is empty", () => {
     const paths = collectPathsToWatch(
       "/home/.now/focus.now.md",
-      "{}",
       "{}",
       undefined,
     );
@@ -27,12 +27,10 @@ describe("collectPathsToWatch", () => {
   it("merges app paths from prefs and storage and dedupes", () => {
     const defaultPath = "/default";
     const appPathsJson = '{"com.apple.Terminal": "~/term.now.md"}';
-    const docPathsJson = "{}";
     const appSpecificNowFiles = '{"com.other": "~/other.now.md"}';
     const paths = collectPathsToWatch(
       defaultPath,
       appPathsJson,
-      docPathsJson,
       appSpecificNowFiles,
     );
     expect(paths.length).toBeGreaterThanOrEqual(2);
@@ -43,29 +41,47 @@ describe("collectPathsToWatch", () => {
     expect(otherResolved).toBeDefined();
   });
 
-  it("includes document paths and dedupes with default and app", () => {
-    const home = process.env.HOME ?? "/tmp";
-    const defaultPath = `${home}/.now/focus.now.md`;
-    const appPathsJson = "{}";
-    const docPathsJson = JSON.stringify({
-      "/doc/a.md": "~/.now/a.now.md",
-      "/doc/b.md": "~/.now/a.now.md",
-    });
-    const paths = collectPathsToWatch(
-      defaultPath,
-      appPathsJson,
-      docPathsJson,
-      undefined,
+  it("returns empty array when defaultPath is empty and no mappings", () => {
+    const paths = collectPathsToWatch("", "{}", undefined);
+    expect(paths).toEqual([]);
+  });
+});
+
+describe("readWatcherDirtyFileSync", () => {
+  it("returns { ts, app } for valid object with app", () => {
+    const dir = join(
+      process.env.TMPDIR ?? "/tmp",
+      "now-watcher-dirty-test-" + Date.now(),
     );
-    // default + one unique doc path (a.now.md appears twice in values, deduped)
-    expect(paths.length).toBeGreaterThanOrEqual(2);
-    const uniq = [...new Set(paths)];
-    expect(paths).toEqual(uniq);
+    mkdirSync(dir, { recursive: true });
+    const filePath = join(dir, "dirty.txt");
+    writeFileSync(
+      filePath,
+      JSON.stringify({ ts: 12345, app: { bundleId: "com.test", name: "Test" } }),
+      "utf-8",
+    );
+    const data = readWatcherDirtyFileSync(filePath);
+    expect(data).not.toBeNull();
+    expect(data!.ts).toBe(12345);
+    expect(data!.app?.name).toBe("Test");
+    expect(data!.app?.bundleId).toBe("com.test");
   });
 
-  it("returns empty array when defaultPath is empty and no mappings", () => {
-    const paths = collectPathsToWatch("", "{}", "{}", undefined);
-    expect(paths).toEqual([]);
+  it("returns null for bare number (legacy format)", () => {
+    const dir = join(
+      process.env.TMPDIR ?? "/tmp",
+      "now-watcher-dirty-test-" + Date.now(),
+    );
+    mkdirSync(dir, { recursive: true });
+    const filePath = join(dir, "dirty2.txt");
+    writeFileSync(filePath, "999", "utf-8");
+    expect(readWatcherDirtyFileSync(filePath)).toBeNull();
+  });
+
+  it("returns null for missing file", () => {
+    expect(
+      readWatcherDirtyFileSync("/nonexistent/dirty-" + Date.now()),
+    ).toBeNull();
   });
 });
 

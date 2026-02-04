@@ -5,46 +5,118 @@
  * Options cacheOnly and maxCacheAgeMs are for menu-bar usage (cache-only when background, use cache when fresh).
  */
 import { useCachedPromise } from "@raycast/utils";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getJsonFocus, getJsonItems, type MutationResult } from "./now";
 import type { JsonFocus, JsonItem } from "./now";
+import { getFocusCache, getFocusCacheSync, setFocusCache } from "./focusCache";
 import {
-  getFocusCache,
-  getFocusCacheSync,
-  setFocusCache,
-  type FocusCacheEntry,
-} from "./focusCache";
+  cacheEntryToFocusDataResult,
+  type FocusDataResult,
+} from "./focusDataResult";
+import {
+  applyMutationResultByMode,
+  deriveDataSurface,
+  mergeErrorFromSurface,
+  shouldExecuteFetch,
+  writeFocusCacheFromResult,
+} from "./focusDataSurface";
+import { useFocusDataCacheState } from "./useFocusDataCacheState";
 
-/**
- * Result shape of {@link fetchFocusData} and the cached promise used by {@link useFocusData}.
- * Exported for tests and type reuse.
- */
-export type FocusDataResult = {
-  focus: JsonFocus | null;
-  items: JsonItem[] | null;
-  error: boolean;
-  errorMessage: string | null;
-};
+export type { FocusDataResult } from "./focusDataResult";
 
-/** Build JsonFocus from cache entry (menubar only uses focus/breadcrumb; key/isLeaf/isRoot are placeholders). */
-function cacheEntryToJsonFocus(entry: FocusCacheEntry): JsonFocus {
-  return {
-    key: "",
-    focus: entry.focus,
-    breadcrumb: entry.breadcrumb,
-    isLeaf: true,
-    isRoot: false,
-  };
+/** Sync read for first paint: cache-only always; maxCacheAgeMs only when cache is fresh. Returns null when not applicable. */
+function getSyncFirstPaintResult(
+  effectivePath: string | null,
+  cacheOnly: boolean,
+  maxCacheAgeMs: number | undefined,
+  cacheCheckDone: boolean,
+): FocusDataResult | null {
+  if (!effectivePath || cacheCheckDone) return null;
+  const entry = getFocusCacheSync(effectivePath);
+  if (!entry) return null;
+  if (cacheOnly) return cacheEntryToFocusDataResult(entry);
+  if (maxCacheAgeMs == null) return null;
+  if (Date.now() - entry.updatedAt >= maxCacheAgeMs) return null;
+  return cacheEntryToFocusDataResult(entry);
 }
 
-/** Build FocusDataResult from cache entry for useFocusData return shape. */
-function cacheEntryToFocusDataResult(entry: FocusCacheEntry): FocusDataResult {
-  return {
-    focus: cacheEntryToJsonFocus(entry),
-    items: entry.items ?? null,
-    error: false,
-    errorMessage: null,
-  };
+type CacheStateSlice = {
+  cacheOnlyData: FocusDataResult | null;
+  setCacheOnlyData: (v: FocusDataResult | null) => void;
+  cacheOnlyLoading: boolean;
+  cacheCheckDone: boolean;
+  hasFreshCache: boolean;
+  freshCacheData: FocusDataResult | null;
+  setFreshCacheData: (v: FocusDataResult | null) => void;
+};
+
+/** Encapsulates fetch + data-surface resolution so useFocusData stays thin. */
+function useFocusDataSurface(
+  pathForFetch: string,
+  effectivePath: string | null,
+  cacheOnly: boolean,
+  maxCacheAgeMs: number | undefined,
+  cacheState: CacheStateSlice,
+) {
+  const executeFetch = shouldExecuteFetch(
+    pathForFetch,
+    cacheOnly,
+    maxCacheAgeMs,
+    cacheState.cacheCheckDone,
+    cacheState.hasFreshCache,
+  );
+
+  const {
+    data,
+    error: hookError,
+    isLoading,
+    revalidate,
+    mutate,
+  } = useCachedPromise(fetchFocusData, [pathForFetch], {
+    execute: executeFetch,
+    keepPreviousData: true,
+    failureToastOptions: {
+      title: "Could not load focus",
+      message: "Check path and CLI, then retry.",
+    },
+  });
+
+  const syncFirstPaint = getSyncFirstPaintResult(
+    effectivePath,
+    cacheOnly,
+    maxCacheAgeMs,
+    cacheState.cacheCheckDone,
+  );
+  const useSyncFirstPaint = syncFirstPaint != null;
+
+  const dataSurface = deriveDataSurface({
+    cacheOnly,
+    maxCacheAgeMs,
+    cacheCheckDone: cacheState.cacheCheckDone,
+    hasFreshCache: cacheState.hasFreshCache,
+    freshCacheData: cacheState.freshCacheData,
+    syncFirstPaint,
+    useSyncFirstPaint,
+    cacheOnlyData: cacheState.cacheOnlyData,
+    cacheOnlyLoading: cacheState.cacheOnlyLoading,
+    fetchData: data,
+    fetchLoading: isLoading,
+  });
+
+  const refreshCacheOnly = useCallback(async () => {
+    if (!effectivePath) return;
+    const entry = await getFocusCache(effectivePath);
+    cacheState.setCacheOnlyData(
+      entry ? cacheEntryToFocusDataResult(entry) : null,
+    );
+  }, [effectivePath, cacheState.setCacheOnlyData]);
+
+  const refreshRevalidate = useCallback(() => revalidate(), [revalidate]);
+  const refresh = dataSurface.useCacheOnlyRefresh
+    ? refreshCacheOnly
+    : refreshRevalidate;
+
+  return { dataSurface, refresh, mutate, hookError };
 }
 
 /**
@@ -140,273 +212,57 @@ export function useFocusData(
   const effectivePath = pinnedPath ?? nowFilePath;
   const pathForFetch = effectivePath ?? "";
 
-  const [cacheOnlyData, setCacheOnlyData] = useState<FocusDataResult | null>(
-    null,
+  const cacheState = useFocusDataCacheState(
+    effectivePath,
+    cacheOnly,
+    maxCacheAgeMs,
   );
-  const [cacheOnlyLoading, setCacheOnlyLoading] = useState(true);
-  const [cacheCheckDone, setCacheCheckDone] = useState(false);
-  const [freshCacheData, setFreshCacheData] = useState<FocusDataResult | null>(
-    null,
+  const { dataSurface, refresh, mutate, hookError } = useFocusDataSurface(
+    pathForFetch,
+    effectivePath,
+    cacheOnly,
+    maxCacheAgeMs,
+    cacheState,
   );
-  const [hasFreshCache, setHasFreshCache] = useState(false);
-
-  const executeFetch =
-    !!effectivePath &&
-    (cacheOnly
-      ? false
-      : maxCacheAgeMs != null
-        ? cacheCheckDone && !hasFreshCache
-        : true);
-
-  const {
-    data,
-    error: hookError,
-    isLoading,
-    revalidate,
-    mutate,
-  } = useCachedPromise(fetchFocusData, [pathForFetch], {
-    execute: executeFetch,
-    keepPreviousData: true,
-    failureToastOptions: {
-      title: "Could not load focus",
-      message: "Check path and CLI, then retry.",
-    },
-  });
 
   useEffect(() => {
-    if (!cacheOnly || !effectivePath) {
-      if (cacheOnly) setCacheOnlyLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setCacheOnlyLoading(true);
-    getFocusCache(effectivePath).then((entry: FocusCacheEntry | null) => {
-      if (!cancelled) {
-        setCacheOnlyData(entry ? cacheEntryToFocusDataResult(entry) : null);
-        setCacheOnlyLoading(false);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [cacheOnly, effectivePath]);
-
-  useEffect(() => {
-    if (cacheOnly || maxCacheAgeMs == null || !effectivePath) return;
-    let cancelled = false;
-    setCacheCheckDone(false);
-    setHasFreshCache(false);
-    setFreshCacheData(null);
-    getFocusCache(effectivePath).then((entry: FocusCacheEntry | null) => {
-      if (cancelled) return;
-      setCacheCheckDone(true);
-      if (entry && Date.now() - entry.updatedAt < maxCacheAgeMs) {
-        setFreshCacheData(cacheEntryToFocusDataResult(entry));
-        setHasFreshCache(true);
-      } else {
-        setHasFreshCache(false);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [cacheOnly, maxCacheAgeMs, effectivePath]);
-
-  useEffect(() => {
-    if (!data?.focus || !effectivePath) return;
+    const current = dataSurface.currentData;
+    if (!current?.focus || !effectivePath) return;
     setPinnedPath((prev: string | null) => prev ?? effectivePath);
     void setFocusCache(
       effectivePath,
-      data.focus.focus,
-      data.focus.breadcrumb,
-      data.items ?? undefined,
+      current.focus.focus,
+      current.focus.breadcrumb,
+      current.items ?? undefined,
     );
   }, [
-    data?.focus?.key,
-    data?.focus?.focus,
-    data?.focus?.breadcrumb,
-    data?.items?.length,
-    data?.items?.map((i: JsonItem) => i.key).join(",") ?? "",
+    dataSurface.currentData?.focus?.key,
+    dataSurface.currentData?.focus?.focus,
+    dataSurface.currentData?.focus?.breadcrumb,
+    dataSurface.currentData?.items?.length,
+    dataSurface.currentData?.items?.map((i: JsonItem) => i.key).join(",") ?? "",
     effectivePath,
   ]);
 
-  const refreshCacheOnly = useCallback(async () => {
-    if (!effectivePath) return;
-    const entry = await getFocusCache(effectivePath);
-    setCacheOnlyData(entry ? cacheEntryToFocusDataResult(entry) : null);
-  }, [effectivePath]);
-
-  const refreshRevalidate = useCallback(() => revalidate(), [revalidate]);
-
-  const applyMutationResultCacheOnly = useCallback(
-    async (result: MutationResult) => {
-      if (effectivePath) {
-        await setFocusCache(
-          effectivePath,
-          result.focus.focus,
-          result.focus.breadcrumb,
-          result.items,
-        );
-        setCacheOnlyData({
-          focus: result.focus,
-          items: result.items,
-          error: false,
-          errorMessage: null,
-        });
-      }
-    },
-    [effectivePath],
+  const applyMutationResult = useCallback(
+    (result: MutationResult) =>
+      applyMutationResultByMode(result, dataSurface.mode, effectivePath, {
+        writeCache: writeFocusCacheFromResult,
+        mutate,
+        setCacheOnlyData: cacheState.setCacheOnlyData,
+        setFreshCacheData: cacheState.setFreshCacheData,
+      }),
+    [dataSurface.mode, effectivePath, mutate, cacheState.setCacheOnlyData, cacheState.setFreshCacheData],
   );
 
-  const applyMutationResultWithMutate = useCallback(
-    async (result: MutationResult) => {
-      await mutate(Promise.resolve(), {
-        optimisticUpdate: (
-          prev: FocusDataResult | undefined,
-        ): FocusDataResult | undefined =>
-          prev
-            ? {
-              ...prev,
-              focus: result.focus,
-              items: result.items,
-              error: false,
-              errorMessage: null,
-            }
-            : prev,
-        shouldRevalidateAfter: false,
-      });
-      if (effectivePath) {
-        await setFocusCache(
-          effectivePath,
-          result.focus.focus,
-          result.focus.breadcrumb,
-          result.items,
-        );
-      }
-    },
-    [effectivePath, mutate],
-  );
-
-  const applyMutationResultFreshCache = useCallback(
-    async (result: MutationResult) => {
-      await mutate(Promise.resolve(), {
-        optimisticUpdate: (
-          prev: FocusDataResult | undefined,
-        ): FocusDataResult | undefined =>
-          prev
-            ? {
-              ...prev,
-              focus: result.focus,
-              items: result.items,
-              error: false,
-              errorMessage: null,
-            }
-            : prev,
-        shouldRevalidateAfter: false,
-      });
-      if (effectivePath) {
-        await setFocusCache(
-          effectivePath,
-          result.focus.focus,
-          result.focus.breadcrumb,
-          result.items,
-        );
-      }
-      setFreshCacheData({
-        focus: result.focus,
-        items: result.items,
-        error: false,
-        errorMessage: null,
-      });
-    },
-    [effectivePath, mutate],
-  );
-
-  const useCacheOnlyReturn = cacheOnly;
-  const useFreshCacheReturn =
-    !cacheOnly &&
-    maxCacheAgeMs != null &&
-    hasFreshCache &&
-    freshCacheData != null;
-
-  // Use sync cache for first paint when path is set and async cache hasn't run yet (cacheOnly menubar, or maxCacheAgeMs before cacheCheckDone).
-  const syncFirstPaint = useMemo(() => {
-    if (!effectivePath || cacheCheckDone) return null;
-    const entry = getFocusCacheSync(effectivePath);
-    if (!entry) return null;
-    if (cacheOnly) return cacheEntryToFocusDataResult(entry);
-    if (maxCacheAgeMs == null) return null;
-    if (Date.now() - entry.updatedAt >= maxCacheAgeMs) return null;
-    return cacheEntryToFocusDataResult(entry);
-  }, [cacheOnly, maxCacheAgeMs, effectivePath, cacheCheckDone]);
-  const useSyncFirstPaint = syncFirstPaint != null;
-
-  const focusFromData = useMemo(
-    () => data?.focus ?? null,
-    [data?.focus?.key, data?.focus?.focus, data?.focus?.breadcrumb],
-  );
-  const itemsFromData = useMemo(
-    () => data?.items ?? null,
-    [
-      data?.items?.length,
-      data?.items?.map((i: JsonItem) => i.key).join(",") ?? "",
-    ],
-  );
-
-  const focus = useSyncFirstPaint
-    ? (syncFirstPaint.focus ?? null)
-    : useCacheOnlyReturn
-      ? (cacheOnlyData?.focus ?? null)
-      : useFreshCacheReturn
-        ? (freshCacheData?.focus ?? null)
-        : focusFromData;
-  const items = useSyncFirstPaint
-    ? (syncFirstPaint.items ?? null)
-    : useCacheOnlyReturn
-      ? (cacheOnlyData?.items ?? null)
-      : useFreshCacheReturn
-        ? (freshCacheData?.items ?? null)
-        : itemsFromData;
-  const error = useSyncFirstPaint
-    ? false
-    : useCacheOnlyReturn
-      ? (cacheOnlyData?.error ?? false)
-      : useFreshCacheReturn
-        ? (freshCacheData?.error ?? false)
-        : (data?.error ?? false);
-  const errorMessage = useSyncFirstPaint
-    ? null
-    : useCacheOnlyReturn
-      ? (cacheOnlyData?.errorMessage ?? null)
-      : useFreshCacheReturn
-        ? (freshCacheData?.errorMessage ?? null)
-        : (data?.errorMessage ?? null);
-  const isLoadingValue = useSyncFirstPaint
-    ? false
-    : useCacheOnlyReturn
-      ? cacheOnlyLoading
-      : useFreshCacheReturn
-        ? false
-        : isLoading;
-  const refresh = useCacheOnlyReturn ? refreshCacheOnly : refreshRevalidate;
-  const applyMutationResult = useCacheOnlyReturn
-    ? applyMutationResultCacheOnly
-    : useFreshCacheReturn
-      ? applyMutationResultFreshCache
-      : applyMutationResultWithMutate;
+  const { error, errorMessage } = mergeErrorFromSurface(dataSurface, hookError);
 
   return {
-    focus,
-    items,
-    error:
-      useSyncFirstPaint || useCacheOnlyReturn || useFreshCacheReturn
-        ? error
-        : error || !!hookError,
-    errorMessage:
-      useSyncFirstPaint || useCacheOnlyReturn || useFreshCacheReturn
-        ? errorMessage
-        : (errorMessage ?? hookError?.message ?? null),
-    isLoading: isLoadingValue,
+    focus: dataSurface.currentData?.focus ?? null,
+    items: dataSurface.currentData?.items ?? null,
+    error,
+    errorMessage,
+    isLoading: dataSurface.isLoadingValue,
     refresh,
     applyMutationResult,
     setPinnedPath,

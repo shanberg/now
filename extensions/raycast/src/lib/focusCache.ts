@@ -1,3 +1,7 @@
+/**
+ * Shared focus cache (Raycast Cache API) so list-focus and menu-bar-focus show the same state.
+ * List writes after refresh/mutation; menubar reads on open. Sync read for first paint, async for updates.
+ */
 import { Cache } from "@raycast/api";
 import type { JsonItem } from "now-format";
 
@@ -15,16 +19,24 @@ export type FocusCacheEntry = {
 
 type CacheMap = Record<string, FocusCacheEntry>;
 
-function getCacheMap(): CacheMap {
-  const raw = focusCache.get(NOW_FOCUS_CACHE_KEY);
-  if (typeof raw !== "string" || !raw.trim() || raw.trim()[0] !== "{")
-    return {};
+function isJsonObjectStart(raw: string): boolean {
+  const t = raw.trim();
+  return t.length > 0 && t[0] === "{";
+}
+
+function parseCacheMapOrEmpty(raw: string): CacheMap {
   try {
     const map = JSON.parse(raw) as CacheMap;
     return map != null && typeof map === "object" ? map : {};
   } catch {
     return {};
   }
+}
+
+function getCacheMap(): CacheMap {
+  const raw = focusCache.get(NOW_FOCUS_CACHE_KEY);
+  if (typeof raw !== "string" || !isJsonObjectStart(raw)) return {};
+  return parseCacheMapOrEmpty(raw);
 }
 
 function setCacheMap(map: CacheMap): void {

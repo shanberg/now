@@ -1,3 +1,4 @@
+"use strict";
 /**
  * Legacy Node watcher for now files (reference only). The extension uses the Swift binary
  * (assets/now-watcher from NowWatcher.swift) which writes JSON { ts, app? } to dirtyPath
@@ -15,8 +16,7 @@ const { execFile } = require("child_process");
 const DEFAULT_PORT = 9847;
 const DEBOUNCE_MS = 300;
 
-function loadConfig(configPath) {
-  const raw = fs.readFileSync(configPath, "utf-8");
+function parseConfig(configPath, raw) {
   const data = JSON.parse(raw);
   if (!Array.isArray(data.paths) || typeof data.deeplink !== "string") {
     throw new Error("Config must have paths (array) and deeplink (string)");
@@ -33,63 +33,73 @@ function loadConfig(configPath) {
   };
 }
 
+function loadConfig(configPath) {
+  const raw = fs.readFileSync(configPath, "utf-8");
+  return parseConfig(configPath, raw);
+}
+
+function healthHandler(req, res) {
+  if (req.method === "GET" && req.url === "/health") {
+    res.writeHead(200);
+    res.end();
+  } else {
+    res.writeHead(404);
+    res.end();
+  }
+}
+
 function startServer(port) {
-  return http
-    .createServer((req, res) => {
-      if (req.method === "GET" && req.url === "/health") {
-        res.writeHead(200);
-        res.end();
-      } else {
-        res.writeHead(404);
-        res.end();
-      }
-    })
-    .listen(port);
+  return http.createServer(healthHandler).listen(port);
 }
 
 const watchers = new Map();
 let debounceTimer = null;
+let currentDeeplink = null;
+let currentDirtyPath = null;
 
+/** Closes all path watchers and clears the map. */
 function unwatchAll() {
-  for (const [path, w] of watchers) {
+  for (const [p, w] of watchers) {
     try {
       w.close();
     } catch (_) { }
-    watchers.delete(path);
+    watchers.delete(p);
   }
 }
 
-function watchPath(path, onChange) {
-  if (watchers.has(path)) return;
+function scheduleDebouncedChange(onChange) {
+  if (debounceTimer) clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(onChange, DEBOUNCE_MS);
+}
+
+/** Starts watching one path; debounces changes and calls onChange after DEBOUNCE_MS. */
+function watchPath(filePath, onChange) {
+  if (watchers.has(filePath)) return;
   try {
-    const w = fs.watch(path, (event, filename) => {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(onChange, DEBOUNCE_MS);
-    });
-    watchers.set(path, w);
+    const w = fs.watch(filePath, () => scheduleDebouncedChange(onChange));
+    watchers.set(filePath, w);
   } catch (err) {
     // ENOENT or other; skip this path
   }
 }
 
+/** Syncs watchers to the given paths: remove watchers not in set, add watchers for new paths. */
 function applyPaths(paths) {
   const set = new Set(paths);
-  for (const path of watchers.keys()) {
-    if (!set.has(path)) {
+  for (const p of watchers.keys()) {
+    if (!set.has(p)) {
       try {
-        watchers.get(path).close();
+        watchers.get(p).close();
       } catch (_) { }
-      watchers.delete(path);
+      watchers.delete(p);
     }
   }
-  for (const path of set) {
-    watchPath(path, fireDeeplink);
+  for (const p of set) {
+    watchPath(p, fireDeeplink);
   }
 }
 
-let currentDeeplink = null;
-let currentDirtyPath = null;
-
+/** Writes timestamp to dirtyPath (if set), then opens deeplink. Called after debounced file change. */
 function fireDeeplink() {
   debounceTimer = null;
   if (currentDirtyPath) {
@@ -102,29 +112,27 @@ function fireDeeplink() {
   }
 }
 
-function run(configPath) {
-  let config = loadConfig(configPath);
-  currentDeeplink = config.deeplink;
-  currentDirtyPath = config.dirtyPath;
-  const server = startServer(config.port);
-
-  applyPaths(config.paths);
-
-  function reloadConfig() {
-    try {
-      config = loadConfig(configPath);
-      currentDeeplink = config.deeplink;
-      currentDirtyPath = config.dirtyPath;
-      applyPaths(config.paths);
-    } catch (_) { }
-  }
-
+/** Reloads config from disk and updates current deeplink, dirtyPath, and watched paths. */
+function reloadConfig(configPath) {
   try {
-    fs.watch(configPath, (event, filename) => {
-      if (event === "change") reloadConfig();
+    const config = loadConfig(configPath);
+    currentDeeplink = config.deeplink;
+    currentDirtyPath = config.dirtyPath;
+    applyPaths(config.paths);
+  } catch (_) { }
+}
+
+/** Watches config file for changes and reloads on change. */
+function watchConfigForReload(configPath) {
+  try {
+    fs.watch(configPath, (event) => {
+      if (event === "change") reloadConfig(configPath);
     });
   } catch (_) { }
+}
 
+/** On SIGINT, unwatch all, close server, exit. */
+function setupShutdown(server) {
   process.on("SIGINT", () => {
     unwatchAll();
     server.close();
@@ -132,14 +140,29 @@ function run(configPath) {
   });
 }
 
-const configPath = process.env.NOW_WATCHER_CONFIG;
-if (!configPath) {
-  console.error("NOW_WATCHER_CONFIG is not set");
-  process.exit(1);
+function run(configPath) {
+  let config = loadConfig(configPath);
+  currentDeeplink = config.deeplink;
+  currentDirtyPath = config.dirtyPath;
+  const server = startServer(config.port);
+
+  applyPaths(config.paths);
+  watchConfigForReload(configPath);
+  setupShutdown(server);
 }
-try {
-  run(configPath);
-} catch (err) {
-  console.error(err.message || err);
-  process.exit(1);
+
+function main() {
+  const configPath = process.env.NOW_WATCHER_CONFIG;
+  if (!configPath) {
+    console.error("NOW_WATCHER_CONFIG is not set");
+    process.exit(1);
+  }
+  try {
+    run(configPath);
+  } catch (err) {
+    console.error(err.message || err);
+    process.exit(1);
+  }
 }
+
+main();

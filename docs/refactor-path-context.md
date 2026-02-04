@@ -1,5 +1,7 @@
 # Refactor: Path context and shared path-switch UI
 
+**Note:** Document-specific Now file tracking (switchToDocument, createForDocument, docPathForCurrent, currentDocumentPath) was later removed from the codebase. This doc is historical; the current implementation has global + app path switching only.
+
 Address the **"Which Now file" path-resolution** complexity knot: one source of truth for "available switch/create options" and a single path-switch UI layer so list-focus and menu-bar-focus don’t re-derive the same conditions.
 
 **Status: Completed.** Old components (`PathSwitchCreateActions`, `PathActionsMenuSection`) removed; path logic lives in `pathContext.ts` and `pathSwitchActions.tsx`.

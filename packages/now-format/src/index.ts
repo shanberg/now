@@ -337,6 +337,21 @@ export function getIndentFromDisplay(display: string): string {
   return m ? m[1] : "";
 }
 
+function findIndexAtDepth(
+  items: { display: string }[],
+  startIndex: number,
+  step: number,
+  targetDepth: number,
+): number | null {
+  const end = step > 0 ? items.length : -1;
+  for (let j = startIndex; step > 0 ? j < end : j > end; j += step) {
+    const d = getIndentFromDisplay(items[j].display).length;
+    if (d === targetDepth) return j;
+    if (d < targetDepth) break;
+  }
+  return null;
+}
+
 /**
  * Index of the item that would be next in focus after completing the current item.
  * Matches selectNewCurrentAfterRemoval: previous sibling's last leaf, else next sibling's first leaf, else parent.
@@ -347,25 +362,23 @@ export function getNextFocusIndex(
 ): number | null {
   if (currentIndex < 0 || currentIndex >= items.length) return null;
   const currentDepth = getIndentFromDisplay(items[currentIndex].display).length;
-  // Previous sibling's last leaf: walk back, first with same depth
-  for (let j = currentIndex - 1; j >= 0; j--) {
-    const d = getIndentFromDisplay(items[j].display).length;
-    if (d === currentDepth) return j;
-    if (d < currentDepth) break;
-  }
-  // Next sibling's first leaf: walk forward, first with same depth
-  for (let j = currentIndex + 1; j < items.length; j++) {
-    const d = getIndentFromDisplay(items[j].display).length;
-    if (d === currentDepth) return j;
-    if (d < currentDepth) break;
-  }
-  // Parent: walk back, first with depth one level up
+  const prevSibling = findIndexAtDepth(
+    items,
+    currentIndex - 1,
+    -1,
+    currentDepth,
+  );
+  if (prevSibling !== null) return prevSibling;
+  const nextSibling = findIndexAtDepth(
+    items,
+    currentIndex + 1,
+    1,
+    currentDepth,
+  );
+  if (nextSibling !== null) return nextSibling;
   const parentDepth = currentDepth - DATA_STR.indent.length;
   if (parentDepth < 0) return null;
-  for (let j = currentIndex - 1; j >= 0; j--) {
-    if (getIndentFromDisplay(items[j].display).length === parentDepth) return j;
-  }
-  return null;
+  return findIndexAtDepth(items, currentIndex - 1, -1, parentDepth);
 }
 
 /** Placeholder line for "narrow focus" (add child): insert after current line. */
@@ -391,6 +404,22 @@ export function getPlaceholderWrap(
   return { wrapParentLine, indentedCurrentLine };
 }
 
+function pathSegmentFromDisplay(display: string): string {
+  const raw = display.replace(/\s+@\s*$/, "").trimEnd();
+  const indStr = getIndentFromDisplay(display);
+  return raw.slice(indStr.length).trim() || "—";
+}
+
+function pathToBreadcrumbAndFocus(path: string[]): {
+  breadcrumb: string;
+  focusName: string;
+} {
+  const focusName = path[path.length - 1] ?? "—";
+  const breadcrumb =
+    path.length > 1 ? path.slice(0, -1).join(" / ") : "Focusing on";
+  return { breadcrumb, focusName };
+}
+
 /**
  * Returns breadcrumb and focus name for an item by key, using the flat items list.
  * Used so extensions can show "preview as if this item were focus" for switch-target items.
@@ -402,29 +431,34 @@ export function getBreadcrumbAndNameForKey(
   const idx = items.findIndex((i) => i.key === key);
   if (idx < 0) return { breadcrumb: "", focusName: "—" };
   const path: string[] = [];
-  let i = idx;
   const indentLen = DATA_STR.indent.length;
+  let i = idx;
   while (i >= 0) {
-    const raw = items[i].display.replace(/\s+@\s*$/, "").trimEnd();
-    const indStr = getIndentFromDisplay(items[i].display);
-    const name = raw.slice(indStr.length).trim() || "—";
-    path.unshift(name);
-    const depth = indStr.length;
+    path.unshift(pathSegmentFromDisplay(items[i].display));
+    const depth = getIndentFromDisplay(items[i].display).length;
     if (depth === 0) break;
     const parentDepth = depth - indentLen;
-    let parentIdx = -1;
-    for (let j = i - 1; j >= 0; j--) {
-      if (getIndentFromDisplay(items[j].display).length === parentDepth) {
-        parentIdx = j;
-        break;
-      }
-    }
+    const parentIdx = findIndexAtDepth(items, i - 1, -1, parentDepth);
+    if (parentIdx === null) break;
     i = parentIdx;
   }
-  const focusName = path[path.length - 1] ?? "—";
-  const breadcrumb =
-    path.length > 1 ? path.slice(0, -1).join(" / ") : "Focusing on";
-  return { breadcrumb, focusName };
+  return pathToBreadcrumbAndFocus(path);
+}
+
+/** First item at depth (parentDepth + indent) after startIndex; null if none. */
+function findFirstChildAtIndex(
+  items: { display: string }[],
+  startIndex: number,
+  parentDepth: number,
+  indentLen: number,
+): number | null {
+  const childDepth = parentDepth + indentLen;
+  for (let j = startIndex; j < items.length; j++) {
+    const d = getIndentFromDisplay(items[j].display).length;
+    if (d <= parentDepth) break;
+    if (d === childDepth) return j;
+  }
+  return null;
 }
 
 /**
@@ -440,19 +474,15 @@ export function getFirstDeepestChildIndex(
   let idx = currentIndex;
   let depth = getIndentFromDisplay(items[idx].display).length;
   while (true) {
-    const childDepth = depth + indentLen;
-    let nextIdx: number | null = null;
-    for (let j = idx + 1; j < items.length; j++) {
-      const d = getIndentFromDisplay(items[j].display).length;
-      if (d <= depth) break;
-      if (d === childDepth) {
-        nextIdx = j;
-        break;
-      }
-    }
+    const nextIdx = findFirstChildAtIndex(
+      items,
+      idx + 1,
+      depth,
+      indentLen,
+    );
     if (nextIdx === null) return idx === currentIndex ? null : idx;
     idx = nextIdx;
-    depth = childDepth;
+    depth += indentLen;
   }
 }
 
@@ -484,6 +514,183 @@ export function truncateBreadcrumb(text: string, maxLength: number): string {
 const FOCUS_PREFIX = `${DATA_STR.focus} `;
 const PREVIOUS_FOCUS_PREFIX = `${DATA_STR.focusPrevious} `;
 
+type PreviewLineContext = {
+  currentKey: string;
+  selectedKey: string | null;
+  selectedAction: PreviewAction;
+  nextFocusIndex: number | null;
+  diveInTargetIndex: number | null;
+};
+
+function applyPrefix(raw: string, prefix: string): string {
+  return raw.replace(/^(\s*)(.*)$/, `$1${prefix}$2`);
+}
+
+function showCurrentAsPrevious(ctx: PreviewLineContext): boolean {
+  return (
+    ctx.selectedAction === "add" ||
+    (ctx.selectedAction === "dive-in" && ctx.diveInTargetIndex !== null) ||
+    (ctx.selectedKey !== null && ctx.selectedKey !== ctx.currentKey)
+  );
+}
+
+/** Prefix for the current item line only. */
+function currentItemPrefix(
+  ctx: PreviewLineContext,
+): "focus" | "previous" | "complete" | "edit" {
+  if (showCurrentAsPrevious(ctx)) return "previous";
+  if (ctx.selectedAction === "complete") return "complete";
+  if (ctx.selectedAction === "edit") return "edit";
+  return "focus";
+}
+
+/** True when this non-current line should show the focus prefix (▶). */
+function shouldShowNonCurrentAsFocus(
+  itemKey: string,
+  index: number,
+  ctx: PreviewLineContext,
+): boolean {
+  const isSelected = ctx.selectedKey !== null && itemKey === ctx.selectedKey;
+  const isNextFocus =
+    ctx.nextFocusIndex !== null && index === ctx.nextFocusIndex;
+  const isDiveInTarget =
+    ctx.diveInTargetIndex !== null && index === ctx.diveInTargetIndex;
+  return (
+    (isNextFocus && ctx.selectedAction === "complete") ||
+    (isDiveInTarget && ctx.selectedAction === "dive-in") ||
+    isSelected
+  );
+}
+
+/** Returns which prefix to apply for a preview line, or null to leave line unchanged. */
+function getPreviewLinePrefix(
+  itemKey: string,
+  index: number,
+  ctx: PreviewLineContext,
+): "focus" | "previous" | "complete" | "edit" | null {
+  if (itemKey === ctx.currentKey) return currentItemPrefix(ctx);
+  if (shouldShowNonCurrentAsFocus(itemKey, index, ctx)) return "focus";
+  return null;
+}
+
+function formatPreviewLineForItem(
+  raw: string,
+  itemKey: string,
+  index: number,
+  ctx: PreviewLineContext,
+): string {
+  const prefix = getPreviewLinePrefix(itemKey, index, ctx);
+  if (prefix === null) return raw;
+  if (prefix === "previous") return applyPrefix(raw, PREVIOUS_FOCUS_PREFIX);
+  if (prefix === "focus") return applyPrefix(raw, FOCUS_PREFIX);
+  const line = applyPrefix(raw, FOCUS_PREFIX);
+  return prefix === "complete"
+    ? line.replace(FOCUS_PREFIX, "✓ ")
+    : line.replace(FOCUS_PREFIX, "✎ ");
+}
+
+function insertPlaceholderAfterCurrent(
+  lines: string[],
+  currentIndex: number,
+  placeholder: string,
+): string[] {
+  return [
+    ...lines.slice(0, currentIndex + 1),
+    placeholder,
+    ...lines.slice(currentIndex + 1),
+  ];
+}
+
+function applyPlaceholderToLines(
+  lines: string[],
+  currentIndex: number,
+  currentIndent: string,
+  selectedAction: PreviewAction,
+): string[] {
+  if (currentIndex < 0) return lines;
+  switch (selectedAction) {
+    case "add":
+      return insertPlaceholderAfterCurrent(
+        lines,
+        currentIndex,
+        getPlaceholderNarrow(currentIndent),
+      );
+    case "later":
+      return insertPlaceholderAfterCurrent(
+        lines,
+        currentIndex,
+        getPlaceholderLater(currentIndent),
+      );
+    case "wrap": {
+      const { wrapParentLine, indentedCurrentLine } = getPlaceholderWrap(
+        currentIndent,
+        lines[currentIndex],
+      );
+      return [
+        ...lines.slice(0, currentIndex),
+        wrapParentLine,
+        indentedCurrentLine,
+        ...lines.slice(currentIndex + 1),
+      ];
+    }
+    default:
+      return lines;
+  }
+}
+
+function buildPreviewContentLines(
+  items: JsonItem[],
+  ctx: PreviewLineContext,
+  currentIndex: number,
+  currentIndent: string,
+  selectedAction: PreviewAction,
+): string[] {
+  const lines = items.map((item, index) => {
+    const raw = item.display.replace(/\s+@\s*$/, "").trimEnd();
+    return formatPreviewLineForItem(raw, item.key, index, ctx);
+  });
+  return applyPlaceholderToLines(
+    lines,
+    currentIndex,
+    currentIndent,
+    selectedAction,
+  );
+}
+
+function resolvePreviewHeaderBreadcrumbAndFocus(
+  items: JsonItem[],
+  breadcrumb: string,
+  currentItemName: string,
+  selectedAction: PreviewAction,
+  diveInTargetIndex: number | null,
+): { rawBreadcrumb: string; headerFocusName: string } {
+  let rawBreadcrumb = breadcrumb || "";
+  let headerFocusName = currentItemName || "—";
+  if (
+    selectedAction === "dive-in" &&
+    diveInTargetIndex !== null &&
+    items[diveInTargetIndex]
+  ) {
+    const after = getBreadcrumbAndNameForKey(items, items[diveInTargetIndex].key);
+    rawBreadcrumb = after.breadcrumb;
+    headerFocusName = after.focusName;
+  }
+  return { rawBreadcrumb, headerFocusName };
+}
+
+function buildPreviewHeader(
+  rawBreadcrumb: string,
+  headerFocusName: string,
+  breadcrumbMaxLength: number | undefined,
+): string {
+  const line1 =
+    breadcrumbMaxLength != null && breadcrumbMaxLength > 0
+      ? truncateBreadcrumb(rawBreadcrumb, breadcrumbMaxLength)
+      : rawBreadcrumb;
+  const line2 = `${DATA_STR.focus} **${headerFocusName}**`;
+  return (line1 ? line1 + "\n\n" : "") + line2 + "\n\n";
+}
+
 /**
  * Builds markdown showing all items with indentation, current focus and selected item (▶),
  * and command-specific placeholders/indicators. Used by CLI `now json preview` and extensions.
@@ -510,87 +717,34 @@ export function buildPreviewMarkdown(
       ? getFirstDeepestChildIndex(items, currentIndex)
       : null;
 
-  let lines = items.map((item, index) => {
-    const raw = item.display.replace(/\s+@\s*$/, "").trimEnd();
-    const isCurrent = item.key === currentKey;
-    const isSelected = selectedKey !== null && item.key === selectedKey;
-    const isNextFocus = nextFocusIndex !== null && index === nextFocusIndex;
-    const isDiveInTarget =
-      diveInTargetIndex !== null && index === diveInTargetIndex;
-    let line = raw;
-    if (isCurrent) {
-      if (selectedAction === "add") {
-        line = raw.replace(/^(\s*)(.*)$/, `$1${PREVIOUS_FOCUS_PREFIX}$2`);
-      } else if (selectedAction === "dive-in" && diveInTargetIndex !== null) {
-        line = raw.replace(/^(\s*)(.*)$/, `$1${PREVIOUS_FOCUS_PREFIX}$2`);
-      } else if (selectedKey !== null && selectedKey !== currentKey) {
-        line = raw.replace(/^(\s*)(.*)$/, `$1${PREVIOUS_FOCUS_PREFIX}$2`);
-      } else {
-        line = raw.replace(/^(\s*)(.*)$/, `$1${FOCUS_PREFIX}$2`);
-        if (selectedAction === "complete") {
-          line = line.replace(FOCUS_PREFIX, "✓ ");
-        } else if (selectedAction === "edit") {
-          line = line.replace(FOCUS_PREFIX, "✎ ");
-        }
-      }
-    } else if (isNextFocus && selectedAction === "complete") {
-      line = raw.replace(/^(\s*)(.*)$/, `$1${FOCUS_PREFIX}$2`);
-    } else if (isDiveInTarget && selectedAction === "dive-in") {
-      line = raw.replace(/^(\s*)(.*)$/, `$1${FOCUS_PREFIX}$2`);
-    } else if (isSelected) {
-      line = raw.replace(/^(\s*)(.*)$/, `$1${FOCUS_PREFIX}$2`);
-    }
-    return line;
-  });
+  const ctx: PreviewLineContext = {
+    currentKey,
+    selectedKey,
+    selectedAction,
+    nextFocusIndex,
+    diveInTargetIndex,
+  };
 
-  if (selectedAction === "add" && currentIndex >= 0) {
-    const placeholder = getPlaceholderNarrow(currentIndent);
-    lines = [
-      ...lines.slice(0, currentIndex + 1),
-      placeholder,
-      ...lines.slice(currentIndex + 1),
-    ];
-  }
-
-  if (selectedAction === "later" && currentIndex >= 0) {
-    const placeholder = getPlaceholderLater(currentIndent);
-    lines = [
-      ...lines.slice(0, currentIndex + 1),
-      placeholder,
-      ...lines.slice(currentIndex + 1),
-    ];
-  }
-
-  if (selectedAction === "wrap" && currentIndex >= 0) {
-    const { wrapParentLine, indentedCurrentLine } = getPlaceholderWrap(
-      currentIndent,
-      lines[currentIndex],
+  const lines = buildPreviewContentLines(
+    items,
+    ctx,
+    currentIndex,
+    currentIndent,
+    selectedAction,
+  );
+  const { rawBreadcrumb, headerFocusName } =
+    resolvePreviewHeaderBreadcrumbAndFocus(
+      items,
+      breadcrumb,
+      currentItemName,
+      selectedAction,
+      diveInTargetIndex,
     );
-    lines = [
-      ...lines.slice(0, currentIndex),
-      wrapParentLine,
-      indentedCurrentLine,
-      ...lines.slice(currentIndex + 1),
-    ];
-  }
-
-  let rawBreadcrumb = breadcrumb || "";
-  let headerFocusName = currentItemName || "—";
-  if (
-    selectedAction === "dive-in" &&
-    diveInTargetIndex !== null &&
-    items[diveInTargetIndex]
-  ) {
-    const after = getBreadcrumbAndNameForKey(items, items[diveInTargetIndex].key);
-    rawBreadcrumb = after.breadcrumb;
-    headerFocusName = after.focusName;
-  }
-  const line1 =
-    breadcrumbMaxLength != null && breadcrumbMaxLength > 0
-      ? truncateBreadcrumb(rawBreadcrumb, breadcrumbMaxLength)
-      : rawBreadcrumb;
-  const line2 = `${DATA_STR.focus} **${headerFocusName}**`;
-  const header = (line1 ? line1 + "\n\n" : "") + line2 + "\n\n";
+  const header = buildPreviewHeader(
+    rawBreadcrumb,
+    headerFocusName,
+    breadcrumbMaxLength,
+  );
   return header + "```\n" + lines.join("\n") + "\n```";
 }
 

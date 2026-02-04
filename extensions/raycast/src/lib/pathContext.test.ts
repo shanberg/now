@@ -6,121 +6,103 @@ import {
   computePathSwitchContext,
   pathSwitchContextSwitchTargetPaths,
   pathSwitchContextToDescriptors,
+  type PathSwitchContext,
   type PathSwitchContextInput,
 } from "./pathContext";
 
 const defaultPath = "/home/.now/focus.now.md";
-const docPath = "/doc/notes.now.md";
+const otherPath = "/home/.now/other.now.md";
 const appPath = "/home/.now/term.now.md";
 
 function input(overrides: Partial<PathSwitchContextInput> = {}): PathSwitchContextInput {
   return {
     activePath: defaultPath,
     defaultPath,
-    docPathForCurrent: null,
     appPathForCurrent: null,
     currentApp: null,
-    currentDocumentPath: null,
     ...overrides,
   };
 }
 
-describe("computePathSwitchContext", () => {
-  it("no options visible when activePath === defaultPath and no doc/app/create options", () => {
+function expectAllHidden(ctx: PathSwitchContext): void {
+  expect(ctx.switchToGlobal.visible).toBe(false);
+  expect(ctx.switchToApp.visible).toBe(false);
+  expect(ctx.createForApp.visible).toBe(false);
+}
+
+function expectSwitchToGlobalVisible(ctx: PathSwitchContext, expectedPath: string): void {
+  expect(ctx.switchToGlobal.visible).toBe(true);
+  if (ctx.switchToGlobal.visible) expect(ctx.switchToGlobal.path).toBe(expectedPath);
+}
+
+function expectSwitchToAppVisible(
+  ctx: PathSwitchContext,
+  expectedPath: string,
+  expectedLabel: string,
+): void {
+  expect(ctx.switchToApp.visible).toBe(true);
+  if (ctx.switchToApp.visible) {
+    expect(ctx.switchToApp.path).toBe(expectedPath);
+    expect(ctx.switchToApp.label).toBe(expectedLabel);
+  }
+}
+
+function expectCreateForAppVisible(
+  ctx: PathSwitchContext,
+  displayName: string,
+  suggestedPathContains: string,
+): void {
+  expect(ctx.createForApp.visible).toBe(true);
+  if (ctx.createForApp.visible) {
+    expect(ctx.createForApp.displayName).toBe(displayName);
+    expect(ctx.createForApp.suggestedPath).toContain(suggestedPathContains);
+  }
+}
+
+function visibilitySpec() {
+  it("no options visible when activePath === defaultPath and no app/create options", () => {
     const ctx = computePathSwitchContext(input());
-    expect(ctx.switchToGlobal.visible).toBe(false);
-    expect(ctx.switchToDocument.visible).toBe(false);
-    expect(ctx.switchToApp.visible).toBe(false);
-    expect(ctx.createForDocument.visible).toBe(false);
-    expect(ctx.createForApp.visible).toBe(false);
+    expectAllHidden(ctx);
     expect(ctx.contextLabel).toBe("Now");
   });
 
   it("switch to Global visible when activePath !== defaultPath", () => {
-    const ctx = computePathSwitchContext(
-      input({ activePath: docPath, docPathForCurrent: docPath }),
-    );
-    expect(ctx.switchToGlobal.visible).toBe(true);
-    if (ctx.switchToGlobal.visible) {
-      expect(ctx.switchToGlobal.path).toBe(defaultPath);
-    }
+    const ctx = computePathSwitchContext(input({ activePath: otherPath }));
+    expectSwitchToGlobalVisible(ctx, defaultPath);
     expect(ctx.contextLabel).toBe("Now");
   });
 
-  it("switch to Document visible when docPathForCurrent set and activePath differs", () => {
-    const ctx = computePathSwitchContext(
-      input({
-        activePath: defaultPath,
-        docPathForCurrent: docPath,
-        currentDocumentPath: "/doc/notes.md",
-      }),
-    );
-    expect(ctx.switchToDocument.visible).toBe(true);
-    if (ctx.switchToDocument.visible) {
-      expect(ctx.switchToDocument.path).toBe(docPath);
-      expect(ctx.switchToDocument.label).toBe("notes.md");
-    }
-  });
-
   it("switch to App visible when appPathForCurrent and currentApp set and activePath differs", () => {
-    const app = { name: "Terminal", bundleId: "com.apple.Terminal" };
     const ctx = computePathSwitchContext(
       input({
         activePath: defaultPath,
         appPathForCurrent: appPath,
-        currentApp: app,
+        currentApp: { name: "Terminal", bundleId: "com.apple.Terminal" },
       }),
     );
-    expect(ctx.switchToApp.visible).toBe(true);
-    if (ctx.switchToApp.visible) {
-      expect(ctx.switchToApp.path).toBe(appPath);
-      expect(ctx.switchToApp.label).toBe("Terminal");
-    }
-  });
-
-  it("create for Document visible when currentDocumentPath set and no docPathForCurrent", () => {
-    const currentDoc = "/Users/me/proj/notes.md";
-    const ctx = computePathSwitchContext(
-      input({
-        currentDocumentPath: currentDoc,
-        docPathForCurrent: null,
-      }),
-    );
-    expect(ctx.createForDocument.visible).toBe(true);
-    if (ctx.createForDocument.visible) {
-      expect(ctx.createForDocument.displayName).toBe("notes.md");
-      expect(ctx.createForDocument.suggestedPath).toContain("notes.now.md");
-    }
+    expectSwitchToAppVisible(ctx, appPath, "Terminal");
   });
 
   it("create for App visible when currentApp set and no appPathForCurrent", () => {
-    const app = { name: "Terminal" };
     const ctx = computePathSwitchContext(
-      input({ currentApp: app, appPathForCurrent: null }),
+      input({ currentApp: { name: "Terminal" }, appPathForCurrent: null }),
     );
-    expect(ctx.createForApp.visible).toBe(true);
-    if (ctx.createForApp.visible) {
-      expect(ctx.createForApp.displayName).toBe("Terminal");
-      expect(ctx.createForApp.suggestedPath).toContain("Terminal.now.md");
-    }
+    expectCreateForAppVisible(ctx, "Terminal", "Terminal.now.md");
   });
 
-  it("contextLabel is Now when activePath is defaultPath", () => {
+  it("activePath null treats as not equal to defaultPath so switchToGlobal can be visible", () => {
+    const ctx = computePathSwitchContext(input({ activePath: null }));
+    expect(ctx.switchToGlobal.visible).toBe(false);
+    expect(ctx.contextLabel).toBe("Now");
+  });
+}
+
+function contextLabelSpec() {
+  it("is Now when activePath is defaultPath", () => {
     expect(computePathSwitchContext(input()).contextLabel).toBe("Now");
   });
 
-  it("contextLabel shows document when activePath === docPathForCurrent", () => {
-    const ctx = computePathSwitchContext(
-      input({
-        activePath: docPath,
-        docPathForCurrent: docPath,
-        currentDocumentPath: "/doc/notes.md",
-      }),
-    );
-    expect(ctx.contextLabel).toBe("Now: notes.md");
-  });
-
-  it("contextLabel shows app when activePath === appPathForCurrent", () => {
+  it("shows app when activePath === appPathForCurrent", () => {
     const app = { name: "Terminal" };
     const ctx = computePathSwitchContext(
       input({
@@ -131,82 +113,78 @@ describe("computePathSwitchContext", () => {
     );
     expect(ctx.contextLabel).toBe("Now: Terminal");
   });
+}
 
-  it("activePath null treats as not equal to defaultPath so switchToGlobal can be visible", () => {
-    const ctx = computePathSwitchContext(input({ activePath: null }));
-    expect(ctx.switchToGlobal.visible).toBe(false);
-    expect(ctx.contextLabel).toBe("Now");
-  });
-});
+function computePathSwitchContextSpec() {
+  describe("visibility", visibilitySpec);
+  describe("contextLabel", contextLabelSpec);
+}
 
-describe("pathSwitchContextToDescriptors", () => {
+describe("computePathSwitchContext", computePathSwitchContextSpec);
+
+function pathSwitchContextToDescriptorsSpec() {
   it("returns empty array when no actions visible", () => {
     const ctx = computePathSwitchContext(input());
     expect(pathSwitchContextToDescriptors(ctx)).toEqual([]);
   });
 
-  it("returns descriptors in order: create doc, create app, switch global, switch document, switch app", () => {
+  it("returns descriptors in order: create app, switch global, switch app", () => {
     const app = { name: "Terminal", bundleId: "com.apple.Terminal" };
     const ctx = computePathSwitchContext(
       input({
-        activePath: "/other.now.md",
-        docPathForCurrent: docPath,
+        activePath: otherPath,
         appPathForCurrent: appPath,
         currentApp: app,
-        currentDocumentPath: "/doc/notes.md",
       }),
     );
     const descriptors = pathSwitchContextToDescriptors(ctx);
     const ids = descriptors.map((d) => d.id);
-    expect(ids).toEqual([
-      "switch-global",
-      "switch-document",
-      "switch-app",
-    ]);
+    expect(ids).toEqual(["switch-global", "switch-app"]);
   });
 
-  it("includes create descriptors when visible", () => {
+  it("includes create-app descriptor when visible", () => {
     const ctx = computePathSwitchContext(
       input({
-        currentDocumentPath: "/a/notes.md",
         currentApp: { name: "Xcode" },
+        appPathForCurrent: null,
       }),
     );
     const descriptors = pathSwitchContextToDescriptors(ctx);
-    expect(descriptors).toHaveLength(2);
-    expect(descriptors[0].id).toBe("create-document");
-    expect((descriptors[0] as { title: string }).title).toContain("notes.md");
-    expect(descriptors[1].id).toBe("create-app");
-    expect((descriptors[1] as { title: string }).title).toContain("Xcode");
+    expect(descriptors).toHaveLength(1);
+    expect(descriptors[0].id).toBe("create-app");
+    expect((descriptors[0] as { title: string }).title).toContain("Xcode");
   });
-});
+}
 
-describe("pathSwitchContextSwitchTargetPaths", () => {
+describe("pathSwitchContextToDescriptors", pathSwitchContextToDescriptorsSpec);
+
+function pathSwitchContextSwitchTargetPathsSpec() {
   it("returns empty when no switch actions visible", () => {
     const ctx = computePathSwitchContext(input());
     expect(pathSwitchContextSwitchTargetPaths(ctx)).toEqual([]);
   });
 
   it("returns defaultPath when switch to Global visible", () => {
-    const ctx = computePathSwitchContext(
-      input({ activePath: docPath, docPathForCurrent: docPath }),
-    );
+    const ctx = computePathSwitchContext(input({ activePath: otherPath }));
     expect(pathSwitchContextSwitchTargetPaths(ctx)).toContain(defaultPath);
   });
 
-  it("returns doc and app paths when those switches visible", () => {
+  it("returns defaultPath and app path when both switches visible", () => {
     const app = { name: "Terminal" };
     const ctx = computePathSwitchContext(
       input({
-        activePath: defaultPath,
-        docPathForCurrent: docPath,
+        activePath: otherPath,
         appPathForCurrent: appPath,
         currentApp: app,
-        currentDocumentPath: "/doc/notes.md",
       }),
     );
     const paths = pathSwitchContextSwitchTargetPaths(ctx);
-    expect(paths).toContain(docPath);
+    expect(paths).toContain(defaultPath);
     expect(paths).toContain(appPath);
   });
-});
+}
+
+describe(
+  "pathSwitchContextSwitchTargetPaths",
+  pathSwitchContextSwitchTargetPathsSpec,
+);

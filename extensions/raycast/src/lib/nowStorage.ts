@@ -1,23 +1,45 @@
+/**
+ * LocalStorage helpers for path-resolution state used by useNowPathFromStorage.
+ * Persists useGlobal, app path mappings, and lastResolvedPath so list and menu bar stay in sync.
+ */
 import { LocalStorage } from "@raycast/api";
 import {
   NOW_APP_PATHS_KEY,
-  NOW_DOCUMENT_PATHS_KEY,
   NOW_LAST_RESOLVED_PATH_KEY,
   NOW_USE_GLOBAL_KEY,
   parseJsonToRecord,
 } from "./now";
 
+/** Mutates the map in place; used to add/update one entry before persisting. */
+export type StorageMapUpdater = (map: Record<string, string>) => void;
+
+/** Writes a string value to LocalStorage at key. */
+async function setStorageString(key: string, value: string): Promise<void> {
+  await LocalStorage.setItem(key, value);
+}
+
 /**
- * Adds or updates a document → now file path mapping in LocalStorage.
+ * Reads the JSON map at key, runs updater(map), then writes back.
+ * Used by addPathMapping.
  */
-export async function addDocumentPathMapping(
-  documentPath: string,
+async function updateStorageMap(
+  key: string,
+  updater: StorageMapUpdater,
+): Promise<void> {
+  const existing = await LocalStorage.getItem<string>(key);
+  const map = parseJsonToRecord(existing ?? undefined);
+  updater(map);
+  await LocalStorage.setItem(key, JSON.stringify(map));
+}
+
+async function addPathMapping(
+  storageKey: string,
+  entryKey: string,
   nowPath: string,
 ): Promise<void> {
-  const existing = await LocalStorage.getItem<string>(NOW_DOCUMENT_PATHS_KEY);
-  const map = parseJsonToRecord(existing ?? undefined);
-  map[documentPath] = nowPath;
-  await LocalStorage.setItem(NOW_DOCUMENT_PATHS_KEY, JSON.stringify(map));
+  await updateStorageMap(storageKey, (map) => {
+    map[entryKey] = nowPath;
+  });
 }
 
 /**
@@ -27,22 +49,19 @@ export async function addAppPathMapping(
   key: string,
   nowPath: string,
 ): Promise<void> {
-  const existing = await LocalStorage.getItem<string>(NOW_APP_PATHS_KEY);
-  const map = parseJsonToRecord(existing ?? undefined);
-  map[key] = nowPath;
-  await LocalStorage.setItem(NOW_APP_PATHS_KEY, JSON.stringify(map));
+  await addPathMapping(NOW_APP_PATHS_KEY, key, nowPath);
 }
 
 /**
  * Sets whether to use the global (default) Now file.
  */
 export async function setUseGlobal(useGlobal: boolean): Promise<void> {
-  await LocalStorage.setItem(NOW_USE_GLOBAL_KEY, useGlobal ? "true" : "false");
+  await setStorageString(NOW_USE_GLOBAL_KEY, useGlobal ? "true" : "false");
 }
 
 /**
- * Sets the last resolved now file path (used when app/document resolution fails).
+ * Sets the last resolved now file path (used when app resolution fails).
  */
 export async function setLastResolvedPath(path: string): Promise<void> {
-  await LocalStorage.setItem(NOW_LAST_RESOLVED_PATH_KEY, path);
+  await setStorageString(NOW_LAST_RESOLVED_PATH_KEY, path);
 }

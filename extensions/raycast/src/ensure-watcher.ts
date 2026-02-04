@@ -11,11 +11,7 @@ import {
 } from "@raycast/api";
 import { createDeeplink } from "@raycast/utils";
 
-import {
-  NOW_APP_PATHS_KEY,
-  NOW_DOCUMENT_PATHS_KEY,
-  resolveNowFilePath,
-} from "./lib/now";
+import { NOW_APP_PATHS_KEY, resolveNowFilePath } from "./lib/now";
 import {
   collectPathsToWatch,
   ensureWatcherRunning,
@@ -33,13 +29,10 @@ export default async function Command() {
     : "";
   const appPathsJson =
     (await LocalStorage.getItem<string>(NOW_APP_PATHS_KEY)) ?? "{}";
-  const docPathsJson =
-    (await LocalStorage.getItem<string>(NOW_DOCUMENT_PATHS_KEY)) ?? "{}";
 
   const paths = collectPathsToWatch(
     defaultPath,
     appPathsJson,
-    docPathsJson,
     prefs.appSpecificNowFiles,
   );
 

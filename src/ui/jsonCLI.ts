@@ -3,7 +3,11 @@
  * Used when cmd is "json" or "init" so the slim path never loads prompt/colors.
  */
 import { resolve } from "std/path/mod.ts";
-import { buildPreviewMarkdown, PREVIEW_ACTION_VALUES } from "now-format";
+import {
+  buildPreviewMarkdown,
+  type PreviewAction,
+  PREVIEW_ACTION_VALUES,
+} from "now-format";
 import { resolveFocusFilePath } from "./resolveFocus.ts";
 import { ensureFocusFile } from "../operations/fileOperations.ts";
 import {
@@ -13,7 +17,13 @@ import {
   moveNodeToNewParent,
 } from "../operations/index.ts";
 
-/** Creates focus file at NOW_FILE if missing. Optional root name (e.g. app/document name). Requires NOW_FILE. Exits 1 on error. */
+/** Logs error to stderr and exits with code 1. */
+function logErrorAndExit(err: unknown): never {
+  console.error(err instanceof Error ? err.message : err);
+  Deno.exit(1);
+}
+
+/** Creates focus file at NOW_FILE if missing. Optional root name (e.g. app name). Requires NOW_FILE. Exits 1 on error. */
 export async function runInit(rootName?: string): Promise<void> {
   const fromEnv = Deno.env.get("NOW_FILE");
   if (!fromEnv?.trim()) {
@@ -41,8 +51,7 @@ export async function runJsonFocus(): Promise<void> {
       }),
     );
   } catch (err) {
-    console.error(err instanceof Error ? err.message : err);
-    Deno.exit(1);
+    logErrorAndExit(err);
   }
 }
 
@@ -56,9 +65,59 @@ export async function runJsonItems(): Promise<void> {
       JSON.stringify(items.map(([display, key]) => ({ display, key }))),
     );
   } catch (err) {
-    console.error(err instanceof Error ? err.message : err);
-    Deno.exit(1);
+    logErrorAndExit(err);
   }
+}
+
+/** Normalizes CLI action string to PreviewAction or null if invalid/empty. */
+function toPreviewAction(action: string | undefined): PreviewAction {
+  if (!action?.trim()) return null;
+  const valid = PREVIEW_ACTION_VALUES as readonly string[];
+  if (!valid.includes(action)) return null;
+  return action as PreviewAction;
+}
+
+/** Loads tree from path; if moveTargetKey is set, moves current focus to that key and returns updated tree. */
+async function loadTreeForPreview(
+  path: string,
+  moveTargetKey: string | undefined,
+) {
+  const tree = await getTree(path);
+  const needMove = moveTargetKey !== undefined && moveTargetKey !== "";
+  if (!needMove) return tree;
+  const d = getCurrentItemDetails(tree);
+  return moveNodeToNewParent(tree, d.key, moveTargetKey!);
+}
+
+/** Resolves focus file path for preview; exits 1 on error. */
+async function resolvePreviewPathOrExit(): Promise<string> {
+  try {
+    return await resolveFocusFilePath({ interactive: false });
+  } catch (err) {
+    logErrorAndExit(err);
+  }
+}
+
+/** Loads tree (optionally moving focus), builds preview markdown with given selectedKey/action, logs to stdout. */
+function buildAndLogPreview(
+  path: string,
+  moveTargetKey: string | undefined,
+  selectedKey: string | undefined,
+  action: string | undefined,
+): Promise<void> {
+  return loadTreeForPreview(path, moveTargetKey).then((tree) => {
+    const d = getCurrentItemDetails(tree);
+    const items = getItemsList(tree).map(([display, key]) => ({ display, key }));
+    const markdown = buildPreviewMarkdown(
+      items,
+      d.key,
+      d.breadcrumbStr,
+      d.focusStr,
+      selectedKey ?? null,
+      toPreviewAction(action),
+    );
+    console.log(markdown);
+  });
 }
 
 /** Outputs preview markdown to stdout. Optional --selected-key, --action (complete|add|later|wrap|edit), or --move-target KEY. Exits 1 on error. */
@@ -67,30 +126,10 @@ export async function runJsonPreview(
   action?: string,
   moveTargetKey?: string,
 ): Promise<void> {
+  const path = await resolvePreviewPathOrExit();
   try {
-    const path = await resolveFocusFilePath({ interactive: false });
-    let tree = await getTree(path);
-    if (moveTargetKey !== undefined && moveTargetKey !== "") {
-      const d = getCurrentItemDetails(tree);
-      tree = moveNodeToNewParent(tree, d.key, moveTargetKey);
-    }
-    const d = getCurrentItemDetails(tree);
-    const items = getItemsList(tree).map(([display, key]) => ({ display, key }));
-    const previewAction =
-      action && PREVIEW_ACTION_VALUES.includes(action as (typeof PREVIEW_ACTION_VALUES)[number])
-        ? (action as (typeof PREVIEW_ACTION_VALUES)[number])
-        : null;
-    const markdown = buildPreviewMarkdown(
-      items,
-      d.key,
-      d.breadcrumbStr,
-      d.focusStr,
-      selectedKey ?? null,
-      previewAction,
-    );
-    console.log(markdown);
+    await buildAndLogPreview(path, moveTargetKey, selectedKey, action);
   } catch (err) {
-    console.error(err instanceof Error ? err.message : err);
-    Deno.exit(1);
+    logErrorAndExit(err);
   }
 }
