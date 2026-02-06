@@ -5,6 +5,7 @@ import { showToast, Toast } from "@raycast/api";
 import type { PathActionDescriptor } from "./pathContext";
 import type { JsonFocus } from "./now";
 import { resolveNowFilePath } from "./now";
+import { ACTIONS_SECTION_ITEMS } from "./listFocusConstants";
 
 /** Resolve default focus file path from preferences (shared by list-focus and menu-bar). */
 export function getDefaultPath(prefs: { focusFilePath: string }): string {
@@ -17,26 +18,19 @@ export const DEFAULT_SELECTED_ACTION_ID = "action-add";
 /** Id for the "Open in Editor" list item (Now File section). */
 export const OPEN_EDITOR_ACTION_ID = "action-open-editor";
 
-/** Fixed action ids (always shown); path and item keys are appended in getSelectionIdArrays. */
-export const BASE_ACTION_IDS = [
-  DEFAULT_SELECTED_ACTION_ID,
-  "action-complete",
-  "action-later",
-  "action-wrap",
-  "action-move",
-  OPEN_EDITOR_ACTION_ID,
-] as const;
-
-/** Returns list selection ids (switch section excludes current item) and detail ids (all items). */
+/** Returns list selection ids (switch section excludes current item) and detail ids (all items). Action ids come from ACTIONS_SECTION_ITEMS (filtered by show(focus)) plus OPEN_EDITOR_ACTION_ID. */
 export function getSelectionIdArrays(
   pathDescriptors: PathActionDescriptor[],
   itemKeys: string[],
   currentKey: string,
   focus: JsonFocus | null,
 ): { listIds: string[]; detailIds: string[] } {
-  const actionIds: string[] = [...BASE_ACTION_IDS];
-  if (focus) actionIds.push("action-edit");
-  if (focus && !focus.isLeaf) actionIds.push("action-dive-in");
+  const actionIds: string[] = [
+    ...ACTIONS_SECTION_ITEMS.filter(
+      (row) => row.show == null || row.show(focus),
+    ).map((row) => row.id),
+    OPEN_EDITOR_ACTION_ID,
+  ];
   const pathIds = pathDescriptors.map((d) => `action-${d.id}`);
   const baseAndPath = [...actionIds, ...pathIds];
   const listIds = [...baseAndPath, ...itemKeys.filter((k) => k !== currentKey)];

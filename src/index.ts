@@ -26,6 +26,27 @@ if (cmd === "tui") {
   Deno.exit(0);
 }
 
+/** Parses argv from startIndex: --key value and --key=value into a record. */
+function parseKeyValueArgs(
+  argv: string[],
+  startIndex: number,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (let i = startIndex; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg.startsWith("--")) {
+      const eq = arg.indexOf("=");
+      if (eq !== -1) {
+        out[arg.slice(2, eq)] = arg.slice(eq + 1);
+      } else if (argv[i + 1] !== undefined) {
+        out[arg.slice(2)] = argv[i + 1];
+        i++;
+      }
+    }
+  }
+  return out;
+}
+
 if (cmd === "json") {
   const { runJsonFocus, runJsonItems, runJsonPreview } = await import(
     "./ui/jsonCLI.ts"
@@ -36,29 +57,12 @@ if (cmd === "json") {
   } else if (sub === "items") {
     await runJsonItems();
   } else if (sub === "preview") {
-    let selectedKey: string | undefined;
-    let action: string | undefined;
-    let moveTargetKey: string | undefined;
-    for (let i = 2; i < args.length; i++) {
-      const arg = args[i];
-      if (arg === "--selected-key" && args[i + 1] !== undefined) {
-        selectedKey = args[i + 1];
-        i++;
-      } else if (arg === "--action" && args[i + 1] !== undefined) {
-        action = args[i + 1];
-        i++;
-      } else if (arg === "--move-target" && args[i + 1] !== undefined) {
-        moveTargetKey = args[i + 1];
-        i++;
-      } else if (arg.startsWith("--selected-key=")) {
-        selectedKey = arg.slice("--selected-key=".length);
-      } else if (arg.startsWith("--action=")) {
-        action = arg.slice("--action=".length);
-      } else if (arg.startsWith("--move-target=")) {
-        moveTargetKey = arg.slice("--move-target=".length);
-      }
-    }
-    await runJsonPreview(selectedKey, action, moveTargetKey);
+    const opts = parseKeyValueArgs(args, 2);
+    await runJsonPreview(
+      opts["selected-key"],
+      opts["action"],
+      opts["move-target"],
+    );
   } else {
     console.error("json requires 'focus', 'items', or 'preview'");
     Deno.exit(1);
