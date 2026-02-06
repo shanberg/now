@@ -252,7 +252,13 @@ export function useFocusData(
         setCacheOnlyData: cacheState.setCacheOnlyData,
         setFreshCacheData: cacheState.setFreshCacheData,
       }),
-    [dataSurface.mode, effectivePath, mutate, cacheState.setCacheOnlyData, cacheState.setFreshCacheData],
+    [
+      dataSurface.mode,
+      effectivePath,
+      mutate,
+      cacheState.setCacheOnlyData,
+      cacheState.setFreshCacheData,
+    ],
   );
 
   const { error, errorMessage } = mergeErrorFromSurface(dataSurface, hookError);

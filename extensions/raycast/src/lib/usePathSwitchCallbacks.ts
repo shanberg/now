@@ -7,12 +7,12 @@ import { showToast, Toast } from "@raycast/api";
 import {
   createFocusFile,
   resolveNowFilePath,
-  runSwitch,
   suggestedNowPathForApp,
   type MutationResult,
 } from "./now";
 import { DEFAULT_SELECTED_ACTION_ID } from "./listFocusHelpers";
 import type { PathSwitchCallbacks } from "./pathSwitchActions";
+import { performSwitchToPath } from "./pathSwitchShared";
 
 export type UsePathSwitchCallbacksArgs = {
   defaultPath: string;
@@ -28,31 +28,6 @@ export type UsePathSwitchCallbacksArgs = {
   setSelectedId: (id: string | null) => void;
 };
 
-/** Shared sequence: set storage, pin path, runSwitch, apply/refresh, set selection. */
-async function switchToPath(
-  path: string,
-  opts: {
-    setUseGlobal: (use: boolean) => Promise<void>;
-    setLastResolvedPath: (path: string) => Promise<void>;
-    refreshPathFromStorage: () => Promise<void>;
-    setPinnedPath: (path: string | null) => void;
-    applyMutationResult: (result: MutationResult) => Promise<void>;
-    refresh: () => void | Promise<void>;
-    setSelectedId: (id: string | null) => void;
-    useGlobal: boolean;
-    pinnedPath: string | null;
-  },
-): Promise<void> {
-  await opts.setUseGlobal(opts.useGlobal);
-  await opts.setLastResolvedPath(path);
-  await opts.refreshPathFromStorage();
-  opts.setPinnedPath(opts.pinnedPath);
-  const result = await runSwitch(path, "0");
-  if (result) await opts.applyMutationResult(result);
-  else await opts.refresh();
-  opts.setSelectedId(DEFAULT_SELECTED_ACTION_ID);
-}
-
 export function usePathSwitchCallbacks({
   defaultPath,
   appPathForCurrent,
@@ -67,16 +42,16 @@ export function usePathSwitchCallbacks({
   setSelectedId,
 }: UsePathSwitchCallbacksArgs): PathSwitchCallbacks {
   const switchToGlobal = useCallback(async () => {
-    await switchToPath(defaultPath, {
+    await performSwitchToPath({
+      path: defaultPath,
       setUseGlobal,
+      useGlobal: true,
       setLastResolvedPath,
       refreshPathFromStorage,
-      setPinnedPath,
+      beforeRunSwitch: () => setPinnedPath(defaultPath),
       applyMutationResult,
       refresh,
-      setSelectedId,
-      useGlobal: true,
-      pinnedPath: defaultPath,
+      afterSwitched: () => setSelectedId(DEFAULT_SELECTED_ACTION_ID),
     });
   }, [
     defaultPath,
@@ -91,16 +66,16 @@ export function usePathSwitchCallbacks({
 
   const switchToApp = useCallback(async () => {
     const path = appPathForCurrent ?? "";
-    await switchToPath(path, {
+    await performSwitchToPath({
+      path,
       setUseGlobal,
+      useGlobal: false,
       setLastResolvedPath,
       refreshPathFromStorage,
-      setPinnedPath,
+      beforeRunSwitch: () => setPinnedPath(appPathForCurrent ?? null),
       applyMutationResult,
       refresh,
-      setSelectedId,
-      useGlobal: false,
-      pinnedPath: appPathForCurrent ?? null,
+      afterSwitched: () => setSelectedId(DEFAULT_SELECTED_ACTION_ID),
     });
   }, [
     appPathForCurrent,
@@ -118,20 +93,23 @@ export function usePathSwitchCallbacks({
     const path = resolveNowFilePath(suggestedNowPathForApp(currentApp));
     try {
       await createFocusFile(path, currentApp.name);
-      const result = await runSwitch(path, "0");
-      if (result) await applyMutationResult(result);
-      else await refresh();
       const key = currentApp.bundleId ?? currentApp.name;
       await addAppPathMapping(key, suggestedNowPathForApp(currentApp));
-      await setUseGlobal(false);
-      await refreshPathFromStorage();
-      setPinnedPath(path);
       await showToast(
         Toast.Style.Success,
         `Created and using for ${currentApp.name}`,
       );
-      await refresh();
-      setSelectedId(DEFAULT_SELECTED_ACTION_ID);
+      await performSwitchToPath({
+        path,
+        setUseGlobal,
+        useGlobal: false,
+        setLastResolvedPath,
+        refreshPathFromStorage,
+        beforeRunSwitch: () => setPinnedPath(path),
+        applyMutationResult,
+        refresh,
+        afterSwitched: () => setSelectedId(DEFAULT_SELECTED_ACTION_ID),
+      });
     } catch (e) {
       await showToast(Toast.Style.Failure, "Failed to create file", String(e));
     }
@@ -139,6 +117,7 @@ export function usePathSwitchCallbacks({
     currentApp,
     addAppPathMapping,
     setUseGlobal,
+    setLastResolvedPath,
     refreshPathFromStorage,
     setPinnedPath,
     refresh,

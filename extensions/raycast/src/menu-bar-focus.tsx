@@ -31,7 +31,7 @@ export default function Command() {
     setSourceLabel,
     currentApp,
     appPathForCurrent,
-    pathReady: storageReady,
+    pathReady,
     appPathsJson,
     refreshPathFromStorage,
     refreshPathFromStorageWithApp,
@@ -52,7 +52,7 @@ export default function Command() {
 
   // When menubar is opened (click or background), assume display is correct: read only from cache; never fetch.
   const { focus, errorMessage, isLoading, refresh, applyMutationResult } =
-    useFocusData(storageReady ? effectiveNowPath : null, null, {
+    useFocusData(pathReady ? effectiveNowPath : null, null, {
       cacheOnly: true,
     });
 
@@ -82,7 +82,7 @@ export default function Command() {
   const isUsingAppFile = nowFilePath !== defaultPath;
 
   useMenubarWatcherSync({
-    storageReady,
+    pathReady,
     defaultPath,
     appPathsJson,
     appSpecificNowFiles: prefs.appSpecificNowFiles,
@@ -95,7 +95,7 @@ export default function Command() {
     refresh,
   });
 
-  if (!storageReady || isLoading) {
+  if (!pathReady || isLoading) {
     return <MenuBarLoadingView />;
   }
 

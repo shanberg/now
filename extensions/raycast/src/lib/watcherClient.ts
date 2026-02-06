@@ -27,8 +27,7 @@ export const NOW_WATCHER_DIRTY_FILENAME = "now-watcher-dirty.txt";
 
 /**
  * Path to the dirty file the menu bar watches (chokidar). The Swift watcher (and this client when resetting) write JSON:
- * { ts: number, app?: { bundleId?: string, name: string } }. Must be a JSON object (not a bare number).
- * Legacy Node watcher (watcher.js) writes a bare number (timestamp); menu bar treats non-object as "no app" and resolves from frontmost app.
+ * { ts: number, app?: { bundleId?: string, name: string } }. A bare number (timestamp) is also accepted and treated as { ts } with no app.
  * When app is present and recent, menu bar resolves path using that app (so deeplink-after-switch shows the right file).
  */
 export function getWatcherDirtyPath(supportPath: string): string {
@@ -41,9 +40,10 @@ export type WatcherDirtyData = {
   app?: { bundleId?: string; name: string };
 };
 
-function parseDirtyContent(
-  parsed: unknown,
-): WatcherDirtyData | null {
+function parseDirtyContent(parsed: unknown): WatcherDirtyData | null {
+  if (typeof parsed === "number" && Number.isFinite(parsed)) {
+    return { ts: parsed };
+  }
   const obj =
     parsed != null && typeof parsed === "object" && !Array.isArray(parsed)
       ? (parsed as { ts?: number; app?: { bundleId?: string; name?: string } })

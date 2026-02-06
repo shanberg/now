@@ -57,7 +57,10 @@ describe("readWatcherDirtyFileSync", () => {
     const filePath = join(dir, "dirty.txt");
     writeFileSync(
       filePath,
-      JSON.stringify({ ts: 12345, app: { bundleId: "com.test", name: "Test" } }),
+      JSON.stringify({
+        ts: 12345,
+        app: { bundleId: "com.test", name: "Test" },
+      }),
       "utf-8",
     );
     const data = readWatcherDirtyFileSync(filePath);
@@ -67,7 +70,7 @@ describe("readWatcherDirtyFileSync", () => {
     expect(data!.app?.bundleId).toBe("com.test");
   });
 
-  it("returns null for bare number (legacy format)", () => {
+  it("returns { ts } for bare number timestamp", () => {
     const dir = join(
       process.env.TMPDIR ?? "/tmp",
       "now-watcher-dirty-test-" + Date.now(),
@@ -75,7 +78,7 @@ describe("readWatcherDirtyFileSync", () => {
     mkdirSync(dir, { recursive: true });
     const filePath = join(dir, "dirty2.txt");
     writeFileSync(filePath, "999", "utf-8");
-    expect(readWatcherDirtyFileSync(filePath)).toBeNull();
+    expect(readWatcherDirtyFileSync(filePath)).toEqual({ ts: 999 });
   });
 
   it("returns null for missing file", () => {

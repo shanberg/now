@@ -1,13 +1,7 @@
 /**
  * Menu-bar view when focus exists: title, breadcrumb, complete action, pin section, More.
  */
-import {
-  Icon,
-  MenuBarExtra,
-  open,
-  showToast,
-  Toast,
-} from "@raycast/api";
+import { Icon, MenuBarExtra, open, showToast, Toast } from "@raycast/api";
 import { runComplete } from "./now";
 import { focusListDeeplink } from "./raycastDeeplinks";
 import { PathSwitchActionsMenuBar } from "./pathSwitchActions";

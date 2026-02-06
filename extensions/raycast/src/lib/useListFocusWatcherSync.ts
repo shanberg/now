@@ -1,7 +1,7 @@
 /**
  * List-focus: ensure watcher running + One Thing sync in one hook.
  */
-import { menuBarBackgroundDeeplink } from "./raycastDeeplinks";
+import { MENU_BAR_BACKGROUND_DEEPLINK } from "./raycastDeeplinks";
 import { useEnsureWatcher } from "./useEnsureWatcher";
 import { useOneThingSync } from "./useOneThingSync";
 
@@ -14,14 +14,11 @@ export type UseListFocusWatcherSyncArgs = {
   assetsPath: string;
   updateOneThing: boolean | undefined;
   focusText: string | undefined;
-  effectivePath: string | undefined;
 };
 
 export function useListFocusWatcherSync(
   args: UseListFocusWatcherSyncArgs,
 ): void {
-  const menuBarDeeplink = menuBarBackgroundDeeplink();
-
   useEnsureWatcher(
     args.pathReady,
     args.defaultPath,
@@ -29,8 +26,8 @@ export function useListFocusWatcherSync(
     args.appSpecificNowFiles,
     args.supportPath,
     args.assetsPath,
-    menuBarDeeplink,
+    MENU_BAR_BACKGROUND_DEEPLINK,
   );
 
-  useOneThingSync(args.updateOneThing, args.focusText, args.effectivePath);
+  useOneThingSync(args.updateOneThing, args.focusText);
 }

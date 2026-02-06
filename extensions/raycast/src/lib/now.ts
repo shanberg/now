@@ -10,7 +10,11 @@ import { parseJsonToRecord } from "./nowParse";
 
 export type { JsonFocus, JsonItem };
 export type { ResolveNowPathResult } from "./nowPathContext";
-export type { MutationResult, GetJsonFocusResult, GetJsonItemsResult } from "./nowCli";
+export type {
+  MutationResult,
+  GetJsonFocusResult,
+  GetJsonItemsResult,
+} from "./nowCli";
 export {
   getAppPathForCurrentApp,
   resolveNowPathFromContext,

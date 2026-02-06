@@ -56,9 +56,10 @@ export type UseNowPathResult = {
   pathReady: boolean;
   appPathsJson: string;
   refreshPathFromStorage: () => Promise<void>;
-  refreshPathFromStorageWithApp: (
-    app: { bundleId?: string; name: string },
-  ) => Promise<void>;
+  refreshPathFromStorageWithApp: (app: {
+    bundleId?: string;
+    name: string;
+  }) => Promise<void>;
   setUseGlobal: (useGlobal: boolean) => Promise<void>;
   setLastResolvedPath: (path: string) => Promise<void>;
   addAppPathMapping: (key: string, nowPath: string) => Promise<void>;
@@ -83,7 +84,9 @@ type PathContextState = {
   ready: boolean;
 };
 
-function defaultPathContextState(overrides: Partial<PathContextState> & { nowFilePath: string }): PathContextState {
+function defaultPathContextState(
+  overrides: Partial<PathContextState> & { nowFilePath: string },
+): PathContextState {
   return {
     nowFilePath: overrides.nowFilePath,
     sourceLabel: overrides.sourceLabel ?? "Global",
@@ -102,9 +105,10 @@ function buildNowPathResult(
     setNowFilePath: (path: string) => void;
     setSourceLabel: (label: string) => void;
     refreshPathFromStorage: () => Promise<void>;
-    refreshPathFromStorageWithApp: (
-      app: { bundleId?: string; name: string },
-    ) => Promise<void>;
+    refreshPathFromStorageWithApp: (app: {
+      bundleId?: string;
+      name: string;
+    }) => Promise<void>;
     setUseGlobal: (useGlobal: boolean) => Promise<void>;
     setLastResolvedPath: (path: string) => Promise<void>;
     addAppPathMapping: (key: string, nowPath: string) => Promise<void>;
@@ -144,9 +148,7 @@ function shouldSkipResolutionBecauseWeWrote(
   const onlyLastPathChanged =
     prevStorageSignature !== storageSignature &&
     prevSignatureInputs === signatureInputs;
-  return (
-    onlyLastPathChanged && lastResolvedPathRaw === lastWrittenPath
-  );
+  return onlyLastPathChanged && lastResolvedPathRaw === lastWrittenPath;
 }
 
 /**
@@ -213,7 +215,9 @@ async function applyResolutionResult(
   result: ResolveNowPathResult,
   override: { app: { name: string; bundleId?: string } | null },
   refs: NowPathStorageRefs,
-  setPathContext: (updater: (prev: PathContextState | null) => PathContextState | null) => void,
+  setPathContext: (
+    updater: (prev: PathContextState | null) => PathContextState | null,
+  ) => void,
   setLastResolvedPathValue: (path: string) => Promise<void>,
 ): Promise<void> {
   setPathContext(() => ({
@@ -237,24 +241,38 @@ async function applyResolutionResult(
 function useNowPathStorage(options: UseNowPathOptions) {
   const { defaultPath, appSpecificNowFiles } = options;
 
-  const { value: useGlobalRaw, setValue: setUseGlobalValue, isLoading: useGlobalLoading } =
-    useLocalStorage<string>(NOW_USE_GLOBAL_KEY, "false");
-  const { value: appPathsJson, setValue: setAppPathsValue, isLoading: appPathsLoading } =
-    useLocalStorage<string>(NOW_APP_PATHS_KEY, "{}");
-  const { value: lastResolvedPathRaw, setValue: setLastResolvedPathValue, isLoading: lastResolvedLoading } =
-    useLocalStorage<string>(NOW_LAST_RESOLVED_PATH_KEY, "");
+  const {
+    value: useGlobalRaw,
+    setValue: setUseGlobalValue,
+    isLoading: useGlobalLoading,
+  } = useLocalStorage<string>(NOW_USE_GLOBAL_KEY, "false");
+  const {
+    value: appPathsJson,
+    setValue: setAppPathsValue,
+    isLoading: appPathsLoading,
+  } = useLocalStorage<string>(NOW_APP_PATHS_KEY, "{}");
+  const {
+    value: lastResolvedPathRaw,
+    setValue: setLastResolvedPathValue,
+    isLoading: lastResolvedLoading,
+  } = useLocalStorage<string>(NOW_LAST_RESOLVED_PATH_KEY, "");
+
+  // useLocalStorage can transiently yield undefined; normalize so our refs stay string-typed.
+  const useGlobalRawValue = useGlobalRaw ?? "false";
+  const appPathsJsonValue = appPathsJson ?? "{}";
+  const lastResolvedPathRawValue = lastResolvedPathRaw ?? "";
 
   const defaultPathRef = useRef(defaultPath);
   const appSpecificNowFilesRef = useRef(appSpecificNowFiles);
-  const useGlobalRef = useRef(useGlobalRaw);
-  const appPathsRef = useRef(appPathsJson);
-  const lastResolvedPathRef = useRef(lastResolvedPathRaw);
+  const useGlobalRef = useRef(useGlobalRawValue);
+  const appPathsRef = useRef(appPathsJsonValue);
+  const lastResolvedPathRef = useRef(lastResolvedPathRawValue);
   const lastWrittenResolvedPathRef = useRef<string | null>(null);
   defaultPathRef.current = defaultPath;
   appSpecificNowFilesRef.current = appSpecificNowFiles;
-  useGlobalRef.current = useGlobalRaw;
-  appPathsRef.current = appPathsJson;
-  lastResolvedPathRef.current = lastResolvedPathRaw;
+  useGlobalRef.current = useGlobalRawValue;
+  appPathsRef.current = appPathsJsonValue;
+  lastResolvedPathRef.current = lastResolvedPathRawValue;
 
   const refs: NowPathStorageRefs = {
     defaultPath: defaultPathRef,
@@ -267,16 +285,16 @@ function useNowPathStorage(options: UseNowPathOptions) {
 
   const storageLoading =
     useGlobalLoading || appPathsLoading || lastResolvedLoading;
-  const signatureInputs = `${useGlobalRaw}|${appPathsJson}`;
-  const storageSignature = `${signatureInputs}|${lastResolvedPathRaw}`;
+  const signatureInputs = `${useGlobalRawValue}|${appPathsJsonValue}`;
+  const storageSignature = `${signatureInputs}|${lastResolvedPathRawValue}`;
 
   return {
     storageLoading,
     signatureInputs,
     storageSignature,
-    lastResolvedPathRaw,
-    useGlobalRaw,
-    appPathsJson,
+    lastResolvedPathRaw: lastResolvedPathRawValue,
+    useGlobalRaw: useGlobalRawValue,
+    appPathsJson: appPathsJsonValue,
     refs,
     setUseGlobalValue,
     setAppPathsValue,
@@ -341,7 +359,8 @@ export function useNowPathFromStorage(
   );
 
   const setUseGlobal = useCallback(
-    (useGlobal: boolean) => storage.setUseGlobalValue(useGlobal ? "true" : "false"),
+    (useGlobal: boolean) =>
+      storage.setUseGlobalValue(useGlobal ? "true" : "false"),
     [storage.setUseGlobalValue],
   );
   const setLastResolvedPath = useCallback(
@@ -359,16 +378,24 @@ export function useNowPathFromStorage(
 
   const setNowFilePath = useCallback((path: string) => {
     setPathContext((prev: PathContextState | null) =>
-      prev ? { ...prev, nowFilePath: path } : defaultPathContextState({ nowFilePath: path }),
+      prev
+        ? { ...prev, nowFilePath: path }
+        : defaultPathContextState({ nowFilePath: path }),
     );
   }, []);
-  const setSourceLabel = useCallback((label: string) => {
-    setPathContext((prev: PathContextState | null) =>
-      prev
-        ? { ...prev, sourceLabel: label }
-        : defaultPathContextState({ nowFilePath: refs.defaultPath.current, sourceLabel: label }),
-    );
-  }, [refs.defaultPath]);
+  const setSourceLabel = useCallback(
+    (label: string) => {
+      setPathContext((prev: PathContextState | null) =>
+        prev
+          ? { ...prev, sourceLabel: label }
+          : defaultPathContextState({
+            nowFilePath: refs.defaultPath.current,
+            sourceLabel: label,
+          }),
+      );
+    },
+    [refs.defaultPath],
+  );
 
   const stableCallbacks = {
     setNowFilePath,

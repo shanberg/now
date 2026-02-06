@@ -15,7 +15,7 @@ export function useEnsureWatcher(
   menuBarDeeplink: string,
 ): void {
   useEffect(() => {
-    if (!pathReady || !defaultPath) return;
+    if (!pathReady) return;
     const paths = collectPathsToWatch(
       defaultPath,
       appPathsJson,

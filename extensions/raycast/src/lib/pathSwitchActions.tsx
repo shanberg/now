@@ -3,10 +3,7 @@
  * Renders from path context descriptors so visibility and labels stay in sync.
  */
 import { Action, Icon, MenuBarExtra } from "@raycast/api";
-import type {
-  PathActionDescriptor,
-  PathSwitchContext,
-} from "./pathContext";
+import type { PathActionDescriptor, PathSwitchContext } from "./pathContext";
 import { pathSwitchContextToDescriptors } from "./pathContext";
 
 export type PathSwitchCallbacks = {
@@ -68,11 +65,7 @@ export function PathSwitchActionsMenuBar({
         const onAction = d.id in callbacks ? callbacks[d.id] : undefined;
         if (!onAction) return null;
         return (
-          <MenuBarExtra.Item
-            key={d.id}
-            title={d.title}
-            onAction={onAction}
-          />
+          <MenuBarExtra.Item key={d.id} title={d.title} onAction={onAction} />
         );
       })}
     </>

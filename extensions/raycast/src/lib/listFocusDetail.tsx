@@ -68,13 +68,17 @@ export function parseTreeOrActionSelection(
   selectedKeyInTree: string | null;
   normalizedAction: PreviewAction | null;
 } {
-  const selectedKeyInTree = id.startsWith("action-") ? null : keys.has(id) ? id : null;
+  const selectedKeyInTree = id.startsWith("action-")
+    ? null
+    : keys.has(id)
+      ? id
+      : null;
   const rawAction = id.startsWith("action-") ? id.slice(7) : null;
   const normalizedAction =
     rawAction &&
-    PREVIEW_ACTION_VALUES.includes(
-      rawAction as (typeof PREVIEW_ACTION_VALUES)[number],
-    )
+      PREVIEW_ACTION_VALUES.includes(
+        rawAction as (typeof PREVIEW_ACTION_VALUES)[number],
+      )
       ? (rawAction as PreviewAction)
       : null;
   return { selectedKeyInTree, normalizedAction };
@@ -105,7 +109,6 @@ function detailForTreeOrAction(id: string, ctx: DetailContext): ReactNode {
 
 export type UseDetailBySelectionArgs = {
   items: JsonItem[] | null;
-  selectionIdArrays: { detailIds: string[] };
   focus: JsonFocus | null;
   currentKey: string;
   selectedId: string | null;
@@ -116,12 +119,12 @@ export type UseDetailBySelectionArgs = {
   switchTargetPreviews: Record<string, FocusDataResult>;
 };
 
-export function useDetailBySelection(
-  args: UseDetailBySelectionArgs,
-): { detail: ReactNode; effectiveSelectedId: string | undefined } {
+export function useDetailBySelection(args: UseDetailBySelectionArgs): {
+  detail: ReactNode;
+  effectiveSelectedId: string | undefined;
+} {
   const {
     items,
-    selectionIdArrays,
     focus,
     currentKey,
     selectedId,
@@ -135,7 +138,7 @@ export function useDetailBySelection(
   const itemKeys = new Set((items ?? []).map((i) => i.key));
   const effectiveSelectedId =
     selectedId != null &&
-    (selectedId.startsWith("action-") || itemKeys.has(selectedId))
+      (selectedId.startsWith("action-") || itemKeys.has(selectedId))
       ? selectedId
       : currentKey && itemKeys.has(currentKey)
         ? currentKey
@@ -143,8 +146,6 @@ export function useDetailBySelection(
 
   const itemList = items ?? [];
   const keys = new Set(itemList.map((i) => i.key));
-  const detailIds = selectionIdArrays.detailIds;
-  const detailBySelection: Record<string, ReactNode> = {};
   const ctx: DetailContext = {
     itemList,
     keys,
@@ -156,15 +157,12 @@ export function useDetailBySelection(
     currentApp,
     switchTargetPreviews,
   };
-  for (const id of detailIds) {
-    detailBySelection[id] = buildDetailForSelectionId(id, ctx);
-  }
 
+  const selectionForDetail =
+    effectiveSelectedId ?? currentKey ?? defaultSelectedActionId;
   const detail =
-    detailBySelection[
-      effectiveSelectedId ?? currentKey ?? defaultSelectedActionId
-    ] ??
-    detailBySelection[defaultSelectedActionId] ??
+    buildDetailForSelectionId(selectionForDetail, ctx) ??
+    buildDetailForSelectionId(defaultSelectedActionId, ctx) ??
     null;
 
   return { detail, effectiveSelectedId };
@@ -174,12 +172,8 @@ export function buildDetailForSelectionId(
   id: string,
   ctx: DetailContext,
 ): ReactNode {
-  const {
-    defaultPath,
-    appPathForCurrent,
-    currentApp,
-    switchTargetPreviews,
-  } = ctx;
+  const { defaultPath, appPathForCurrent, currentApp, switchTargetPreviews } =
+    ctx;
 
   switch (id) {
     case "action-switch-global":

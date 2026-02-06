@@ -4,13 +4,10 @@
  */
 import { useEffect, useRef } from "react";
 import chokidar from "chokidar";
-import {
-  getWatcherDirtyPath,
-  readWatcherDirtyFileSync,
-} from "./watcherClient";
+import { getWatcherDirtyPath, readWatcherDirtyFileSync } from "./watcherClient";
 
 type UseMenubarDirtyFileSyncArgs = {
-  storageReady: boolean;
+  pathReady: boolean;
   supportPath: string;
   refreshPathFromStorage: () => Promise<void>;
   refreshPathFromStorageWithApp: (app: {
@@ -21,7 +18,7 @@ type UseMenubarDirtyFileSyncArgs = {
 };
 
 export function useMenubarDirtyFileSync({
-  storageReady,
+  pathReady,
   supportPath,
   refreshPathFromStorage,
   refreshPathFromStorageWithApp,
@@ -31,7 +28,7 @@ export function useMenubarDirtyFileSync({
 
   // On mount (e.g. when launched via deeplink after app switch), resolve path from dirty file if recent.
   useEffect(() => {
-    if (!storageReady || mountReadDoneRef.current) return;
+    if (!pathReady || mountReadDoneRef.current) return;
     mountReadDoneRef.current = true;
     const dirtyPath = getWatcherDirtyPath(supportPath);
     const data = readWatcherDirtyFileSync(dirtyPath);
@@ -41,11 +38,11 @@ export function useMenubarDirtyFileSync({
         name: data.app.name,
       });
     }
-  }, [storageReady, supportPath, refreshPathFromStorageWithApp]);
+  }, [pathReady, supportPath, refreshPathFromStorageWithApp]);
 
   // When the Swift watcher writes to the dirty file, refresh.
   useEffect(() => {
-    if (!storageReady) return;
+    if (!pathReady) return;
     const dirtyPath = getWatcherDirtyPath(supportPath);
     const watcher = chokidar.watch(dirtyPath, { persistent: true });
     const onChange = () => {
@@ -61,7 +58,7 @@ export function useMenubarDirtyFileSync({
       watcher.close();
     };
   }, [
-    storageReady,
+    pathReady,
     supportPath,
     refresh,
     refreshPathFromStorage,

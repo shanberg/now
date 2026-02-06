@@ -12,10 +12,7 @@ import {
 import { createDeeplink } from "@raycast/utils";
 
 import { NOW_APP_PATHS_KEY, resolveNowFilePath } from "./lib/now";
-import {
-  collectPathsToWatch,
-  ensureWatcherRunning,
-} from "./lib/watcherClient";
+import { collectPathsToWatch, ensureWatcherRunning } from "./lib/watcherClient";
 
 interface Preferences {
   focusFilePath: string;

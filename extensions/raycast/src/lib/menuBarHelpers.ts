@@ -25,8 +25,7 @@ export function getMenubarBreadcrumbDisplay(
 ): string {
   const raw = (breadcrumbMaxLengthPref ?? "64").trim() || "64";
   const parsed = parseInt(raw, 10);
-  const max =
-    Number.isNaN(parsed) || parsed <= 0 ? 0 : parsed;
+  const max = Number.isNaN(parsed) || parsed <= 0 ? 0 : parsed;
   if (max > 0 && breadcrumb) {
     return truncateBreadcrumb(breadcrumb, max);
   }

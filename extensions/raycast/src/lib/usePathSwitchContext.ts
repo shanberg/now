@@ -1,6 +1,7 @@
 /**
  * Hook: compute path switch context, label, and list descriptors for list-focus/menu-bar.
  */
+import { useMemo } from "react";
 import {
   computePathSwitchContext,
   pathSwitchContextToDescriptors,
@@ -18,8 +19,20 @@ export type UsePathSwitchContextResult = {
 export function usePathSwitchContext(
   input: PathSwitchContextInput,
 ): UsePathSwitchContextResult {
-  const pathSwitchContext = computePathSwitchContext(input);
+  const pathSwitchContext = useMemo(
+    () => computePathSwitchContext(input),
+    [
+      input.activePath,
+      input.defaultPath,
+      input.appPathForCurrent,
+      input.currentApp?.bundleId ?? "",
+      input.currentApp?.name ?? "",
+    ],
+  );
   const nowInputLabel = pathSwitchContext.contextLabel;
-  const pathDescriptorsForList = pathSwitchContextToDescriptors(pathSwitchContext);
+  const pathDescriptorsForList = useMemo(
+    () => pathSwitchContextToDescriptors(pathSwitchContext),
+    [pathSwitchContext],
+  );
   return { pathSwitchContext, nowInputLabel, pathDescriptorsForList };
 }

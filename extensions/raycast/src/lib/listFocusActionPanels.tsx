@@ -1,5 +1,8 @@
 /**
  * Action panel building for list-focus: buildActionPanel, OtherActionsSection, EmptyViewActions, context type.
+ *
+ * Selection is interpreted as: path descriptor (action-{pathId}), item key (move target), or fixed action id.
+ * Fixed actions are built from a registry of fragments to avoid a large switch and duplicated JSX.
  */
 import {
   Action,
@@ -36,9 +39,35 @@ import {
   WrapForm,
   type MutationFormProps,
 } from "./listFocusForms";
-import { DEFAULT_SELECTED_ACTION_ID, OPEN_EDITOR_ACTION_ID } from "./listFocusHelpers";
+import {
+  DEFAULT_SELECTED_ACTION_ID,
+  OPEN_EDITOR_ACTION_ID,
+} from "./listFocusHelpers";
 import { showFailureToast, trimItemDisplay } from "./listFocusHelpers";
 import { pathActionIcon } from "./pathSwitchActions";
+
+/** Discriminated union for what a selection id represents. */
+export type SelectionKind =
+  | { kind: "path"; descriptor: PathActionDescriptor }
+  | { kind: "item"; item: JsonItem }
+  | { kind: "action"; actionId: string };
+
+/** Parses selectionId into path descriptor, item, or fixed action id. */
+export function parseSelectionId(
+  selectionId: string,
+  pathDescriptorsForList: PathActionDescriptor[],
+  itemsForMove: JsonItem[],
+): SelectionKind {
+  const pathDescriptor = pathDescriptorsForList.find(
+    (d) => `action-${d.id}` === selectionId,
+  );
+  if (pathDescriptor) return { kind: "path", descriptor: pathDescriptor };
+
+  const item = itemsForMove.find((i) => i.key === selectionId);
+  if (item) return { kind: "item", item };
+
+  return { kind: "action", actionId: selectionId };
+}
 
 /** Shared "Other" actions: Tui, Open in Editor, Refresh; optionally Open Extension Preferences. */
 export function OtherActionsSection({
@@ -69,11 +98,7 @@ export function OtherActionsSection({
         icon={Icon.Document}
         target={pathForMutations}
       />
-      <Action
-        title="Refresh"
-        icon={Icon.ArrowClockwise}
-        onAction={refresh}
-      />
+      <Action title="Refresh" icon={Icon.ArrowClockwise} onAction={refresh} />
       {includePreferences ? (
         <Action
           title="Open Extension Preferences"
@@ -121,10 +146,7 @@ export function EmptyViewActions({
               const result = await runSwitch(pathForMutations, "0");
               if (result) await applyMutationResult(result);
               else await refresh();
-              await showToast(
-                Toast.Style.Success,
-                "Focus file created",
-              );
+              await showToast(Toast.Style.Success, "Focus file created");
               await new Promise((r) => setTimeout(r, 100));
               await refresh();
             } catch (e) {
@@ -188,7 +210,8 @@ export type ListEmptyStateViewProps = {
   title: string;
   description: string;
   icon: (typeof Icon)[keyof typeof Icon];
-  actions: ReactNode;
+  /** Typed as unknown to avoid ReactNode type mismatch between project and Raycast API types. */
+  actions: unknown;
 };
 
 export function ListEmptyStateView({
@@ -205,7 +228,8 @@ export function ListEmptyStateView({
         title={title}
         description={description}
         icon={icon}
-        actions={actions}
+        /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- Raycast types mismatch */
+        actions={actions as any}
       />
     </List>
   );
@@ -230,24 +254,154 @@ export type ActionPanelContext = {
   setSelectedId: (id: string | null) => void;
   pathDescriptorsForList: PathActionDescriptor[];
   pathSwitchCallbacks: PathSwitchCallbacks;
-  otherSection: any;
-  contextSection: any;
+  /** Typed as unknown to avoid ReactNode mismatch between project and Raycast API types. */
+  otherSection: unknown;
+  /** Typed as unknown to avoid ReactNode mismatch between project and Raycast API types. */
+  contextSection: unknown;
 };
 
-function panelWithOther(primary: ReactNode, otherSection: any): any {
+function panelWithOther(primary: ReactNode, otherSection: unknown): unknown {
   return (
     <ActionPanel>
       {primary}
-      {otherSection}
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- Raycast types mismatch */}
+      {otherSection as any}
     </ActionPanel>
   );
 }
 
-/** Returns action panel for a selection id. Typed as any to avoid React/ReactNode mismatch between project and @raycast/api. */
-export function buildActionPanel(
-  selectionId: string,
-  ctx: ActionPanelContext,
-): any {
+/** Reusable primary-action fragments. Each takes context and returns the action(s) for one list row. */
+type FragmentFn = (ctx: ActionPanelContext) => ReactNode | null;
+
+const narrowFocusFragment: FragmentFn = ({ mutationFormProps }) => (
+  <Action.Push
+    title="Narrow Focus"
+    icon={Icon.ChevronRight}
+    target={<AddNestedForm {...mutationFormProps} />}
+  />
+);
+
+const diveInFragment: FragmentFn = ({ pathForMutations, runNav, setSelectedId }) => (
+  <Action
+    title="Dive in"
+    icon={Icon.ChevronDown}
+    onAction={async () => {
+      await runNav(async () => {
+        await runDiveIn(pathForMutations);
+        return null;
+      }, "Dove in");
+      setSelectedId(DEFAULT_SELECTED_ACTION_ID);
+    }}
+  />
+);
+
+const completeFragment: FragmentFn = ({ pathForMutations, runNav }) => (
+  <Action
+    title="Finish This"
+    icon={Icon.Checkmark}
+    onAction={async () => {
+      await runNav(() => runComplete(pathForMutations), "Completed");
+    }}
+  />
+);
+
+const laterFragment: FragmentFn = ({ mutationFormProps }) => (
+  <Action.Push
+    title="Add Followup"
+    icon={Icon.Ellipsis}
+    target={<LaterForm {...mutationFormProps} />}
+  />
+);
+
+const editFragment: FragmentFn = (ctx) =>
+  ctx.focus ? (
+    <Action.Push
+      title="Edit"
+      icon={Icon.TextCursor}
+      target={
+        <EditForm
+          {...ctx.mutationFormProps}
+          currentName={ctx.focus.focus}
+        />
+      }
+    />
+  ) : null;
+
+const wrapFragment: FragmentFn = ({ mutationFormProps }) => (
+  <Action.Push
+    title="Wrap"
+    icon={Icon.ArrowUp}
+    target={<WrapForm {...mutationFormProps} />}
+  />
+);
+
+const moveFragment: FragmentFn = ({
+  mutationFormProps,
+  currentKey,
+  itemsForMove,
+}) => (
+  <Action.Push
+    title="Move"
+    icon={Icon.ArrowRight}
+    target={
+      <MoveTargetList
+        {...mutationFormProps}
+        currentKey={currentKey}
+        items={itemsForMove}
+      />
+    }
+  />
+);
+
+const openEditorFragment: FragmentFn = ({ pathForMutations }) => (
+  <Action.Open
+    title="Open in Editor"
+    icon={Icon.Document}
+    target={pathForMutations}
+  />
+);
+
+/** Registry: fixed action id → primary content for the panel. Add new actions here instead of a switch case. */
+const ACTION_PANEL_PRIMARY: Record<
+  string,
+  (ctx: ActionPanelContext) => ReactNode | null
+> = {
+  "action-add": (ctx) => (
+    <>
+      {narrowFocusFragment(ctx)}
+      {ctx.focus && !ctx.focus.isLeaf ? diveInFragment(ctx) : null}
+    </>
+  ),
+  "action-dive-in": diveInFragment,
+  "action-complete": completeFragment,
+  "action-later": laterFragment,
+  "action-edit": editFragment,
+  "action-wrap": wrapFragment,
+  "action-move": moveFragment,
+  [OPEN_EDITOR_ACTION_ID]: openEditorFragment,
+};
+
+function buildPathPanel(
+  descriptor: PathActionDescriptor,
+  pathSwitchCallbacks: PathSwitchCallbacks,
+  otherSection: unknown,
+): unknown {
+  const onAction = pathSwitchCallbacks[descriptor.id];
+  if (!onAction) return null;
+  return (
+    <ActionPanel>
+      <Action
+        title={descriptor.title}
+        icon={pathActionIcon(descriptor.id)}
+        onAction={onAction}
+      />
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- Raycast types mismatch */}
+      {otherSection as any}
+    </ActionPanel>
+  );
+}
+
+function buildItemPanel(ctx: ActionPanelContext, item: JsonItem): unknown {
   const {
     pathForMutations,
     focus,
@@ -257,232 +411,82 @@ export function buildActionPanel(
     refresh,
     runNav,
     setSelectedId,
-    pathDescriptorsForList,
-    pathSwitchCallbacks,
     otherSection,
     contextSection,
   } = ctx;
-
-  const pathDescriptor = pathDescriptorsForList.find(
-    (d) => `action-${d.id}` === selectionId,
-  );
-  if (pathDescriptor) {
-    const onAction = pathSwitchCallbacks[pathDescriptor.id];
-    if (!onAction) return null;
-    return (
-      <ActionPanel>
+  const isCurrent = item.key === currentKey;
+  return (
+    <ActionPanel>
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- Raycast types mismatch */}
+      {contextSection as any}
+      <ActionPanel.Section title="Focus">
         <Action
-          title={pathDescriptor.title}
-          icon={pathActionIcon(pathDescriptor.id)}
-          onAction={onAction}
-        />
-        {otherSection}
-      </ActionPanel>
-    ) as unknown as any;
-  }
-
-  const itemForKey = itemsForMove.find((i) => i.key === selectionId);
-  if (itemForKey) {
-    const isCurrent = itemForKey.key === currentKey;
-    return (
-      <ActionPanel>
-        {contextSection}
-        <ActionPanel.Section title="Focus">
-          <Action
-            title="Switch"
-            icon={Icon.Star}
-            onAction={async () => {
-              await runNav(
-                () => runSwitch(pathForMutations, itemForKey.key),
-                "Focus updated",
-              );
-              setSelectedId(DEFAULT_SELECTED_ACTION_ID);
-            }}
-          />
-          {isCurrent ? (
-            <Action
-              title="Finish This"
-              icon={Icon.Checkmark}
-              onAction={() =>
-                runNav(() => runComplete(pathForMutations), "Completed")
-              }
-            />
-          ) : null}
-        </ActionPanel.Section>
-        <ActionPanel.Section title="Actions">
-          <Action.Push
-            title="Narrow Focus"
-            icon={Icon.ChevronRight}
-            target={<AddNestedForm {...mutationFormProps} />}
-          />
-          {focus && !focus.isLeaf ? (
-            <Action
-              title="Dive In"
-              icon={Icon.ChevronDown}
-              onAction={async () => {
-                await runNav(async () => {
-                  await runDiveIn(pathForMutations);
-                  return null;
-                }, "Dove in");
-                setSelectedId(DEFAULT_SELECTED_ACTION_ID);
-              }}
-            />
-          ) : null}
-          <Action.Push
-            title="Add Followup"
-            icon={Icon.Ellipsis}
-            target={<LaterForm {...mutationFormProps} />}
-          />
-          {focus ? (
-            <Action.Push
-              title="Edit"
-              icon={Icon.TextCursor}
-              target={
-                <EditForm
-                  {...mutationFormProps}
-                  currentName={focus.focus}
-                />
-              }
-            />
-          ) : null}
-          <Action.Push
-            title="Wrap"
-            icon={Icon.ArrowUp}
-            target={<WrapForm {...mutationFormProps} />}
-          />
-          <Action.Push
-            title="Move"
-            icon={Icon.ArrowRight}
-            target={
-              <MoveTargetList
-                {...mutationFormProps}
-                currentKey={currentKey}
-                items={itemsForMove}
-              />
-            }
-          />
-        </ActionPanel.Section>
-        <ActionPanel.Section title="Copy">
-          <Action.CopyToClipboard
-            title="Copy Title"
-            content={trimItemDisplay(itemForKey.display)}
-          />
-        </ActionPanel.Section>
-        <OtherActionsSection
-          pathForMutations={pathForMutations}
-          refresh={refresh}
-          includePreferences
-        />
-      </ActionPanel>
-    ) as any;
-  }
-
-  switch (selectionId) {
-    case "action-add":
-      return panelWithOther(
-        <>
-          <Action.Push
-            title="Narrow Focus"
-            icon={Icon.ChevronRight}
-            target={<AddNestedForm {...mutationFormProps} />}
-          />
-          {focus && !focus.isLeaf ? (
-            <Action
-              title="Dive In"
-              icon={Icon.ChevronDown}
-              onAction={async () => {
-                await runNav(async () => {
-                  await runDiveIn(pathForMutations);
-                  return null;
-                }, "Dove in");
-                setSelectedId(DEFAULT_SELECTED_ACTION_ID);
-              }}
-            />
-          ) : null}
-        </>,
-        otherSection,
-      );
-    case "action-dive-in":
-      return panelWithOther(
-        <Action
-          title="Dive In"
-          icon={Icon.ChevronDown}
+          title="Switch"
+          icon={Icon.Star}
           onAction={async () => {
-            await runNav(async () => {
-              await runDiveIn(pathForMutations);
-              return null;
-            }, "Dove in");
+            await runNav(
+              () => runSwitch(pathForMutations, item.key),
+              "Focus updated",
+            );
             setSelectedId(DEFAULT_SELECTED_ACTION_ID);
           }}
-        />,
+        />
+        {isCurrent ? completeFragment(ctx) : null}
+      </ActionPanel.Section>
+      <ActionPanel.Section title="Actions">
+        {narrowFocusFragment(ctx)}
+        {focus && !focus.isLeaf ? diveInFragment(ctx) : null}
+        {laterFragment(ctx)}
+        {editFragment(ctx)}
+        {wrapFragment(ctx)}
+        {moveFragment(ctx)}
+      </ActionPanel.Section>
+      <ActionPanel.Section title="Copy">
+        <Action.CopyToClipboard
+          title="Copy Title"
+          content={trimItemDisplay(item.display)}
+        />
+      </ActionPanel.Section>
+      <OtherActionsSection
+        pathForMutations={pathForMutations}
+        refresh={refresh}
+        includePreferences
+      />
+    </ActionPanel>
+  );
+}
+
+/** Returns action panel for a selection id. Typed as unknown to avoid React/ReactNode mismatch between project and @raycast/api. */
+export function buildActionPanel(
+  selectionId: string,
+  ctx: ActionPanelContext,
+): unknown {
+  const {
+    pathDescriptorsForList,
+    pathSwitchCallbacks,
+    otherSection,
+  } = ctx;
+
+  const selection = parseSelectionId(
+    selectionId,
+    pathDescriptorsForList,
+    ctx.itemsForMove,
+  );
+
+  switch (selection.kind) {
+    case "path":
+      return buildPathPanel(
+        selection.descriptor,
+        pathSwitchCallbacks,
         otherSection,
       );
-    case "action-complete":
-      return panelWithOther(
-        <Action
-          title="Finish This"
-          icon={Icon.Checkmark}
-          onAction={async () => {
-            await runNav(() => runComplete(pathForMutations), "Completed");
-          }}
-        />,
-        otherSection,
-      );
-    case "action-later":
-      return panelWithOther(
-        <Action.Push
-          title="Add Followup"
-          icon={Icon.Ellipsis}
-          target={<LaterForm {...mutationFormProps} />}
-        />,
-        otherSection,
-      );
-    case "action-edit":
-      return focus
-        ? panelWithOther(
-            <Action.Push
-              title="Edit"
-              icon={Icon.TextCursor}
-              target={
-                <EditForm {...mutationFormProps} currentName={focus.focus} />
-              }
-            />,
-            otherSection,
-          )
-        : null;
-    case "action-wrap":
-      return panelWithOther(
-        <Action.Push
-          title="Wrap"
-          icon={Icon.ArrowUp}
-          target={<WrapForm {...mutationFormProps} />}
-        />,
-        otherSection,
-      );
-    case "action-move":
-      return panelWithOther(
-        <Action.Push
-          title="Move"
-          icon={Icon.ArrowRight}
-          target={
-            <MoveTargetList
-              {...mutationFormProps}
-              currentKey={currentKey}
-              items={itemsForMove}
-            />
-          }
-        />,
-        otherSection,
-      );
-    case OPEN_EDITOR_ACTION_ID:
-      return panelWithOther(
-        <Action.Open
-          title="Open in Editor"
-          icon={Icon.Document}
-          target={pathForMutations}
-        />,
-        otherSection,
-      );
+    case "item":
+      return buildItemPanel(ctx, selection.item);
+    case "action": {
+      const primary = ACTION_PANEL_PRIMARY[selection.actionId]?.(ctx);
+      if (primary == null) return null;
+      return panelWithOther(primary, otherSection);
+    }
     default:
       return null;
   }

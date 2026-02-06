@@ -1,7 +1,7 @@
 /**
  * Menu-bar empty state: no focus file or CLI missing / error.
  */
-import { Icon, MenuBarExtra, open } from "@raycast/api";
+import { Icon, MenuBarExtra, open, showToast, Toast } from "@raycast/api";
 import {
   createFocusFile,
   NOW_INSTALL_URL,
@@ -42,22 +42,30 @@ export function MenuBarEmptyState({
   errorMessage,
   refresh,
 }: MenuBarEmptyStateProps) {
-
   const handleCreateFocusFile = async () => {
     try {
       await createFocusFile(effectiveNowPath);
       await runSwitch(effectiveNowPath, "0");
       await new Promise((r) => setTimeout(r, 100));
       await refresh();
-    } catch {
-      // Keep empty state
+    } catch (e) {
+      await showToast(
+        Toast.Style.Failure,
+        "Failed to create focus file",
+        String(e),
+      );
     }
   };
 
   const handleInstallCli = async () => {
     try {
       await runNowInstallInTerminal();
-    } catch {
+    } catch (e) {
+      await showToast(
+        Toast.Style.Failure,
+        "Could not open Terminal for install",
+        String(e),
+      );
       await open(NOW_INSTALL_URL);
     }
   };
@@ -65,14 +73,18 @@ export function MenuBarEmptyState({
   const handleRunStatusInTerminal = async () => {
     try {
       await openTerminalWithNowStatus(effectiveNowPath);
-    } catch {
-      // Keep empty state
+    } catch (e) {
+      await showToast(
+        Toast.Style.Failure,
+        "Could not open Terminal",
+        String(e),
+      );
     }
   };
 
   return (
     <MenuBarExtra
-      tooltip={emptyStateTooltip(fileMissing, cliMissing, errorMessage)}
+      tooltip={emptyStateTooltip(fileMissing, cliMissing, errorMessage ?? null)}
     >
       <MenuBarExtra.Section>
         <MenuBarExtra.Item title={nowInputLabel} />

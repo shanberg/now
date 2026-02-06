@@ -6,10 +6,10 @@ import { showToast, Toast } from "@raycast/api";
 import {
   createFocusFile,
   resolveNowFilePath,
-  runSwitch,
   suggestedNowPathForApp,
 } from "./now";
 import type { PathSwitchCallbacks } from "./pathSwitchActions";
+import { performSwitchToPath } from "./pathSwitchShared";
 
 export type MenubarPathSwitchDeps = {
   setUseGlobal: (useGlobal: boolean) => Promise<void>;
@@ -26,40 +26,14 @@ export type MenubarPathSwitchDeps = {
 };
 
 async function menubarSwitchGlobal(deps: MenubarPathSwitchDeps): Promise<void> {
-  await deps.setUseGlobal(true);
-  await deps.refreshPathFromStorage();
-  await runSwitch(deps.defaultPath, "0");
-  deps.clearMenubarPin();
-  await deps.refresh();
-}
-
-/** Shared "switch to path" flow: set storage, clear pin, set path/label, runSwitch, refresh. */
-async function applySwitchToPath(
-  path: string,
-  label: string,
-  d: MenubarPathSwitchDeps,
-): Promise<void> {
-  await d.setUseGlobal(false);
-  await d.setLastResolvedPath(path);
-  d.clearMenubarPin();
-  d.setNowFilePath(path);
-  d.setSourceLabel(label);
-  await runSwitch(path, "0");
-  await d.refresh();
-}
-
-/** Shared "commit path" after create: set storage, clear pin, set path/label, refreshPathFromStorage. */
-async function commitSwitchedPath(
-  path: string,
-  label: string,
-  d: MenubarPathSwitchDeps,
-): Promise<void> {
-  await d.setUseGlobal(false);
-  await d.setLastResolvedPath(path);
-  d.clearMenubarPin();
-  d.setNowFilePath(path);
-  d.setSourceLabel(label);
-  await d.refreshPathFromStorage();
+  await performSwitchToPath({
+    path: deps.defaultPath,
+    setUseGlobal: deps.setUseGlobal,
+    useGlobal: true,
+    refreshPathFromStorage: deps.refreshPathFromStorage,
+    beforeRunSwitch: deps.clearMenubarPin,
+    refresh: deps.refresh,
+  });
 }
 
 async function menubarSwitchApp(deps: MenubarPathSwitchDeps): Promise<void> {
@@ -67,7 +41,18 @@ async function menubarSwitchApp(deps: MenubarPathSwitchDeps): Promise<void> {
   const label = deps.currentApp
     ? `${deps.currentApp.name} — ${deps.appPathForCurrent}`
     : deps.appPathForCurrent;
-  await applySwitchToPath(deps.appPathForCurrent, label, deps);
+  await performSwitchToPath({
+    path: deps.appPathForCurrent,
+    setUseGlobal: deps.setUseGlobal,
+    useGlobal: false,
+    setLastResolvedPath: deps.setLastResolvedPath,
+    beforeRunSwitch: () => {
+      deps.clearMenubarPin();
+      deps.setNowFilePath(deps.appPathForCurrent!);
+      deps.setSourceLabel(label);
+    },
+    refresh: deps.refresh,
+  });
 }
 
 async function menubarCreateApp(deps: MenubarPathSwitchDeps): Promise<void> {
@@ -75,22 +60,29 @@ async function menubarCreateApp(deps: MenubarPathSwitchDeps): Promise<void> {
   const path = resolveNowFilePath(suggestedNowPathForApp(deps.currentApp));
   try {
     await createFocusFile(path, deps.currentApp.name);
-    await runSwitch(path, "0");
     await deps.addAppPathMapping(
       deps.currentApp.bundleId ?? deps.currentApp.name,
       suggestedNowPathForApp(deps.currentApp),
     );
-    await commitSwitchedPath(path, deps.currentApp.name, deps);
+    await performSwitchToPath({
+      path,
+      setUseGlobal: deps.setUseGlobal,
+      useGlobal: false,
+      setLastResolvedPath: deps.setLastResolvedPath,
+      refreshPathFromStorage: deps.refreshPathFromStorage,
+      beforeRunSwitch: () => {
+        deps.clearMenubarPin();
+        deps.setNowFilePath(path);
+        deps.setSourceLabel(deps.currentApp!.name);
+      },
+      refresh: deps.refresh,
+    });
     await showToast(
       Toast.Style.Success,
       `Created and using for ${deps.currentApp.name}`,
     );
   } catch (e) {
-    await showToast(
-      Toast.Style.Failure,
-      "Failed to create file",
-      String(e),
-    );
+    await showToast(Toast.Style.Failure, "Failed to create file", String(e));
   }
 }
 

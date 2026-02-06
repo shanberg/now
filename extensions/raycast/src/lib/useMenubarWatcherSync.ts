@@ -1,13 +1,13 @@
 /**
  * Menu-bar: watcher ensure + One Thing sync + dirty file sync in one hook.
  */
-import { menuBarBackgroundDeeplink } from "./raycastDeeplinks";
+import { MENU_BAR_BACKGROUND_DEEPLINK } from "./raycastDeeplinks";
 import { useEnsureWatcher } from "./useEnsureWatcher";
 import { useMenubarDirtyFileSync } from "./useMenubarDirtyFileSync";
 import { useOneThingSync } from "./useOneThingSync";
 
 export type UseMenubarWatcherSyncArgs = {
-  storageReady: boolean;
+  pathReady: boolean;
   defaultPath: string;
   appPathsJson: string;
   appSpecificNowFiles: string | null | undefined;
@@ -24,22 +24,20 @@ export type UseMenubarWatcherSyncArgs = {
 };
 
 export function useMenubarWatcherSync(args: UseMenubarWatcherSyncArgs): void {
-  const menuBarDeeplink = menuBarBackgroundDeeplink();
-
   useEnsureWatcher(
-    args.storageReady,
+    args.pathReady,
     args.defaultPath,
     args.appPathsJson,
     args.appSpecificNowFiles,
     args.supportPath,
     args.assetsPath,
-    menuBarDeeplink,
+    MENU_BAR_BACKGROUND_DEEPLINK,
   );
 
   useOneThingSync(args.updateOneThing, args.focusText);
 
   useMenubarDirtyFileSync({
-    storageReady: args.storageReady,
+    pathReady: args.pathReady,
     supportPath: args.supportPath,
     refreshPathFromStorage: args.refreshPathFromStorage,
     refreshPathFromStorageWithApp: args.refreshPathFromStorageWithApp,

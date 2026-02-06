@@ -39,10 +39,7 @@ export function getSelectionIdArrays(
   if (focus && !focus.isLeaf) actionIds.push("action-dive-in");
   const pathIds = pathDescriptors.map((d) => `action-${d.id}`);
   const baseAndPath = [...actionIds, ...pathIds];
-  const listIds = [
-    ...baseAndPath,
-    ...itemKeys.filter((k) => k !== currentKey),
-  ];
+  const listIds = [...baseAndPath, ...itemKeys.filter((k) => k !== currentKey)];
   const detailIds = [...baseAndPath, ...itemKeys];
   return { listIds, detailIds };
 }

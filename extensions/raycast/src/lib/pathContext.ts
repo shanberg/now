@@ -13,10 +13,12 @@ export type PathSwitchContextInput = {
 
 export type PathSwitchContext = {
   switchToGlobal: { visible: true; path: string } | { visible: false };
-  switchToApp: { visible: true; path: string; label: string } | { visible: false };
+  switchToApp:
+    | { visible: true; path: string; label: string }
+    | { visible: false };
   createForApp:
-  | { visible: true; suggestedPath: string; displayName: string }
-  | { visible: false };
+    | { visible: true; suggestedPath: string; displayName: string }
+    | { visible: false };
   contextLabel: string;
 };
 
@@ -40,10 +42,10 @@ function computeSwitchToApp(
     activePath !== appPathForCurrent;
   return visible
     ? {
-      visible: true,
-      path: appPathForCurrent,
-      label: currentApp.name,
-    }
+        visible: true,
+        path: appPathForCurrent,
+        label: currentApp.name,
+      }
     : { visible: false };
 }
 
@@ -54,12 +56,10 @@ function computeCreateForApp(
   const visible = currentApp != null && !appPathForCurrent;
   return visible
     ? {
-      visible: true,
-      suggestedPath: resolveNowFilePath(
-        suggestedNowPathForApp(currentApp),
-      ),
-      displayName: currentApp.name,
-    }
+        visible: true,
+        suggestedPath: resolveNowFilePath(suggestedNowPathForApp(currentApp)),
+        displayName: currentApp.name,
+      }
     : { visible: false };
 }
 
@@ -98,11 +98,11 @@ export type PathActionDescriptor =
   | { id: "switch-global"; title: string; path: string }
   | { id: "switch-app"; title: string; path: string }
   | {
-    id: "create-app";
-    title: string;
-    suggestedPath: string;
-    displayName: string;
-  };
+      id: "create-app";
+      title: string;
+      suggestedPath: string;
+      displayName: string;
+    };
 
 /** Returns paths that are valid switch targets (for prefetching previews). */
 export function pathSwitchContextSwitchTargetPaths(

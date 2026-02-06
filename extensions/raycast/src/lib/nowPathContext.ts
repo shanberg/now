@@ -87,7 +87,8 @@ export function resolveNowPathFromContext(options: {
   if (useGlobal) return pathResult(defaultPath, "Global", appPathForCurrent);
   if (app) {
     const path = resolveNowFilePathForApp(defaultPath, mergedAppJson, app);
-    const sourceLabel = path !== defaultPath ? `${app.name} — ${path}` : "Global";
+    const sourceLabel =
+      path !== defaultPath ? `${app.name} — ${path}` : "Global";
     return pathResult(path, sourceLabel, appPathForCurrent);
   }
   if (lastResolvedPath) {

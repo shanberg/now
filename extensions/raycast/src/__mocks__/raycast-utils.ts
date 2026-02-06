@@ -7,15 +7,18 @@ export function useLocalStorage<T>(
 ): { value: T; setValue: (v: T) => Promise<void>; isLoading: boolean } {
   return {
     value: _defaultValue,
-    setValue: async () => {},
+    setValue: async () => { },
     isLoading: false,
   };
 }
 
 export function useCachedPromise<T, U>(
-  _fn: (arg: U) => Promise<T>,
-  _deps: unknown[],
-  _opts?: { execute?: boolean },
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- test stub signature
+  fn: (arg: U) => Promise<T>,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- test stub signature
+  deps: unknown[],
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- test stub signature
+  opts?: { execute?: boolean },
 ): {
   data: T | undefined;
   error: Error | undefined;
@@ -27,7 +30,7 @@ export function useCachedPromise<T, U>(
     data: undefined,
     error: undefined,
     isLoading: false,
-    revalidate: () => {},
-    mutate: async () => {},
+    revalidate: () => { },
+    mutate: async () => { },
   };
 }

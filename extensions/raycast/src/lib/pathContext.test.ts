@@ -14,7 +14,9 @@ const defaultPath = "/home/.now/focus.now.md";
 const otherPath = "/home/.now/other.now.md";
 const appPath = "/home/.now/term.now.md";
 
-function input(overrides: Partial<PathSwitchContextInput> = {}): PathSwitchContextInput {
+function input(
+  overrides: Partial<PathSwitchContextInput> = {},
+): PathSwitchContextInput {
   return {
     activePath: defaultPath,
     defaultPath,
@@ -30,9 +32,13 @@ function expectAllHidden(ctx: PathSwitchContext): void {
   expect(ctx.createForApp.visible).toBe(false);
 }
 
-function expectSwitchToGlobalVisible(ctx: PathSwitchContext, expectedPath: string): void {
+function expectSwitchToGlobalVisible(
+  ctx: PathSwitchContext,
+  expectedPath: string,
+): void {
   expect(ctx.switchToGlobal.visible).toBe(true);
-  if (ctx.switchToGlobal.visible) expect(ctx.switchToGlobal.path).toBe(expectedPath);
+  if (ctx.switchToGlobal.visible)
+    expect(ctx.switchToGlobal.path).toBe(expectedPath);
 }
 
 function expectSwitchToAppVisible(

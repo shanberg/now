@@ -3,7 +3,10 @@
  */
 import type { PathSwitchContextInput } from "./pathContext";
 import { usePathSwitchContext } from "./usePathSwitchContext";
-import { usePathSwitchCallbacks, type UsePathSwitchCallbacksArgs } from "./usePathSwitchCallbacks";
+import {
+  usePathSwitchCallbacks,
+  type UsePathSwitchCallbacksArgs,
+} from "./usePathSwitchCallbacks";
 
 export type UseListFocusPathSwitchArgs = PathSwitchContextInput &
   UsePathSwitchCallbacksArgs;

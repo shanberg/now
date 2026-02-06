@@ -85,15 +85,15 @@ beforeEach(() => {
     }) =>
       useGlobal
         ? {
-          path: def,
-          sourceLabel: "Global",
-          appPathForCurrent: null,
-        }
+            path: def,
+            sourceLabel: "Global",
+            appPathForCurrent: null,
+          }
         : {
-          path: "/last",
-          sourceLabel: "Last used — /last",
-          appPathForCurrent: null,
-        },
+            path: "/last",
+            sourceLabel: "Last used — /last",
+            appPathForCurrent: null,
+          },
   );
   setStorage({
     [NOW_USE_GLOBAL_KEY]: "false",

@@ -11,7 +11,9 @@ export type UseMenubarPinStateResult = {
   clearMenubarPin: () => void;
 };
 
-export function useMenubarPinState(nowFilePath: string): UseMenubarPinStateResult {
+export function useMenubarPinState(
+  nowFilePath: string,
+): UseMenubarPinStateResult {
   const { value: pinnedPathStorage, setValue: setPinnedPathStorage } =
     useLocalStorage<string>(NOW_MENUBAR_PINNED_PATH_KEY, "");
 

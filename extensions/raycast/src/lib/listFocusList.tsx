@@ -13,10 +13,7 @@ import {
   type ActionSectionRow,
 } from "./listFocusConstants";
 import { getEmptyViewContent, OPEN_EDITOR_ACTION_ID } from "./listFocusHelpers";
-import {
-  EmptyViewActions,
-  ListEmptyStateView,
-} from "./listFocusActionPanels";
+import { EmptyViewActions, ListEmptyStateView } from "./listFocusActionPanels";
 import type { PathSwitchCallbacks } from "./pathSwitchActions";
 import type { JsonFocus, JsonItem } from "./now";
 import type { MutationResult } from "./now";
@@ -125,7 +122,8 @@ export type ListFocusListContentProps = {
   effectiveSelectedId: string | undefined;
   onSelectionChange: (id: string | null | undefined) => void;
   detail: ReactNode;
-  actionPanelsBySelection: Record<string, ReactNode>;
+  /** Typed as unknown to avoid ReactNode mismatch between project and Raycast API types. */
+  actionPanelsBySelection: Record<string, unknown>;
   pathDescriptorsForList: PathActionDescriptor[];
   items: JsonItem[] | null;
   currentKey: string;
@@ -162,7 +160,8 @@ export function ListFocusListContent({
             title={row.title}
             icon={row.icon}
             detail={detail}
-            actions={actionPanelsBySelection[row.id]}
+            /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- Raycast ReactNode type mismatch */
+            actions={actionPanelsBySelection[row.id] as any}
           />
         ))}
       </List.Section>
@@ -172,7 +171,8 @@ export function ListFocusListContent({
           title="Open in Editor"
           icon={Icon.Document}
           detail={detail}
-          actions={actionPanelsBySelection[OPEN_EDITOR_ACTION_ID]}
+          /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- Raycast ReactNode type mismatch */
+          actions={actionPanelsBySelection[OPEN_EDITOR_ACTION_ID] as any}
         />
         {pathDescriptorsForList.map((d: PathActionDescriptor) => (
           <ListFocusItem
@@ -181,7 +181,8 @@ export function ListFocusListContent({
             title={d.title}
             icon={pathActionIcon(d.id)}
             detail={detail}
-            actions={actionPanelsBySelection[`action-${d.id}`]}
+            /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- Raycast ReactNode type mismatch */
+            actions={actionPanelsBySelection[`action-${d.id}`] as any}
           />
         ))}
       </List.Section>
@@ -197,7 +198,8 @@ export function ListFocusListContent({
                 title={item.display.trim()}
                 icon={isCurrent ? Icon.Star : undefined}
                 detail={detail}
-                actions={actionPanelsBySelection[item.key]}
+                /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- Raycast ReactNode type mismatch */
+                actions={actionPanelsBySelection[item.key] as any}
               />
             );
           })}

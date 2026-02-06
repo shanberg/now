@@ -57,19 +57,15 @@ async function loadEnvWithPathFromShell(): Promise<NodeJS.ProcessEnv> {
   if (envPath && envPath.length > 0) return { ...process.env };
   const shell = process.env.SHELL || "/bin/zsh";
   try {
-    const { stdout } = await execFileAsync(
-      shell,
-      ["-l", "-c", "echo $PATH"],
-      {
-        encoding: "utf-8",
-        timeout: 5000,
-        env: {
-          HOME: process.env.HOME ?? "",
-          USER: process.env.USER ?? "",
-          PATH: "/usr/bin:/bin",
-        },
+    const { stdout } = await execFileAsync(shell, ["-l", "-c", "echo $PATH"], {
+      encoding: "utf-8",
+      timeout: 5000,
+      env: {
+        HOME: process.env.HOME ?? "",
+        USER: process.env.USER ?? "",
+        PATH: "/usr/bin:/bin",
       },
-    );
+    });
     return { ...process.env, PATH: stdout.trim() };
   } catch {
     return { ...process.env };
@@ -106,8 +102,7 @@ function execNowWithEnv(
             return;
           }
           const msg =
-            ((stderr ?? "").trim() ||
-              (err as NodeJS.ErrnoException).message) ??
+            ((stderr ?? "").trim() || (err as NodeJS.ErrnoException).message) ??
             "now failed";
           reject(new Error(msg));
           return;

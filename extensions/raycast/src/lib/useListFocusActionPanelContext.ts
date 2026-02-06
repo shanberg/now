@@ -1,6 +1,7 @@
 /**
  * Action panel context for list-focus (buildActionPanel input).
  */
+import { useMemo } from "react";
 import type { ActionPanelContext } from "./listFocusActionPanels";
 import type { MutationFormProps } from "./listFocusForms";
 import type { PathActionDescriptor } from "./pathContext";
@@ -44,25 +45,45 @@ export function useListFocusActionPanelContext(
     contextSection,
   } = args;
 
-  const mutationFormProps: MutationFormProps = {
-    nowFilePath: pathForMutations,
-    applyMutationResult,
-    refresh,
-  };
+  const mutationFormProps: MutationFormProps = useMemo(
+    () => ({
+      nowFilePath: pathForMutations,
+      applyMutationResult,
+      refresh,
+    }),
+    [pathForMutations, applyMutationResult, refresh],
+  );
 
-  return {
-    pathForMutations,
-    focus,
-    currentKey,
-    itemsForMove,
-    mutationFormProps,
-    applyMutationResult,
-    refresh,
-    runNav,
-    setSelectedId,
-    pathDescriptorsForList,
-    pathSwitchCallbacks,
-    otherSection,
-    contextSection,
-  };
+  return useMemo(
+    () => ({
+      pathForMutations,
+      focus,
+      currentKey,
+      itemsForMove,
+      mutationFormProps,
+      applyMutationResult,
+      refresh,
+      runNav,
+      setSelectedId,
+      pathDescriptorsForList,
+      pathSwitchCallbacks,
+      otherSection,
+      contextSection,
+    }),
+    [
+      pathForMutations,
+      focus,
+      currentKey,
+      itemsForMove,
+      mutationFormProps,
+      applyMutationResult,
+      refresh,
+      runNav,
+      setSelectedId,
+      pathDescriptorsForList,
+      pathSwitchCallbacks,
+      otherSection,
+      contextSection,
+    ],
+  );
 }

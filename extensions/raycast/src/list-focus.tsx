@@ -1,10 +1,17 @@
-import { environment, getPreferenceValues, type LaunchProps } from "@raycast/api";
-import { useCallback, useState } from "react";
+import {
+  environment,
+  getPreferenceValues,
+  type LaunchProps,
+} from "@raycast/api";
+import { useCallback, useMemo, useState } from "react";
 
 import { useFocusData } from "./lib/useFocusData";
 import { useSwitchTargetPreviews } from "./lib/useSwitchTargetPreviews";
 import { useNowPathFromStorage } from "./lib/useNowPath";
-import { DEFAULT_SELECTED_ACTION_ID, getDefaultPath } from "./lib/listFocusHelpers";
+import {
+  DEFAULT_SELECTED_ACTION_ID,
+  getDefaultPath,
+} from "./lib/listFocusHelpers";
 import {
   ListFocusEmptyView,
   ListFocusListContent,
@@ -67,21 +74,25 @@ export default function Command(
     effectivePath,
   });
 
-  const { pathSwitchContext, nowInputLabel, pathDescriptorsForList, pathSwitchCallbacks } =
-    useListFocusPathSwitch({
-      activePath: effectivePath,
-      defaultPath,
-      appPathForCurrent,
-      currentApp,
-      setUseGlobal,
-      setLastResolvedPath,
-      refreshPathFromStorage,
-      setPinnedPath,
-      addAppPathMapping,
-      applyMutationResult,
-      refresh,
-      setSelectedId,
-    });
+  const {
+    pathSwitchContext,
+    nowInputLabel,
+    pathDescriptorsForList,
+    pathSwitchCallbacks,
+  } = useListFocusPathSwitch({
+    activePath: effectivePath,
+    defaultPath,
+    appPathForCurrent,
+    currentApp,
+    setUseGlobal,
+    setLastResolvedPath,
+    refreshPathFromStorage,
+    setPinnedPath,
+    addAppPathMapping,
+    applyMutationResult,
+    refresh,
+    setSelectedId,
+  });
 
   /** Path used for all mutations and forms; pinned so it does not flip when frontmost app changes. */
   const pathForMutations = effectivePath ?? nowFilePath ?? "";
@@ -100,7 +111,6 @@ export default function Command(
     assetsPath: environment.assetsPath,
     updateOneThing: prefs.updateOneThing,
     focusText: focus?.focus,
-    effectivePath: effectivePath ?? undefined,
   });
 
   /** All hooks below must run on every render (Rules of Hooks). Do not add early returns above them. */
@@ -149,9 +159,10 @@ export default function Command(
     contextSection,
   });
   const allSelectionIds = selectionIdArrays.listIds;
-  const actionPanelsBySelection = useActionPanels(
-    allSelectionIds,
-    actionPanelContext,
+  const selectionIdSignature = allSelectionIds.join("\n");
+  const actionPanelsBySelection = useMemo(
+    () => useActionPanels(allSelectionIds, actionPanelContext),
+    [selectionIdSignature, actionPanelContext],
   );
 
   if (!pathReady) {

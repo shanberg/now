@@ -63,12 +63,12 @@ export function shouldExecuteFetch(
 export function deriveDataSurface(input: DataSurfaceInput): DataSurface {
   const mode = resolveMode(input);
   const dataByMode: Record<DataSourceMode, FocusDataResult | null | undefined> =
-  {
-    sync_first_paint: input.syncFirstPaint,
-    cache_only: input.cacheOnlyData,
-    fresh_cache: input.freshCacheData,
-    fetch: input.fetchData,
-  };
+    {
+      sync_first_paint: input.syncFirstPaint,
+      cache_only: input.cacheOnlyData,
+      fresh_cache: input.freshCacheData,
+      fetch: input.fetchData,
+    };
   const currentData = dataByMode[mode];
   const loadingByMode: Record<DataSourceMode, boolean> = {
     sync_first_paint: false,
@@ -101,11 +101,13 @@ export function mergeErrorFromSurface(
       : errorFromData || !!hookError,
     errorMessage: dataSurface.fromCacheMode
       ? errorMessageFromData
-      : errorMessageFromData ?? hookError?.message ?? null,
+      : (errorMessageFromData ?? hookError?.message ?? null),
   };
 }
 
-export const mutationResultToFocusData = (result: MutationResult): FocusDataResult => ({
+export const mutationResultToFocusData = (
+  result: MutationResult,
+): FocusDataResult => ({
   focus: result.focus,
   items: result.items,
   error: false,
@@ -127,10 +129,15 @@ export async function writeFocusCacheFromResult(
 
 export type ApplyMutationOpts = {
   writeCache: (path: string, r: MutationResult) => Promise<void>;
-  mutate: (arg: Promise<void>, options: {
-    optimisticUpdate: (prev: FocusDataResult | undefined) => FocusDataResult | undefined;
-    shouldRevalidateAfter: boolean;
-  }) => Promise<unknown>;
+  mutate: (
+    arg: Promise<void>,
+    options: {
+      optimisticUpdate: (
+        prev: FocusDataResult | undefined,
+      ) => FocusDataResult | undefined;
+      shouldRevalidateAfter: boolean;
+    },
+  ) => Promise<unknown>;
   setCacheOnlyData: (data: FocusDataResult) => void;
   setFreshCacheData: (data: FocusDataResult) => void;
 };

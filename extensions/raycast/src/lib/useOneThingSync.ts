@@ -9,7 +9,6 @@ import { getOneThingUrl } from "./now";
 export function useOneThingSync(
   enabled: boolean | undefined,
   focusText: string | undefined,
-  _effectivePath?: string,
 ): void {
   const hasDeferred = useRef(false);
 
@@ -20,5 +19,5 @@ export function useOneThingSync(
     } else {
       hasDeferred.current = true;
     }
-  }, [enabled, focusText, _effectivePath]);
+  }, [enabled, focusText]);
 }
