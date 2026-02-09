@@ -18,6 +18,9 @@ export const DEFAULT_SELECTED_ACTION_ID = "action-add";
 /** Id for the "Open in Editor" list item (Now File section). */
 export const OPEN_EDITOR_ACTION_ID = "action-open-editor";
 
+/** Id for the synthetic "Create from search" row when no Switch item matches the query. */
+export const CREATE_FROM_SEARCH_ID = "create-from-search";
+
 /** Returns list selection ids (switch section excludes current item) and detail ids (all items). Action ids come from ACTIONS_SECTION_ITEMS (filtered by show(focus)) plus OPEN_EDITOR_ACTION_ID. */
 export function getSelectionIdArrays(
   pathDescriptors: PathActionDescriptor[],
@@ -74,7 +77,7 @@ export function trimItemDisplay(display: string): string {
 
 /** Show a failure toast with message and stringified error. */
 export function showFailureToast(title: string, error: unknown): Promise<void> {
-  return showToast(Toast.Style.Failure, title, String(error)).then(() => {});
+  return showToast(Toast.Style.Failure, title, String(error)).then(() => { });
 }
 
 /** Tooltip for empty/error state (e.g. menu bar). */

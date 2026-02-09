@@ -71,12 +71,12 @@ async function runAndMaybeEmitTree(
   if (emitJson) emitJsonFromTree(tree);
 }
 
-/** (focusFilePath, positionalArgs, emitJson) => Promise<void>. */
+/** (focusFilePath, positionalArgs, emitJson) => Promise<void | Tree>. */
 type CommandHandler = (
   focusFilePath: string,
   positionalArgs: string[],
   emitJson: boolean,
-) => Promise<void>;
+) => Promise<void | Tree>;
 
 /** Map of command name to handler for status, complete, add, later, edit, switch, wrap, move, dive-in, next, previous, down, up. */
 function buildCommandHandlers(): Record<string, CommandHandler> {

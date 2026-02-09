@@ -98,45 +98,6 @@ async function promptMainAction(tree: TreeNode): Promise<string> {
   });
 }
 
-/** Dispatches the chosen action and returns the updated tree. */
-async function handleMainAction(
-  action: string,
-  path: string,
-): Promise<TreeNode> {
-  switch (action) {
-    case "complete":
-      return await handleCompleteAction(path);
-    case "add":
-      return await handleAddNestedAction(path);
-    case "later":
-      return await handleAddLater(path);
-    case "switch":
-      return await handleSwitchAction(path);
-    case "diveIn":
-      return await handleDiveInAction(path);
-    case "edit":
-      return await handleEditAction(path);
-    case "wrap":
-      return await handleWrapAction(path);
-    case "move":
-      return await handleMoveAction(path);
-    case "focusNextSibling":
-      return await handleNextSiblingAction(path);
-    case "focusPreviousSibling":
-      return await handlePreviousSiblingAction(path);
-    case "focusChild":
-      return await handleFocusChildAction(path);
-    case "focusParent":
-      return await handleFocusParentAction(path);
-    case "quit":
-      console.log("Exiting...");
-      Deno.exit();
-      break;
-    default:
-      return await getTree(path); // Return the current tree if action is unrecognized
-  }
-}
-
 /** Runs the dive-in effect and returns the updated tree. */
 async function handleDiveInAction(path: string): Promise<TreeNode> {
   await diveInEffect(path);
@@ -154,7 +115,7 @@ async function handleCompleteAction(path: string): Promise<TreeNode> {
 async function handleAddItems(
   path: string,
   message: string,
-  effect: (path: string, items: string) => Promise<void>,
+  effect: (path: string, items: string) => Promise<void | TreeNode>,
 ): Promise<TreeNode> {
   D || console.clear();
   const tree = await getTree(path);
@@ -290,6 +251,42 @@ async function handleMoveAction(path: string): Promise<TreeNode> {
       currentKey,
       moveToKey,
     );
+  }
+  return await getTree(path);
+}
+
+/** Registry: action id → handler. Add new actions here instead of a switch. */
+const MAIN_ACTION_HANDLERS: Record<
+  string,
+  (path: string) => Promise<TreeNode> | void
+> = {
+  complete: handleCompleteAction,
+  add: handleAddNestedAction,
+  later: handleAddLater,
+  switch: handleSwitchAction,
+  diveIn: handleDiveInAction,
+  edit: handleEditAction,
+  wrap: handleWrapAction,
+  move: handleMoveAction,
+  focusNextSibling: handleNextSiblingAction,
+  focusPreviousSibling: handlePreviousSiblingAction,
+  focusChild: handleFocusChildAction,
+  focusParent: handleFocusParentAction,
+  quit: () => {
+    console.log("Exiting...");
+    Deno.exit();
+  },
+};
+
+/** Dispatches the chosen action and returns the updated tree. */
+async function handleMainAction(
+  action: string,
+  path: string,
+): Promise<TreeNode> {
+  const handler = MAIN_ACTION_HANDLERS[action];
+  if (handler) {
+    const result = handler(path);
+    if (result !== undefined) return await result;
   }
   return await getTree(path);
 }

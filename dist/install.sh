@@ -1,4 +1,10 @@
 #!/bin/bash
+# Install the now CLI (core app only; does not include the Raycast extension).
+# To install a specific release: curl -fsSL .../v0.1.0/dist/install.sh | bash
+# (This script fetches assets from the same ref it was served from.)
+
+# Release ref: branch or tag used to fetch bundle.js (e.g. main or v0.1.0).
+NOW_REF="${NOW_REF:-v0.1.0}"
 
 # Define the installation directory
 INSTALL_DIR="/usr/local/bin"
@@ -35,7 +41,7 @@ fi
 
 # Download the bundled JavaScript file to a temporary location
 TEMP_FILE=$(mktemp)
-curl -o "$TEMP_FILE" https://raw.githubusercontent.com/shanberg/now/main/dist/bundle.js
+curl -o "$TEMP_FILE" "https://raw.githubusercontent.com/shanberg/now/${NOW_REF}/dist/bundle.js"
 
 # Ensure the installation directory exists
 sudo mkdir -p "$INSTALL_DIR"

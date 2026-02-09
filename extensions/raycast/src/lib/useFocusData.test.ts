@@ -333,7 +333,7 @@ describe("useFocusData", () => {
     });
   });
 
-  describe("cacheOnly and maxCacheAgeMs", () => {
+  describe("cacheOnly", () => {
     it("when cacheOnly and path set, returns focus from getFocusCache and does not execute fetch", async () => {
       mockGetFocusCache.mockResolvedValue(sampleCacheEntry);
       const { result } = renderHook(() =>
@@ -353,51 +353,6 @@ describe("useFocusData", () => {
         expect.any(Function),
         ["/path"],
         expect.objectContaining({ execute: false }),
-      );
-    });
-
-    it("when maxCacheAgeMs and cache fresh, uses cache and does not refetch", async () => {
-      const freshEntry: FocusCacheEntry = {
-        ...sampleCacheEntry,
-        updatedAt: Date.now() - 1000,
-      };
-      mockGetFocusCache.mockResolvedValue(freshEntry);
-      const { result } = renderHook(() =>
-        useFocusData("/path", null, { maxCacheAgeMs: 60_000 }),
-      );
-
-      await waitFor(() => {
-        expect(result.current.focus?.focus).toBe("Cached focus");
-      });
-
-      expect(result.current.focus?.breadcrumb).toBe("x > y");
-      expect(result.current.isLoading).toBe(false);
-      expect(useCachedPromise).toHaveBeenCalledWith(
-        expect.any(Function),
-        ["/path"],
-        expect.objectContaining({ execute: false }),
-      );
-    });
-
-    it("when maxCacheAgeMs and cache stale or missing, fetches", async () => {
-      const staleEntry: FocusCacheEntry = {
-        ...sampleCacheEntry,
-        updatedAt: Date.now() - 70_000,
-      };
-      mockGetFocusCache.mockResolvedValue(staleEntry);
-      const { result } = renderHook(() =>
-        useFocusData("/path", null, { maxCacheAgeMs: 60_000 }),
-      );
-
-      await waitFor(() => {
-        expect(result.current.focus).toEqual(sampleFocus);
-      });
-
-      expect(result.current.focus?.focus).toBe("Current focus");
-      expect(useCachedPromise).toHaveBeenCalledWith(
-        expect.any(Function),
-        ["/path"],
-        expect.objectContaining({ execute: true }),
       );
     });
   });

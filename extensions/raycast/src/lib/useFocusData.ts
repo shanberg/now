@@ -1,8 +1,7 @@
 /**
  * Hook and fetcher for focus + items for a single Now file path.
  *
- * Used by list-focus to load and mutate focus data; writes to focus cache so menu-bar-focus can read the same state.
- * Options cacheOnly and maxCacheAgeMs are for menu-bar usage (cache-only when background, use cache when fresh).
+ * List: fetch (with optional sync first paint from cache). Menu bar: cacheOnly (no fetch).
  */
 import { useCachedPromise } from "@raycast/utils";
 import { useCallback, useEffect, useState } from "react";
@@ -24,30 +23,19 @@ import { useFocusDataCacheState } from "./useFocusDataCacheState";
 
 export type { FocusDataResult } from "./focusDataResult";
 
-/** Sync read for first paint: cache-only always; maxCacheAgeMs only when cache is fresh. Returns null when not applicable. */
+/** Sync read for first paint when we have a cache entry (list and menu bar). */
 function getSyncFirstPaintResult(
   effectivePath: string | null,
-  cacheOnly: boolean,
-  maxCacheAgeMs: number | undefined,
-  cacheCheckDone: boolean,
 ): FocusDataResult | null {
-  if (!effectivePath || cacheCheckDone) return null;
+  if (!effectivePath) return null;
   const entry = getFocusCacheSync(effectivePath);
-  if (!entry) return null;
-  if (cacheOnly) return cacheEntryToFocusDataResult(entry);
-  if (maxCacheAgeMs == null) return null;
-  if (Date.now() - entry.updatedAt >= maxCacheAgeMs) return null;
-  return cacheEntryToFocusDataResult(entry);
+  return entry ? cacheEntryToFocusDataResult(entry) : null;
 }
 
 type CacheStateSlice = {
   cacheOnlyData: FocusDataResult | null;
   setCacheOnlyData: (v: FocusDataResult | null) => void;
   cacheOnlyLoading: boolean;
-  cacheCheckDone: boolean;
-  hasFreshCache: boolean;
-  freshCacheData: FocusDataResult | null;
-  setFreshCacheData: (v: FocusDataResult | null) => void;
 };
 
 /** Encapsulates fetch + data-surface resolution so useFocusData stays thin. */
@@ -55,16 +43,9 @@ function useFocusDataSurface(
   pathForFetch: string,
   effectivePath: string | null,
   cacheOnly: boolean,
-  maxCacheAgeMs: number | undefined,
   cacheState: CacheStateSlice,
 ) {
-  const executeFetch = shouldExecuteFetch(
-    pathForFetch,
-    cacheOnly,
-    maxCacheAgeMs,
-    cacheState.cacheCheckDone,
-    cacheState.hasFreshCache,
-  );
+  const executeFetch = shouldExecuteFetch(pathForFetch, cacheOnly);
 
   const {
     data,
@@ -81,20 +62,11 @@ function useFocusDataSurface(
     },
   });
 
-  const syncFirstPaint = getSyncFirstPaintResult(
-    effectivePath,
-    cacheOnly,
-    maxCacheAgeMs,
-    cacheState.cacheCheckDone,
-  );
+  const syncFirstPaint = getSyncFirstPaintResult(effectivePath);
   const useSyncFirstPaint = syncFirstPaint != null;
 
   const dataSurface = deriveDataSurface({
     cacheOnly,
-    maxCacheAgeMs,
-    cacheCheckDone: cacheState.cacheCheckDone,
-    hasFreshCache: cacheState.hasFreshCache,
-    freshCacheData: cacheState.freshCacheData,
     syncFirstPaint,
     useSyncFirstPaint,
     cacheOnlyData: cacheState.cacheOnlyData,
@@ -148,7 +120,7 @@ export async function fetchFocusData(path: string): Promise<FocusDataResult> {
  * Return value of {@link useFocusData}.
  *
  * **Stable across rerenders** (same reference unless dependencies change): `refresh`, `applyMutationResult`, `setPinnedPath`.
- * **Memoized when source is fetch data**: when the hook uses useCachedPromise result (i.e. not cacheOnly or freshCache mode), `focus` and `items` are memoized by content so unchanged content yields the same reference. In that mode, `error` / `errorMessage` merge useCachedPromise's data error with the hook's `error` (e.g. fetch failure) so both are surfaced.
+ * **Memoized when source is fetch data**: when the hook uses useCachedPromise result (i.e. not cacheOnly), `focus` and `items` are memoized by content so unchanged content yields the same reference. In that mode, `error` / `errorMessage` merge useCachedPromise's data error with the hook's `error` (e.g. fetch failure) so both are surfaced.
  * **Not stable** (new reference when data or path change): `effectivePath`.
  * **Primitives**: `error`, `errorMessage`, `isLoading` are values, not refs.
  *
@@ -175,13 +147,11 @@ export type UseFocusDataResult = {
 };
 
 /**
- * Options for useFocusData. Used by menu-bar (cache-only when background, use cache when fresh).
- * @property cacheOnly - When true, only read from getFocusCache; do not fetch. For menu bar background launch.
- * @property maxCacheAgeMs - When set (and not cacheOnly), use cache if entry.updatedAt is within this many ms; otherwise fetch.
+ * Options for useFocusData. Menu bar uses cacheOnly; list uses fetch (default).
+ * @property cacheOnly - When true, only read from getFocusCache; do not fetch. For menu bar.
  */
 export type UseFocusDataOptions = {
   cacheOnly?: boolean;
-  maxCacheAgeMs?: number;
 };
 
 /**
@@ -191,11 +161,11 @@ export type UseFocusDataOptions = {
  *
  * **When it updates**: Data and loading state come from useCachedPromise (pathForFetch, execute when effectivePath is set). effectivePath changes when pinnedPath or nowFilePath change. The effect that syncs pinned path and focus cache runs when data?.focus?.key, data?.focus?.focus, data?.focus?.breadcrumb, data?.items?.length, or effectivePath change (primitives to avoid re-runs on unchanged content).
  *
- * **Options** (for menu-bar): cacheOnly — only read from getFocusCache; maxCacheAgeMs — use cache when fresh, else fetch.
+ * **Options** (for menu-bar): cacheOnly — only read from getFocusCache.
  *
  * @param nowFilePath - Currently resolved Now file path (e.g. from useNowPathFromStorage). When null, no fetch runs.
  * @param initialPinnedPath - Optional initial pinned path (e.g. from launch context). When set, effectivePath uses this until the user switches.
- * @param options - Optional. cacheOnly (menu-bar background); maxCacheAgeMs (menu-bar use cache when fresh).
+ * @param options - Optional. cacheOnly (menu-bar).
  * @returns UseFocusDataResult
  */
 export function useFocusData(
@@ -204,7 +174,6 @@ export function useFocusData(
   options?: UseFocusDataOptions,
 ): UseFocusDataResult {
   const cacheOnly = options?.cacheOnly === true;
-  const maxCacheAgeMs = options?.maxCacheAgeMs;
 
   const [pinnedPath, setPinnedPath] = useState<string | null>(
     initialPinnedPath ?? null,
@@ -212,16 +181,11 @@ export function useFocusData(
   const effectivePath = pinnedPath ?? nowFilePath;
   const pathForFetch = effectivePath ?? "";
 
-  const cacheState = useFocusDataCacheState(
-    effectivePath,
-    cacheOnly,
-    maxCacheAgeMs,
-  );
+  const cacheState = useFocusDataCacheState(effectivePath, cacheOnly);
   const { dataSurface, refresh, mutate, hookError } = useFocusDataSurface(
     pathForFetch,
     effectivePath,
     cacheOnly,
-    maxCacheAgeMs,
     cacheState,
   );
 
@@ -250,15 +214,8 @@ export function useFocusData(
         writeCache: writeFocusCacheFromResult,
         mutate,
         setCacheOnlyData: cacheState.setCacheOnlyData,
-        setFreshCacheData: cacheState.setFreshCacheData,
       }),
-    [
-      dataSurface.mode,
-      effectivePath,
-      mutate,
-      cacheState.setCacheOnlyData,
-      cacheState.setFreshCacheData,
-    ],
+    [dataSurface.mode, effectivePath, mutate, cacheState.setCacheOnlyData],
   );
 
   const { error, errorMessage } = mergeErrorFromSurface(dataSurface, hookError);

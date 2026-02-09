@@ -52,6 +52,13 @@ async function runNowMutation(
 const DEFAULT_PATH = "/usr/local/bin:/usr/bin:/bin";
 let envWithPathPromise: Promise<NodeJS.ProcessEnv> | null = null;
 
+/** Sync env for subprocess: use process.env if PATH is set, else default PATH. Used first; on ENOENT call getEnvForSubprocess(). */
+function envForSubprocessSync(): NodeJS.ProcessEnv {
+  return process.env.PATH && process.env.PATH.length > 0
+    ? { ...process.env }
+    : { ...process.env, PATH: DEFAULT_PATH };
+}
+
 async function loadEnvWithPathFromShell(): Promise<NodeJS.ProcessEnv> {
   const envPath = process.env.PATH;
   if (envPath && envPath.length > 0) return { ...process.env };
@@ -72,7 +79,8 @@ async function loadEnvWithPathFromShell(): Promise<NodeJS.ProcessEnv> {
   }
 }
 
-async function getEnvForSubprocess(): Promise<NodeJS.ProcessEnv> {
+/** Async env for subprocess (shell-derived PATH when needed). Cached. Use after ENOENT with envForSubprocessSync(). */
+export async function getEnvForSubprocess(): Promise<NodeJS.ProcessEnv> {
   if (envWithPathPromise !== null) return envWithPathPromise;
   envWithPathPromise = loadEnvWithPathFromShell();
   return envWithPathPromise;
@@ -122,13 +130,13 @@ export async function runNow(
 ): Promise<{ stdout: string; stderr: string }> {
   const cwdDir = dirname(nowFilePath);
   const cwd = existsSync(cwdDir) ? cwdDir : undefined;
-  const baseEnv =
-    process.env.PATH && process.env.PATH.length > 0
-      ? { ...process.env }
-      : { ...process.env, PATH: DEFAULT_PATH };
-
   try {
-    return await execNowWithEnv(nowFilePath, args, baseEnv, cwd);
+    return await execNowWithEnv(
+      nowFilePath,
+      args,
+      envForSubprocessSync(),
+      cwd,
+    );
   } catch (err) {
     const e = err as NodeJS.ErrnoException;
     if (e?.code === "ENOENT") {
@@ -157,12 +165,7 @@ export async function isNowOnPath(): Promise<boolean> {
       return true;
     }
   };
-  if (
-    await tryWithEnv(
-      process.env.PATH ? process.env : { ...process.env, PATH: DEFAULT_PATH },
-    )
-  )
-    return true;
+  if (await tryWithEnv(envForSubprocessSync())) return true;
   const envWithPath = await getEnvForSubprocess();
   return tryWithEnv(envWithPath);
 }

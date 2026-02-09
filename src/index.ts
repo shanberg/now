@@ -3,6 +3,12 @@ import { D } from "./consts.ts";
 const args = Deno.args;
 const cmd = args[0] ?? "status";
 
+if (cmd === "--version" || cmd === "-v") {
+  const { VERSION } = await import("./consts.ts");
+  console.log(VERSION);
+  Deno.exit(0);
+}
+
 const MUTATION_COMMANDS = [
   "complete",
   "add",

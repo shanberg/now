@@ -31,9 +31,13 @@ accessibility.
 
 ## Installation
 
+Install the core CLI (no Raycast extension):
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/shanberg/now/main/dist/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/shanberg/now/v0.1.0/dist/install.sh | bash
 ```
+
+To install from the latest development branch: `NOW_REF=main` before the URL, or use `main` in the path instead of `v0.1.0`. Run `now --version` to confirm the installed version.
 
 ## Using `now`
 
@@ -70,6 +74,8 @@ A **Raycast extension** in this repo (`extensions/raycast/`) adds a menu bar com
 - Run tests: `deno task test`
 - **Install dev version** (so the Raycast extension and your shell use this repo’s build): from the repo root run `./dist/install-local.sh`. It compiles and copies the binary to `/usr/local/bin/now` (sudo required).
 - Code quality: use [Valknut](https://github.com/valknut-org/valknut) with `path` set to `src` to validate application code (health gate passes for `src`; full repo includes tests and may report lower scores).
+
+**Releasing the core app** (version in `src/consts.ts` and `deno.json`): run `deno task test`, then `deno task bundle` and `deno task compile`. Tag the release (e.g. `git tag v0.1.0`) and push the tag. The install script at that tag will fetch `dist/bundle.js` from the same tag. Optionally create a GitHub Release and attach `dist/now` for macOS/Linux.
 
 ## License
 

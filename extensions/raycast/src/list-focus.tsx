@@ -3,7 +3,7 @@ import {
   getPreferenceValues,
   type LaunchProps,
 } from "@raycast/api";
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { useFocusData } from "./lib/useFocusData";
 import { useSwitchTargetPreviews } from "./lib/useSwitchTargetPreviews";
@@ -14,14 +14,14 @@ import {
 } from "./lib/listFocusHelpers";
 import {
   ListFocusEmptyView,
-  ListFocusListContent,
   ListFocusLoadingView,
 } from "./lib/listFocusList";
-import { useActionPanels } from "./lib/useActionPanels";
-import { useListFocusActionPanelContext } from "./lib/useListFocusActionPanelContext";
+import {
+  ListFocusContent,
+  ListFocusProvider,
+  type ListFocusContextValue,
+} from "./lib/listFocusContext";
 import { useListFocusEmptyState } from "./lib/useListFocusEmptyState";
-import { useListFocusSelection } from "./lib/useListFocusSelection";
-import { useListFocusSections } from "./lib/useListFocusSections";
 import { useListFocusPathSwitch } from "./lib/useListFocusPathSwitch";
 import { useListFocusWatcherSync } from "./lib/useListFocusWatcherSync";
 import type {
@@ -35,6 +35,7 @@ export default function Command(
   const prefs = getPreferenceValues<ListFocusPreferences>();
   const defaultPath = getDefaultPath(prefs);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [searchText, setSearchText] = useState("");
   const initialPinnedPath = props.launchContext?.path ?? null;
 
   const {
@@ -66,7 +67,7 @@ export default function Command(
 
   const itemsForMove = items ?? [];
 
-  const currentKey = focus?.key ?? "";
+  const currentKey = focus?.key != null ? String(focus.key) : "";
   const { showEmpty, fileMissing, cliMissing } = useListFocusEmptyState({
     items,
     error,
@@ -113,56 +114,50 @@ export default function Command(
     focusText: focus?.focus,
   });
 
-  /** All hooks below must run on every render (Rules of Hooks). Do not add early returns above them. */
-  const { selectionIdArrays, detail, effectiveSelectedId } =
-    useListFocusSelection({
-      pathDescriptorsForList,
-      items,
+  const listContextValue: ListFocusContextValue = useMemo(
+    () => ({
+      pathForMutations,
       focus,
+      items,
+      itemsForMove,
       currentKey,
+      refresh,
+      applyMutationResult,
+      pathSwitchContext,
+      pathSwitchCallbacks,
+      pathDescriptorsForList,
+      nowInputLabel,
       selectedId,
+      setSelectedId,
       defaultSelectedActionId: DEFAULT_SELECTED_ACTION_ID,
       defaultPath,
       appPathForCurrent,
       currentApp,
       switchTargetPreviews,
-    });
-
-  /** Stable callback so List doesn't re-sync selection on every render (avoids render loop when arrowing). Only update state when the id actually changes so Raycast re-syncing the same selection doesn't trigger another render. */
-  const handleSelectionChange = useCallback((id: string | null | undefined) => {
-    const next = id ?? null;
-    setSelectedId((prev) => (prev === next ? prev : next));
-  }, []);
-
-  const { contextSection, otherSection, runNav } = useListFocusSections({
-    hasSwitchOptions: pathDescriptorsForList.length > 0,
-    nowInputLabel,
-    pathSwitchContext,
-    pathSwitchCallbacks,
-    pathForMutations,
-    refresh,
-    applyMutationResult,
-  });
-
-  const actionPanelContext = useListFocusActionPanelContext({
-    pathForMutations,
-    focus,
-    currentKey,
-    itemsForMove,
-    applyMutationResult,
-    refresh,
-    runNav,
-    setSelectedId,
-    pathDescriptorsForList,
-    pathSwitchCallbacks,
-    otherSection,
-    contextSection,
-  });
-  const allSelectionIds = selectionIdArrays.listIds;
-  const selectionIdSignature = allSelectionIds.join("\n");
-  const actionPanelsBySelection = useMemo(
-    () => useActionPanels(allSelectionIds, actionPanelContext),
-    [selectionIdSignature, actionPanelContext],
+      isLoading,
+      searchText,
+      setSearchText,
+    }),
+    [
+      pathForMutations,
+      focus,
+      items,
+      itemsForMove,
+      currentKey,
+      refresh,
+      applyMutationResult,
+      pathSwitchContext,
+      pathSwitchCallbacks,
+      pathDescriptorsForList,
+      nowInputLabel,
+      selectedId,
+      setSelectedId,
+      defaultPath,
+      appPathForCurrent,
+      currentApp,
+      switchTargetPreviews,
+      isLoading,
+    ],
   );
 
   if (!pathReady) {
@@ -188,17 +183,8 @@ export default function Command(
   }
 
   return (
-    <ListFocusListContent
-      isLoading={isLoading}
-      nowInputLabel={nowInputLabel}
-      effectiveSelectedId={effectiveSelectedId}
-      onSelectionChange={handleSelectionChange}
-      detail={detail}
-      actionPanelsBySelection={actionPanelsBySelection}
-      pathDescriptorsForList={pathDescriptorsForList}
-      items={items}
-      currentKey={currentKey}
-      focus={focus}
-    />
+    <ListFocusProvider value={listContextValue}>
+      <ListFocusContent />
+    </ListFocusProvider>
   );
 }

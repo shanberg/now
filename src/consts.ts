@@ -1,5 +1,8 @@
 import { DATA_STR as BASE_DATA_STR } from "now-format";
 
+/** Release version of the core CLI (excluded: Raycast extension). */
+export const VERSION = "0.1.0";
+
 export const LOG_FILE_PATH = "now.log";
 export const NOW_FILE_SUFFIX = "now.md";
 

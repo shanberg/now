@@ -9,7 +9,6 @@ import type { MutationResult } from "./now";
 export type DataSourceMode =
   | "sync_first_paint"
   | "cache_only"
-  | "fresh_cache"
   | "fetch";
 
 export type DataSurface = {
@@ -22,10 +21,6 @@ export type DataSurface = {
 
 export type DataSurfaceInput = {
   cacheOnly: boolean;
-  maxCacheAgeMs: number | undefined;
-  cacheCheckDone: boolean;
-  hasFreshCache: boolean;
-  freshCacheData: FocusDataResult | null;
   syncFirstPaint: FocusDataResult | null;
   useSyncFirstPaint: boolean;
   cacheOnlyData: FocusDataResult | null;
@@ -37,27 +32,15 @@ export type DataSurfaceInput = {
 function resolveMode(input: DataSurfaceInput): DataSourceMode {
   if (input.useSyncFirstPaint) return "sync_first_paint";
   if (input.cacheOnly) return "cache_only";
-  if (
-    input.maxCacheAgeMs != null &&
-    input.hasFreshCache &&
-    input.freshCacheData != null
-  ) {
-    return "fresh_cache";
-  }
   return "fetch";
 }
 
-/** Whether useCachedPromise should run fetch for the given options and cache state. */
+/** Whether useCachedPromise should run fetch. List: true when path set; menu bar (cacheOnly): false. */
 export function shouldExecuteFetch(
   effectivePath: string,
   cacheOnly: boolean,
-  maxCacheAgeMs: number | undefined,
-  cacheCheckDone: boolean,
-  hasFreshCache: boolean,
 ): boolean {
-  if (!effectivePath || cacheOnly) return false;
-  if (maxCacheAgeMs != null) return cacheCheckDone && !hasFreshCache;
-  return true;
+  return !!effectivePath && !cacheOnly;
 }
 
 export function deriveDataSurface(input: DataSurfaceInput): DataSurface {
@@ -66,20 +49,16 @@ export function deriveDataSurface(input: DataSurfaceInput): DataSurface {
     {
       sync_first_paint: input.syncFirstPaint,
       cache_only: input.cacheOnlyData,
-      fresh_cache: input.freshCacheData,
       fetch: input.fetchData,
     };
   const currentData = dataByMode[mode];
   const loadingByMode: Record<DataSourceMode, boolean> = {
     sync_first_paint: false,
-    fresh_cache: false,
     cache_only: input.cacheOnlyLoading,
     fetch: input.fetchLoading,
   };
   const fromCacheMode =
-    mode === "sync_first_paint" ||
-    mode === "cache_only" ||
-    mode === "fresh_cache";
+    mode === "sync_first_paint" || mode === "cache_only";
   return {
     mode,
     currentData,
@@ -139,7 +118,6 @@ export type ApplyMutationOpts = {
     },
   ) => Promise<unknown>;
   setCacheOnlyData: (data: FocusDataResult) => void;
-  setFreshCacheData: (data: FocusDataResult) => void;
 };
 
 async function applyMutationCacheOnly(
@@ -153,7 +131,6 @@ async function applyMutationCacheOnly(
 
 async function applyMutationWithRevalidate(
   result: MutationResult,
-  mode: DataSourceMode,
   effectivePath: string | null,
   opts: ApplyMutationOpts,
 ): Promise<void> {
@@ -164,12 +141,9 @@ async function applyMutationWithRevalidate(
     shouldRevalidateAfter: false,
   });
   if (effectivePath) await opts.writeCache(effectivePath, result);
-  if (mode === "fresh_cache") {
-    opts.setFreshCacheData(mutationResultToFocusData(result));
-  }
 }
 
-/** Apply mutation by mode: cache_only updates local state + cache; fresh_cache/fetch use mutate + cache; fresh_cache also updates local cache state. */
+/** Apply mutation by mode: cache_only updates local state + cache; fetch uses mutate + cache. */
 export async function applyMutationResultByMode(
   result: MutationResult,
   mode: DataSourceMode,
@@ -180,7 +154,5 @@ export async function applyMutationResultByMode(
     await applyMutationCacheOnly(result, effectivePath, opts);
     return;
   }
-  if (mode === "fresh_cache" || mode === "fetch") {
-    await applyMutationWithRevalidate(result, mode, effectivePath, opts);
-  }
+  await applyMutationWithRevalidate(result, effectivePath, opts);
 }

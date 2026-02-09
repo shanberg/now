@@ -1,89 +1,71 @@
 /**
  * Action panel context for list-focus (buildActionPanel input).
+ * Reads path, focus, items, callbacks from ListFocusContext; takes only runNav and section nodes.
  */
 import { useMemo } from "react";
 import type { ActionPanelContext } from "./listFocusActionPanels";
 import type { MutationFormProps } from "./listFocusForms";
-import type { PathActionDescriptor } from "./pathContext";
-import type { PathSwitchCallbacks } from "./pathSwitchActions";
-import type { JsonFocus, JsonItem } from "./now";
 import type { MutationResult } from "./now";
+import { useListFocusContext } from "./listFocusContextState";
 
-export type UseListFocusActionPanelContextArgs = {
-  pathForMutations: string;
-  focus: JsonFocus | null;
-  currentKey: string;
-  itemsForMove: JsonItem[];
-  applyMutationResult: (result: MutationResult) => Promise<void>;
-  refresh: () => void | Promise<void>;
+export type UseListFocusActionPanelContextSections = {
   runNav: (
     fn: () => Promise<MutationResult | null>,
     label: string,
   ) => Promise<void>;
-  setSelectedId: (id: string | null) => void;
-  pathDescriptorsForList: PathActionDescriptor[];
-  pathSwitchCallbacks: PathSwitchCallbacks;
-  otherSection: React.ReactNode;
   contextSection: React.ReactNode;
+  otherSection: React.ReactNode;
 };
 
 export function useListFocusActionPanelContext(
-  args: UseListFocusActionPanelContextArgs,
+  sections: UseListFocusActionPanelContextSections,
 ): ActionPanelContext {
-  const {
-    pathForMutations,
-    focus,
-    currentKey,
-    itemsForMove,
-    applyMutationResult,
-    refresh,
-    runNav,
-    setSelectedId,
-    pathDescriptorsForList,
-    pathSwitchCallbacks,
-    otherSection,
-    contextSection,
-  } = args;
+  const ctx = useListFocusContext();
+  const { runNav, contextSection, otherSection } = sections;
 
   const mutationFormProps: MutationFormProps = useMemo(
     () => ({
-      nowFilePath: pathForMutations,
-      applyMutationResult,
-      refresh,
+      nowFilePath: ctx.pathForMutations,
+      applyMutationResult: ctx.applyMutationResult,
+      refresh: ctx.refresh,
     }),
-    [pathForMutations, applyMutationResult, refresh],
+    [ctx.pathForMutations, ctx.applyMutationResult, ctx.refresh],
   );
 
   return useMemo(
     () => ({
-      pathForMutations,
-      focus,
-      currentKey,
-      itemsForMove,
+      pathForMutations: ctx.pathForMutations,
+      focus: ctx.focus,
+      currentKey: ctx.currentKey,
+      itemsForMove: ctx.itemsForMove,
       mutationFormProps,
-      applyMutationResult,
-      refresh,
+      applyMutationResult: ctx.applyMutationResult,
+      refresh: ctx.refresh,
       runNav,
-      setSelectedId,
-      pathDescriptorsForList,
-      pathSwitchCallbacks,
+      setSelectedId: ctx.setSelectedId,
+      pathDescriptorsForList: ctx.pathDescriptorsForList,
+      pathSwitchCallbacks: ctx.pathSwitchCallbacks,
       otherSection,
       contextSection,
+      searchText: ctx.searchText,
+      setSearchText: ctx.setSearchText,
     }),
     [
-      pathForMutations,
-      focus,
-      currentKey,
-      itemsForMove,
+      ctx.pathForMutations,
+      ctx.focus,
+      ctx.currentKey,
+      ctx.itemsForMove,
       mutationFormProps,
-      applyMutationResult,
-      refresh,
+      ctx.applyMutationResult,
+      ctx.refresh,
       runNav,
-      setSelectedId,
-      pathDescriptorsForList,
-      pathSwitchCallbacks,
+      ctx.setSelectedId,
+      ctx.pathDescriptorsForList,
+      ctx.pathSwitchCallbacks,
       otherSection,
       contextSection,
+      ctx.searchText,
+      ctx.setSearchText,
     ],
   );
 }

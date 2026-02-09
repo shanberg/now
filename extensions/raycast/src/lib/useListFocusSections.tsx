@@ -1,5 +1,5 @@
 /**
- * List-focus section builders and runNav: context section, other section, mutation+toast runner.
+ * List-focus section builders and runNav. When called with no args, reads from ListFocusContext.
  */
 import { ActionPanel, showToast, Toast } from "@raycast/api";
 import { useCallback, type ReactNode } from "react";
@@ -8,6 +8,7 @@ import type { PathSwitchContext } from "./pathContext";
 import type { PathSwitchCallbacks } from "./pathSwitchActions";
 import { OtherActionsSection } from "./listFocusActionPanels";
 import type { MutationResult } from "./now";
+import { useListFocusContext } from "./listFocusContextState";
 
 export type UseListFocusSectionsArgs = {
   hasSwitchOptions: boolean;
@@ -19,7 +20,7 @@ export type UseListFocusSectionsArgs = {
   applyMutationResult: (result: MutationResult) => Promise<void>;
 };
 
-export function useListFocusSections(args: UseListFocusSectionsArgs): {
+export function useListFocusSections(): {
   contextSection: ReactNode;
   otherSection: ReactNode;
   runNav: (
@@ -27,15 +28,16 @@ export function useListFocusSections(args: UseListFocusSectionsArgs): {
     label: string,
   ) => Promise<void>;
 } {
+  const ctx = useListFocusContext();
+  const hasSwitchOptions = ctx.pathDescriptorsForList.length > 0;
   const {
-    hasSwitchOptions,
     nowInputLabel,
     pathSwitchContext,
     pathSwitchCallbacks,
     pathForMutations,
     refresh,
     applyMutationResult,
-  } = args;
+  } = ctx;
 
   const contextSection = hasSwitchOptions ? (
     <ActionPanel.Section title={nowInputLabel}>

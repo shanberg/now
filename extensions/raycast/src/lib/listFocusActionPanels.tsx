@@ -20,6 +20,7 @@ import { PathSwitchActionsList } from "./pathSwitchActions";
 import type { PathSwitchCallbacks } from "./pathSwitchActions";
 import {
   createFocusFile,
+  runAdd,
   runComplete,
   runDiveIn,
   runSwitch,
@@ -40,6 +41,7 @@ import {
   type MutationFormProps,
 } from "./listFocusForms";
 import {
+  CREATE_FROM_SEARCH_ID,
   DEFAULT_SELECTED_ACTION_ID,
   OPEN_EDITOR_ACTION_ID,
 } from "./listFocusHelpers";
@@ -258,6 +260,10 @@ export type ActionPanelContext = {
   otherSection: unknown;
   /** Typed as unknown to avoid ReactNode mismatch between project and Raycast API types. */
   contextSection: unknown;
+  /** Current search bar text; used by create-from-search to run add. */
+  searchText?: string;
+  /** Clear search after create-from-search add. */
+  setSearchText?: (text: string) => void;
 };
 
 function panelWithOther(primary: ReactNode, otherSection: unknown): unknown {
@@ -379,6 +385,28 @@ const ACTION_PANEL_PRIMARY: Record<
   "action-wrap": wrapFragment,
   "action-move": moveFragment,
   [OPEN_EDITOR_ACTION_ID]: openEditorFragment,
+  [CREATE_FROM_SEARCH_ID]: (ctx) => {
+    const query = (ctx.searchText ?? "").trim();
+    if (!query) return null;
+    return (
+      <Action
+        title="Add"
+        icon={Icon.Plus}
+        onAction={async () => {
+          try {
+            const result = await runAdd(ctx.pathForMutations, query);
+            if (result) await ctx.applyMutationResult(result);
+            else await ctx.refresh();
+            await showToast(Toast.Style.Success, "Added");
+            ctx.setSelectedId(DEFAULT_SELECTED_ACTION_ID);
+            ctx.setSearchText?.("");
+          } catch (e) {
+            await showFailureToast("Failed to add", e);
+          }
+        }}
+      />
+    );
+  },
 };
 
 function buildPathPanel(
@@ -431,15 +459,15 @@ function buildItemPanel(ctx: ActionPanelContext, item: JsonItem): unknown {
             setSelectedId(DEFAULT_SELECTED_ACTION_ID);
           }}
         />
-        {isCurrent ? completeFragment(ctx) : null}
+        {isCurrent ? (completeFragment(ctx) as any) : null}
       </ActionPanel.Section>
       <ActionPanel.Section title="Actions">
-        {narrowFocusFragment(ctx)}
-        {focus && !focus.isLeaf ? diveInFragment(ctx) : null}
-        {laterFragment(ctx)}
-        {editFragment(ctx)}
-        {wrapFragment(ctx)}
-        {moveFragment(ctx)}
+        {(narrowFocusFragment(ctx) as any)}
+        {focus && !focus.isLeaf ? (diveInFragment(ctx) as any) : null}
+        {(laterFragment(ctx) as any)}
+        {(editFragment(ctx) as any)}
+        {(wrapFragment(ctx) as any)}
+        {(moveFragment(ctx) as any)}
       </ActionPanel.Section>
       <ActionPanel.Section title="Copy">
         <Action.CopyToClipboard
@@ -456,23 +484,12 @@ function buildItemPanel(ctx: ActionPanelContext, item: JsonItem): unknown {
   );
 }
 
-/** Returns action panel for a selection id. Typed as unknown to avoid React/ReactNode mismatch between project and @raycast/api. */
-export function buildActionPanel(
-  selectionId: string,
+/** Builds action panel from parsed selection. Parse once at call site (e.g. useActionPanels). */
+export function buildActionPanelFromSelection(
+  selection: SelectionKind,
   ctx: ActionPanelContext,
 ): unknown {
-  const {
-    pathDescriptorsForList,
-    pathSwitchCallbacks,
-    otherSection,
-  } = ctx;
-
-  const selection = parseSelectionId(
-    selectionId,
-    pathDescriptorsForList,
-    ctx.itemsForMove,
-  );
-
+  const { pathSwitchCallbacks, otherSection } = ctx;
   switch (selection.kind) {
     case "path":
       return buildPathPanel(
@@ -490,4 +507,17 @@ export function buildActionPanel(
     default:
       return null;
   }
+}
+
+/** Returns action panel for a selection id (parses then delegates to buildActionPanelFromSelection). */
+export function buildActionPanel(
+  selectionId: string,
+  ctx: ActionPanelContext,
+): unknown {
+  const selection = parseSelectionId(
+    selectionId,
+    ctx.pathDescriptorsForList,
+    ctx.itemsForMove,
+  );
+  return buildActionPanelFromSelection(selection, ctx);
 }
